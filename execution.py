@@ -1,9 +1,10 @@
 from __future__ import annotations
+import os
 import time as _time
 import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from loguru import logger
 from config import Direction, InstrumentConfig
@@ -83,42 +84,112 @@ class MT5Adapter(BrokerAdapter):
     MetaTrader 5 execution adapter.
     
     Deployment Notes:
-      1. Install MetaTrader 5 terminal on a Windows VPS.
+      1. Install MetaTrader 5 terminal on a Windows VPS or desktop.
       2. pip install MetaTrader5
-      3. Log in to your MT5 account in the terminal.
-      4. Set mt5_path to the terminal executable path.
+      3. Log in to your MT5 account in the terminal (or supply MT5_LOGIN, MT5_PASSWORD, MT5_SERVER).
+      4. Set mt5_path to the terminal executable path (defaults to standard C:\Program Files\MetaTrader 5\terminal64.exe).
       5. Call connect() before trading.
     """
     
     def __init__(self, mt5_path: str | None = None, login: int | None = None,
                  password: str | None = None, server: str | None = None,
                  max_retries: int = 3, retry_delay: float = 1.0):
-        self.mt5_path = mt5_path
+        self.mt5_path = mt5_path or os.environ.get("MT5_PATH", r"C:\Program Files\MetaTrader 5\terminal64.exe")
         self.login_id = login
         self.password = password
         self.server = server
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self._symbol_cache: dict[str, str] = {}
     
+    def resolve_symbol(self, symbol: str) -> str:
+        """Find the broker's exact symbol name, matching prefixes/suffixes (e.g. XAUUSDm, XAUUSD.a, GOLD)."""
+        if mt5 is None:
+            return symbol
+        if symbol in self._symbol_cache:
+            return self._symbol_cache[symbol]
+
+        # First check direct name
+        info = mt5.symbol_info(symbol)
+        if info is not None:
+            self._symbol_cache[symbol] = symbol
+            return symbol
+
+        # Fetch all available broker symbols
+        all_symbols = mt5.symbols_get()
+        if not all_symbols:
+            return symbol
+
+        target = symbol.upper()
+        # Exact match case-insensitive
+        for s in all_symbols:
+            if s.name.upper() == target:
+                self._symbol_cache[symbol] = s.name
+                return s.name
+
+        # Substring / broker suffix match (e.g. XAUUSDm, XAUUSD.pro, GOLD)
+        for s in all_symbols:
+            s_up = s.name.upper()
+            if target in s_up or (target == "XAUUSD" and "GOLD" in s_up):
+                logger.info(f"Resolved symbol '{symbol}' -> broker symbol '{s.name}'")
+                self._symbol_cache[symbol] = s.name
+                return s.name
+
+        return symbol
+
     def connect(self) -> bool:
         if mt5 is None:
             logger.error("MetaTrader5 package not installed. Cannot connect.")
             return False
-            
-        kwargs = {}
-        if self.mt5_path:
-            kwargs['path'] = self.mt5_path
-            
-        if not mt5.initialize(**kwargs):
-            logger.error(f"MT5 initialization failed, error code: {mt5.last_error()}")
+
+        initialized = False
+        # 1. Attempt connecting to an already running MT5 terminal
+        try:
+            initialized = mt5.initialize()
+            if initialized:
+                logger.info("Attached to running MetaTrader 5 terminal.")
+        except Exception as e:
+            logger.debug(f"Direct mt5.initialize() attempt: {e}")
+
+        # 2. If not initialized, try with configured or standard terminal paths
+        if not initialized:
+            candidate_paths = []
+            if self.mt5_path and os.path.exists(self.mt5_path):
+                candidate_paths.append(self.mt5_path)
+            candidate_paths.extend([
+                r"C:\Program Files\MetaTrader 5\terminal64.exe",
+                r"C:\Program Files (x86)\MetaTrader 5\terminal.exe",
+            ])
+            for path in candidate_paths:
+                if os.path.exists(path):
+                    logger.info(f"Attempting MT5 initialization with terminal path: {path}")
+                    if mt5.initialize(path=path):
+                        initialized = True
+                        break
+
+        if not initialized:
+            err = mt5.last_error()
+            logger.error(
+                f"MT5 initialization failed (code: {err}). "
+                "Please make sure the MetaTrader 5 desktop app is open and logged into your account."
+            )
             return False
-            
+
+        # 3. Optional explicit login if credentials were provided
         if self.login_id and self.password and self.server:
-            if not mt5.login(self.login_id, self.password, self.server):
-                logger.error(f"MT5 login failed, error code: {mt5.last_error()}")
+            if not mt5.login(self.login_id, password=self.password, server=self.server):
+                err = mt5.last_error()
+                logger.error(f"MT5 login failed for account #{self.login_id}: {err}")
                 return False
-                
-        logger.info("Successfully connected to MetaTrader 5.")
+
+        acc = mt5.account_info()
+        if acc is not None:
+            logger.info(
+                f"✅ Connected to MetaTrader 5 | Account #{acc.login} ({acc.server}) | "
+                f"Balance: ${acc.balance:,.2f} | Equity: ${acc.equity:,.2f} | Leverage: 1:{acc.leverage}"
+            )
+        else:
+            logger.warning("Connected to MT5, but no account is active. Please log in inside the MT5 terminal.")
         return True
 
     def disconnect(self) -> None:
@@ -129,12 +200,15 @@ class MT5Adapter(BrokerAdapter):
     def send_bracket_order(self, order: BracketOrder) -> OrderResult:
         if mt5 is None:
             return OrderResult(success=False, error_message="MT5 not installed")
-            
+
+        broker_symbol = self.resolve_symbol(order.symbol)
+        mt5.symbol_select(broker_symbol, True)
+
         order_type = mt5.ORDER_TYPE_BUY if order.direction == Direction.BUY else mt5.ORDER_TYPE_SELL
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": order.symbol,
+            "symbol": broker_symbol,
             "volume": order.lot_size,
             "type": order_type,
             "price": order.entry_price,
@@ -157,7 +231,7 @@ class MT5Adapter(BrokerAdapter):
             else:
                 last_retcode = result.retcode
                 if result.retcode == mt5.TRADE_RETCODE_DONE:
-                    logger.info(f"Order executed successfully! Order ID: {result.order}")
+                    logger.info(f"Order executed successfully! Order ID: {result.order} for {broker_symbol}")
                     return OrderResult(
                         success=True,
                         order_id=result.order,
@@ -179,7 +253,9 @@ class MT5Adapter(BrokerAdapter):
     def get_current_price(self, symbol: str) -> PriceQuote | None:
         if mt5 is None:
             return None
-        tick = mt5.symbol_info_tick(symbol)
+        broker_symbol = self.resolve_symbol(symbol)
+        mt5.symbol_select(broker_symbol, True)
+        tick = mt5.symbol_info_tick(broker_symbol)
         if tick is None:
             return None
         return PriceQuote(
@@ -197,17 +273,62 @@ class MT5Adapter(BrokerAdapter):
         if acc_info is None:
             return 0.0
         return acc_info.equity
+
+    def get_account_info(self) -> dict | None:
+        """Return dict of account details (login, server, balance, equity, leverage)."""
+        if mt5 is None:
+            return None
+        acc = mt5.account_info()
+        if acc is None:
+            return None
+        return {
+            "login": acc.login,
+            "server": acc.server,
+            "balance": acc.balance,
+            "equity": acc.equity,
+            "profit": acc.profit,
+            "margin": acc.margin,
+            "margin_free": acc.margin_free,
+            "currency": acc.currency,
+            "company": acc.company,
+            "leverage": acc.leverage,
+        }
     
     def get_open_positions(self, symbol: str | None = None) -> list[dict]:
         if mt5 is None:
             return []
         kwargs = {}
         if symbol:
-            kwargs['symbol'] = symbol
+            kwargs['symbol'] = self.resolve_symbol(symbol)
         positions = mt5.positions_get(**kwargs)
         if positions is None:
             return []
         return [p._asdict() for p in positions]
+
+    def get_deal_pnl_for_order(self, order_id: int) -> tuple[float, str] | None:
+        """
+        Check MT5 deal history to see if an order/position has closed.
+        Returns (realized_pnl, status) where status is 'CLOSED_TP', 'CLOSED_SL', or 'CLOSED_MANUAL'.
+        """
+        if mt5 is None:
+            return None
+        now = datetime.now(timezone.utc)
+        deals = mt5.history_deals_get(now - timedelta(days=7), now)
+        if not deals:
+            return None
+        
+        pos_deals = [d for d in deals if d.position_id == order_id]
+        if not pos_deals:
+            return None
+            
+        closing_deals = [d for d in pos_deals if d.entry == 1]  # DEAL_ENTRY_OUT
+        if closing_deals:
+            cd = closing_deals[-1]
+            total_profit = sum(d.profit + d.commission + d.swap for d in pos_deals)
+            comment = (cd.comment or "").lower()
+            status = "CLOSED_TP" if "tp" in comment else ("CLOSED_SL" if "sl" in comment else "CLOSED_MANUAL")
+            return total_profit, status
+        return None
 
 
 class MockBrokerAdapter(BrokerAdapter):

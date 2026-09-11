@@ -17,10 +17,15 @@ Deployment Notes:
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 from typing import List
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 # ─────────────────────────────────────────────
@@ -306,9 +311,24 @@ class TradingConfig(BaseModel):
         description="Minimum AI confidence percentage (e.g. 75%) required to approve a trade.",
     )
     use_mock_broker: bool = Field(
-        default=True,
-
+        default_factory=lambda: os.getenv("USE_MOCK_BROKER", "false").lower() in ("true", "1", "yes"),
         description="If True, use MockBrokerAdapter instead of live MT5.",
+    )
+    mt5_path: str = Field(
+        default_factory=lambda: os.getenv("MT5_PATH", r"C:\Program Files\MetaTrader 5\terminal64.exe"),
+        description="Path to MT5 terminal executable.",
+    )
+    mt5_login: int | None = Field(
+        default_factory=lambda: int(os.getenv("MT5_LOGIN", "0")) if os.getenv("MT5_LOGIN", "0").isdigit() and int(os.getenv("MT5_LOGIN", "0")) > 0 else None,
+        description="MT5 broker account login ID.",
+    )
+    mt5_password: str | None = Field(
+        default_factory=lambda: os.getenv("MT5_PASSWORD") or None,
+        description="MT5 broker account password.",
+    )
+    mt5_server: str | None = Field(
+        default_factory=lambda: os.getenv("MT5_SERVER") or None,
+        description="MT5 broker server name.",
     )
     log_path: str = Field(
         default="logs/trading_bot.log",

@@ -101,12 +101,12 @@ def create_broker(config: TradingConfig) -> BrokerAdapter:
         logger.info("Using MockBrokerAdapter for local testing.")
         return MockBrokerAdapter(initial_equity=config.account.equity)
     else:
-        logger.info("Using MT5Adapter for live trading.")
+        logger.info("Using MT5Adapter for live real-market trading.")
         return MT5Adapter(
-            mt5_path=os.environ.get("MT5_PATH"),
-            login=int(os.environ.get("MT5_LOGIN", "0")) or None,
-            password=os.environ.get("MT5_PASSWORD"),
-            server=os.environ.get("MT5_SERVER"),
+            mt5_path=config.mt5_path or os.environ.get("MT5_PATH"),
+            login=config.mt5_login or (int(os.environ.get("MT5_LOGIN", "0")) if os.environ.get("MT5_LOGIN", "0").isdigit() and int(os.environ.get("MT5_LOGIN", "0")) > 0 else None),
+            password=config.mt5_password or os.environ.get("MT5_PASSWORD"),
+            server=config.mt5_server or os.environ.get("MT5_SERVER"),
         )
 
 
@@ -198,6 +198,41 @@ class TradingBot:
             self.state.reset_daily_state()
             self._last_utc_day = today_ordinal
 
+    def _sync_open_positions(self) -> None:
+        """
+        Check database open trades against live broker positions / deal history.
+        If a trade reached TP or SL and is no longer open in MT5, update state.
+        """
+        try:
+            open_trades = self.state.get_open_positions()
+            if not open_trades:
+                return
+
+            live_positions = self.broker.get_open_positions()
+            live_order_ids = {
+                p.get("ticket") or p.get("order_id")
+                for p in live_positions
+                if p.get("ticket") or p.get("order_id")
+            }
+
+            for trade in open_trades:
+                # If still open with broker, skip
+                if trade.id in live_order_ids:
+                    continue
+
+                # Query broker for closed deal result
+                if hasattr(self.broker, "get_deal_pnl_for_order") and trade.id is not None:
+                    deal_res = self.broker.get_deal_pnl_for_order(trade.id)
+                    if deal_res:
+                        pnl, status = deal_res
+                        self.state.update_trade_pnl(trade.id, pnl, status)
+                        self.log(
+                            f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
+                            f"Realized PnL: ${pnl:+.2f}"
+                        )
+        except Exception as e:
+            logger.error(f"Error syncing open positions: {e}")
+
     def tick(self) -> None:
         """
         Main trading loop — called once per LTF bar close.
@@ -210,8 +245,9 @@ class TradingBot:
         now_utc = datetime.now(timezone.utc)
         self.log(f"─── TICK @ {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} (Active Charts: {self.config.selected_symbols[:2]}) ───")
 
-        # Step 1: Day rollover
+        # Step 1: Day rollover & position sync
         self._check_day_rollover()
+        self._sync_open_positions()
 
         active_symbols = set(self.config.selected_symbols[:2])
         for instrument in self.config.instruments:
@@ -338,7 +374,7 @@ class TradingBot:
                 )
                 # Record in state
                 trade_record = TradeRecord(
-                    id=None,
+                    id=order_result.order_id,
                     timestamp=now_utc,
                     symbol=symbol,
                     direction=best_signal.direction,
@@ -367,9 +403,8 @@ class TradingBot:
     def _get_ohlcv(self, symbol: str, timeframe: str):
         """
         Fetch OHLCV data for a symbol/timeframe.
-
-        In production, this would call self.broker or a data API to get
-        the latest bars. For the mock adapter, we use cached demo data.
+        In mock mode: loads synthetic demo data from mock_data.py.
+        In live real-market mode: fetches streaming candlesticks from MetaTrader 5.
         """
         # Check cache
         cache_key = f"{symbol}_{timeframe}"
@@ -389,13 +424,41 @@ class TradingBot:
                 logger.warning("mock_data module not available.")
             return None
 
-        # In live mode, you would fetch from MT5:
-        # import MetaTrader5 as mt5
-        # timeframe_map = {'1m': mt5.TIMEFRAME_M1, '5m': mt5.TIMEFRAME_M5, ...}
-        # rates = mt5.copy_rates_from_pos(symbol, timeframe_map[timeframe], 0, 300)
-        # df = pd.DataFrame(rates)
-        # df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
-        return None
+        # In live real-market mode (MetaTrader 5):
+        try:
+            import MetaTrader5 as mt5
+            import pandas as pd
+
+            tf_map = {
+                '1m': mt5.TIMEFRAME_M1,
+                '5m': mt5.TIMEFRAME_M5,
+                '15m': mt5.TIMEFRAME_M15,
+                '1H': mt5.TIMEFRAME_H1,
+                '4H': mt5.TIMEFRAME_H4,
+                '1D': mt5.TIMEFRAME_D1,
+            }
+            if timeframe not in tf_map:
+                logger.warning(f"Unsupported timeframe '{timeframe}' for MT5.")
+                return None
+
+            broker_symbol = symbol
+            if hasattr(self.broker, 'resolve_symbol'):
+                broker_symbol = self.broker.resolve_symbol(symbol)
+
+            mt5.symbol_select(broker_symbol, True)
+            rates = mt5.copy_rates_from_pos(broker_symbol, tf_map[timeframe], 0, 300)
+            if rates is None or len(rates) == 0:
+                err = mt5.last_error()
+                logger.warning(f"MT5 returned no rates for {broker_symbol} ({timeframe}). Error: {err}")
+                return None
+
+            df = pd.DataFrame(rates)
+            df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
+            df['volume'] = df['tick_volume']
+            return df
+        except Exception as e:
+            logger.error(f"Error fetching live MT5 candles for {symbol} ({timeframe}): {e}")
+            return None
 
     def set_data(self, symbol: str, timeframe: str, df) -> None:
         """Manually inject OHLCV data (useful for backtesting)."""

@@ -71,6 +71,11 @@ class BotStateResponse(BaseModel):
     recent_logs: List[str]
     available_symbols: List[str]
     mock_mode: bool
+    broker_info: Optional[dict] = None
+    accuracy: float = 0.0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    total_closed_trades: int = 0
 
 
 
@@ -150,6 +155,16 @@ async def get_bot_state():
     cb_active = bot_instance.state.is_circuit_breaker_active()
 
     available = [i.symbol for i in bot_instance.config.instruments]
+    broker_info = None
+    if hasattr(bot_instance.broker, "get_account_info"):
+        broker_info = bot_instance.broker.get_account_info()
+
+    # Calculate win accuracy across all historical closed trades
+    all_trades = bot_instance.state.get_all_trades(limit=500)
+    closed_trades = [t for t in all_trades if t.status != "OPEN"]
+    winning_trades = [t for t in closed_trades if t.realized_pnl > 0]
+    losing_trades = [t for t in closed_trades if t.realized_pnl < 0]
+    accuracy = round((len(winning_trades) / len(closed_trades) * 100), 1) if closed_trades else 0.0
 
     return BotStateResponse(
         is_active=bot_instance.is_active,
@@ -165,6 +180,11 @@ async def get_bot_state():
         recent_logs=list(reversed(bot_instance.recent_logs[-50:])),
         available_symbols=available,
         mock_mode=bot_instance.config.use_mock_broker,
+        broker_info=broker_info,
+        accuracy=accuracy,
+        winning_trades=len(winning_trades),
+        losing_trades=len(losing_trades),
+        total_closed_trades=len(closed_trades),
     )
 
 
@@ -300,9 +320,18 @@ async def get_trade_history():
             "status": r.status,
         })
 
+    closed = [t for t in trades_data if t["status"] != "OPEN"]
+    wins = [t for t in closed if t["realized_pnl"] > 0]
+    losses = [t for t in closed if t["realized_pnl"] < 0]
+    accuracy = round((len(wins) / len(closed) * 100), 1) if closed else 0.0
+
     return {
         "trades": trades_data,
         "total_trades": len(trades_data),
         "total_pnl": round(total_realized_pnl, 2),
+        "accuracy": accuracy,
+        "winning_trades": len(wins),
+        "losing_trades": len(losses),
+        "total_closed_trades": len(closed),
     }
 

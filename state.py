@@ -77,24 +77,44 @@ class StateManager:
         self._ensure_daily_row(trade.timestamp.date())
         
         with self.conn:
-            cursor = self.conn.execute('''
-                INSERT INTO trade_log (
-                    timestamp, symbol, direction, entry_price, 
-                    stop_loss, take_profit, lot_size, realized_pnl, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                trade.timestamp.isoformat(),
-                trade.symbol,
-                trade.direction.name if hasattr(trade.direction, 'name') else str(trade.direction),
-                trade.entry_price,
-                trade.stop_loss,
-                trade.take_profit,
-                trade.lot_size,
-                trade.realized_pnl,
-                trade.status
-            ))
-            trade_id = cursor.lastrowid
-            trade.id = trade_id
+            if trade.id is not None:
+                cursor = self.conn.execute('''
+                    INSERT INTO trade_log (
+                        id, timestamp, symbol, direction, entry_price, 
+                        stop_loss, take_profit, lot_size, realized_pnl, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    trade.id,
+                    trade.timestamp.isoformat(),
+                    trade.symbol,
+                    trade.direction.name if hasattr(trade.direction, 'name') else str(trade.direction),
+                    trade.entry_price,
+                    trade.stop_loss,
+                    trade.take_profit,
+                    trade.lot_size,
+                    trade.realized_pnl,
+                    trade.status
+                ))
+                trade_id = trade.id
+            else:
+                cursor = self.conn.execute('''
+                    INSERT INTO trade_log (
+                        timestamp, symbol, direction, entry_price, 
+                        stop_loss, take_profit, lot_size, realized_pnl, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    trade.timestamp.isoformat(),
+                    trade.symbol,
+                    trade.direction.name if hasattr(trade.direction, 'name') else str(trade.direction),
+                    trade.entry_price,
+                    trade.stop_loss,
+                    trade.take_profit,
+                    trade.lot_size,
+                    trade.realized_pnl,
+                    trade.status
+                ))
+                trade_id = cursor.lastrowid
+                trade.id = trade_id
             
             # Update daily state
             self.conn.execute('''
