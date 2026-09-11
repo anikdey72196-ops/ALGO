@@ -1,0 +1,94 @@
+{
+  "events": [
+    {
+      "title": "US Non-Farm Payrolls",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-11T12:30:00Z"
+    },
+    {
+      "title": "US ISM Manufacturing PMI",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-11T14:00:00Z"
+    },
+    {
+      "title": "FOMC Interest Rate Decision",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-11T18:00:00Z"
+    },
+    {
+      "title": "FOMC Press Conference",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-11T18:30:00Z"
+    },
+    {
+      "title": "ECB Interest Rate Decision",
+      "currency": "EUR",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-12T11:45:00Z"
+    },
+    {
+      "title": "ECB Press Conference",
+      "currency": "EUR",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-12T12:30:00Z"
+    },
+    {
+      "title": "BOE Interest Rate Decision",
+      "currency": "GBP",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-12T11:00:00Z"
+    },
+    {
+      "title": "US CPI Year-over-Year",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-13T12:30:00Z"
+    },
+    {
+      "title": "US Retail Sales m/m",
+      "currency": "USD",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-14T12:30:00Z"
+    },
+    {
+      "title": "Eurozone GDP q/q",
+      "currency": "EUR",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-14T09:00:00Z"
+    },
+    {
+      "title": "UK GDP m/m",
+      "currency": "GBP",
+      "impact": "HIGH",
+      "datetime_utc": "2026-09-15T06:00:00Z"
+    },
+    {
+      "title": "US PPI m/m",
+      "currency": "USD",
+      "impact": "MEDIUM",
+      "datetime_utc": "2026-09-15T12:30:00Z"
+    },
+    {
+      "title": "Eurozone CPI y/y",
+      "currency": "EUR",
+      "impact": "MEDIUM",
+      "datetime_utc": "2026-09-15T09:00:00Z"
+    },
+    {
+      "title": "UK Claimant Count Change",
+      "currency": "GBP",
+      "impact": "MEDIUM",
+      "datetime_utc": "2026-09-16T06:00:00Z"
+    },
+    {
+      "title": "US Initial Jobless Claims",
+      "currency": "USD",
+      "impact": "LOW",
+      "datetime_utc": "2026-09-16T12:30:00Z"
+    }
+  ]
+}

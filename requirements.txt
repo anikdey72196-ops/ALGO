@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────
+# Automated Trading Bot — Dependencies
+# ─────────────────────────────────────────────
+# Install:  pip install -r requirements.txt
+#
+# For live MT5 trading on Windows:
+#   pip install MetaTrader5
+# MT5 library only works on Windows with the MT5 terminal installed.
+# On Linux VPS, use Wine or run the bot on a Windows VPS.
+# ─────────────────────────────────────────────
+
+pydantic>=2.0,<3.0
+loguru>=0.7,<1.0
+apscheduler>=3.10,<4.0
+numpy>=1.24,<2.0
+pandas>=2.0,<3.0
+
+fastapi>=0.110.0
+uvicorn>=0.28.0
+
+# Optional — only needed for live MT5 trading (Windows only)
+# MetaTrader5>=5.0.45
+

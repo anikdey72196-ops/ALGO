@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Institutional Algorithmic Trading Control Station & TradingView</title>
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- TradingView Widget Script -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            },
+            darkbg: '#0b0f19',
+            cardbg: '#111827',
+            bordercol: '#1f2937'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    .pulse-glow-green { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+    .pulse-glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+  </style>
+</head>
+<body class="bg-darkbg text-gray-100 min-h-screen font-sans antialiased p-4 md:p-8">
+
+  <!-- Header Section -->
+  <header class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-gray-800 gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <span class="text-2xl font-bold tracking-tight bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
+          ALGO COMMAND CENTER
+        </span>
+        <span id="modeBadge" class="text-xs px-2.5 py-0.5 rounded-full font-medium bg-blue-900/60 text-blue-300 border border-blue-700">
+          Simulation Mock Mode
+        </span>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">Smart Money Concepts (SMC) & Institutional Liquidity Execution Bot</p>
+    </div>
+
+    <!-- Navigation Tabs & Active State Pill -->
+    <div class="flex items-center gap-4">
+      <nav class="flex items-center bg-gray-900 p-1 rounded-xl border border-gray-800">
+        <button id="tabBtnControl" onclick="switchTab('control')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm">
+          Control Station
+        </button>
+        <button id="tabBtnCharts" onclick="switchTab('charts')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
+          TradingView Live Charts
+        </button>
+        <button id="tabBtnHistory" onclick="switchTab('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
+          Trade History & PnL
+        </button>
+      </nav>
+
+      <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 shadow-inner">
+        <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
+        <span id="statusLabel" class="text-sm font-semibold text-gray-300">DEACTIVATED (IDLE)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Top KPI Row (Always Visible) -->
+  <div class="max-w-7xl mx-auto mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <!-- Account Equity -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account Equity</div>
+      <div id="kpiEquity" class="text-2xl md:text-3xl font-bold mt-2 text-white">$10,000.00</div>
+      <div class="text-xs text-gray-500 mt-1">Real-time Balance</div>
+    </div>
+
+    <!-- Daily Realized PnL -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Daily Realized PnL</div>
+      <div id="kpiPnL" class="text-2xl md:text-3xl font-bold mt-2 text-emerald-400">+$0.00</div>
+      <div class="text-xs text-gray-500 mt-1">Reset at 00:00 UTC</div>
+    </div>
+
+    <!-- Daily Trade Count -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Trades Today</div>
+      <div id="kpiTrades" class="text-2xl md:text-3xl font-bold mt-2 text-white">0 / 2</div>
+      <div class="text-xs text-gray-500 mt-1">Daily Trade Cap</div>
+    </div>
+
+    <!-- Circuit Breaker Status -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+      <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Circuit Breaker</div>
+      <div id="kpiBreaker" class="text-2xl md:text-3xl font-bold mt-2 text-emerald-400">NORMAL</div>
+      <div class="text-xs text-gray-500 mt-1">2.0% Drawdown Safety</div>
+    </div>
+  </div>
+
+  <!-- TAB 1: CONTROL STATION (Main View) -->
+  <section id="viewControl" class="max-w-7xl mx-auto mt-6 space-y-6">
+
+    <!-- Interactive Control Deck Form -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <!-- Active Lock Overlay Badge -->
+      <div id="lockNotice" class="hidden absolute top-4 right-6 flex items-center gap-1.5 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/80 px-3 py-1 rounded-full font-medium">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        <span>Market Selection Locked While Active</span>
+      </div>
+
+      <h2 class="text-lg font-semibold tracking-tight text-white mb-4 flex items-center gap-2">
+        <span>Execution Controls & Dual-Chart Setup</span>
+      </h2>
+
+      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
+        <!-- Chart 1 Dropdown -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2">
+            Primary Chart (Chart 1)
+          </label>
+          <div class="relative">
+            <select id="chart1Select" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <option value="XAUUSD">XAUUSD (Gold)</option>
+              <option value="EURUSD">EURUSD (Forex)</option>
+              <option value="GBPUSD">GBPUSD (Forex)</option>
+              <option value="BTCUSD">BTCUSD (Crypto)</option>
+              <option value="ETHUSD">ETHUSD (Crypto)</option>
+              <option value="NONE">None (Disabled)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Chart 2 Dropdown -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2">
+            Secondary Chart (Chart 2)
+          </label>
+          <div class="relative">
+            <select id="chart2Select" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <option value="NONE">None (Disabled)</option>
+              <option value="EURUSD">EURUSD (Forex)</option>
+              <option value="XAUUSD">XAUUSD (Gold)</option>
+              <option value="GBPUSD">GBPUSD (Forex)</option>
+              <option value="BTCUSD">BTCUSD (Crypto)</option>
+              <option value="ETHUSD">ETHUSD (Crypto)</option>
+            </select>
+          </div>
+        </div>
+
+
+        <!-- Manual Lot Size Input -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
+            <span>Lot Size</span>
+            <span class="text-gray-500">(Blank=0.5%)</span>
+          </label>
+          <div class="relative">
+            <input type="number" step="0.01" min="0.01" max="100.0" id="lotSizeInput" placeholder="e.g. 0.05" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+          </div>
+        </div>
+
+        <!-- Manual Stop Loss in Pips -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
+            <span class="text-emerald-400 font-semibold">Fixed Stop Loss (Pips)</span>
+            <span class="text-gray-500">(Blank=SMC)</span>
+          </label>
+          <div class="relative">
+            <input type="number" step="1" min="1" max="1000" id="slPipsInput" placeholder="e.g. 20 (pips)" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+          </div>
+        </div>
+
+        <!-- AI Second-Opinion Gatekeeper & Actions Container -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between bg-gray-900 border border-gray-700 rounded-xl px-3 py-1.5">
+            <span class="text-[11px] text-purple-300 font-semibold flex items-center gap-1">
+              <span>🤖 AI Gate (≥75%)</span>
+            </span>
+            <input type="checkbox" id="aiToggleCheckbox" checked class="w-4 h-4 text-purple-600 bg-gray-900 border-gray-700 rounded focus:ring-purple-500">
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button type="button" id="toggleActiveBtn" onclick="toggleActivation()" class="flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+              <span id="toggleBtnText">ACTIVATE BOT</span>
+            </button>
+            <button type="button" id="saveConfigBtn" onclick="saveConfig()" class="py-3 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl font-semibold text-xs text-gray-200 transition-all" title="Save market selections, lot size, fixed SL, and AI gate">
+              Save
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+
+
+    <!-- Live Execution Terminal & Log Feed -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex justify-between items-center pb-4 border-b border-gray-800">
+        <div class="flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+          <h3 class="text-sm font-bold tracking-wide uppercase text-gray-300">Live Decision Feed & Trade Activity</h3>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="triggerManualTick()" id="tickBtn" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50" title="Forces an instant SMC strategy analysis cycle across both selected charts right now without waiting for the automated 15-minute bar close">
+            ⚡ Run Tick Now
+          </button>
+          <span class="text-xs text-gray-500">Auto-refreshing every 2.5s</span>
+        </div>
+      </div>
+
+      <!-- Terminal Box -->
+      <div id="terminalContainer" class="mt-4 bg-black/60 rounded-xl p-4 font-mono text-xs text-gray-300 h-80 overflow-y-auto space-y-1.5 border border-gray-900">
+        <div class="text-gray-500">Connecting to trading engine log stream...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: TRADINGVIEW LIVE CHARTS (Dual Multi-Chart View) -->
+  <section id="viewCharts" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-gray-800 gap-2">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>TradingView Dual Market Terminal</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-0.5">Live real-time candlesticks and structural order flow for your 2 active charts</p>
+        </div>
+        <div class="text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800 px-3 py-1 rounded-lg">
+          Live Sync Active
+        </div>
+      </div>
+
+      <!-- Dual Chart Split Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <!-- Chart 1 Widget -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
+          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
+            <span id="chart1Title" class="text-xs font-bold text-gray-200">Chart 1: XAUUSD (Gold)</span>
+            <span class="text-[10px] text-gray-500 uppercase">15m Execution View</span>
+          </div>
+          <div id="tradingview_chart_1" class="w-full h-[450px]"></div>
+        </div>
+
+        <!-- Chart 2 Widget -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
+          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
+            <span id="chart2Title" class="text-xs font-bold text-gray-200">Chart 2: EURUSD</span>
+            <span class="text-[10px] text-gray-500 uppercase">15m Execution View</span>
+          </div>
+          <div id="tradingview_chart_2" class="w-full h-[450px]"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: EXECUTED TRADES & NET PnL HISTORY -->
+  <section id="viewHistory" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex justify-between items-center pb-4 border-b border-gray-800">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>Executed Trade Ledger & Realized PnL</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-0.5">Comprehensive audit log of filled bracket orders, exits, and net profitability</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-xs text-gray-400">Total Net PnL: <span id="historyNetPnL" class="font-bold text-emerald-400 text-sm ml-1">$0.00</span></div>
+          <button onclick="fetchTradeHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-all">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Trade History Table -->
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-300">
+          <thead class="bg-gray-900/90 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="py-3 px-4">ID</th>
+              <th class="py-3 px-4">Time (UTC)</th>
+              <th class="py-3 px-4">Symbol</th>
+              <th class="py-3 px-4">Side</th>
+              <th class="py-3 px-4">Entry</th>
+              <th class="py-3 px-4">Stop Loss</th>
+              <th class="py-3 px-4">Take Profit</th>
+              <th class="py-3 px-4">Lots</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Net PnL ($)</th>
+            </tr>
+          </thead>
+          <tbody id="tradeHistoryBody" class="divide-y divide-gray-800">
+            <tr>
+              <td colspan="10" class="py-6 text-center text-gray-500">Loading trade history records...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 hidden bg-gray-900 border border-gray-700 text-white px-5 py-3 rounded-xl shadow-2xl text-sm transition-all z-50 flex items-center gap-2">
+    <span id="toastMsg">Notification</span>
+  </div>
+
+  <script>
+    let isBotActive = false;
+    let currentSymbols = ["XAUUSD", "EURUSD"];
+    let widget1 = null;
+    let widget2 = null;
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      const tm = document.getElementById('toastMsg');
+      tm.innerText = msg;
+      t.className = `fixed bottom-6 right-6 flex items-center gap-2 px-5 py-3 rounded-xl shadow-2xl text-sm transition-all z-50 ${isError ? 'bg-red-900/90 border-red-700 text-red-200' : 'bg-gray-900 border-gray-700 text-white'}`;
+      t.classList.remove('hidden');
+      setTimeout(() => { t.classList.add('hidden'); }, 4000);
+    }
+
+    function switchTab(tabId) {
+      document.getElementById('viewControl').classList.add('hidden');
+      document.getElementById('viewCharts').classList.add('hidden');
+      document.getElementById('viewHistory').classList.add('hidden');
+
+      document.getElementById('tabBtnControl').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      document.getElementById('tabBtnCharts').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
+
+      if (tabId === 'control') {
+        document.getElementById('viewControl').classList.remove('hidden');
+        document.getElementById('tabBtnControl').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
+      } else if (tabId === 'charts') {
+        document.getElementById('viewCharts').classList.remove('hidden');
+        document.getElementById('tabBtnCharts').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
+        renderTradingViewWidgets();
+      } else if (tabId === 'history') {
+        document.getElementById('viewHistory').classList.remove('hidden');
+        document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
+        fetchTradeHistory();
+      }
+    }
+
+    function mapToTradingViewSymbol(symbol) {
+      if (symbol === "XAUUSD") return "OANDA:XAUUSD";
+      if (symbol === "EURUSD") return "FX:EURUSD";
+      if (symbol === "GBPUSD") return "FX:GBPUSD";
+      if (symbol === "BTCUSD") return "BINANCE:BTCUSDT";
+      if (symbol === "ETHUSD") return "BINANCE:ETHUSDT";
+      return symbol;
+    }
+
+    function renderTradingViewWidgets() {
+      const sym1 = currentSymbols[0] || "XAUUSD";
+      const sym2 = currentSymbols.length > 1 ? currentSymbols[1] : "NONE";
+
+      document.getElementById('chart1Title').innerText = `Chart 1: ${sym1}`;
+      document.getElementById('chart2Title').innerText = `Chart 2: ${sym2 === 'NONE' ? 'None (Disabled)' : sym2}`;
+
+      const tvSym1 = mapToTradingViewSymbol(sym1);
+
+      // Render Widget 1
+      new TradingView.widget({
+        "autosize": true,
+        "symbol": tvSym1,
+        "interval": "15",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#0b0f19",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": "tradingview_chart_1"
+      });
+
+      // Render Widget 2 or placeholder
+      const c2Container = document.getElementById('tradingview_chart_2');
+      if (sym2 === "NONE") {
+        c2Container.innerHTML = `
+          <div class="w-full h-full flex flex-col items-center justify-center text-gray-500 space-y-2 p-8">
+            <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+            <div class="text-xs font-semibold">Secondary Chart is set to None</div>
+            <p class="text-[11px] text-gray-600">The bot is currently focusing 100% of its resources on Chart 1 (${sym1}).</p>
+          </div>
+        `;
+      } else {
+        const tvSym2 = mapToTradingViewSymbol(sym2);
+        new TradingView.widget({
+          "autosize": true,
+          "symbol": tvSym2,
+          "interval": "15",
+          "timezone": "Etc/UTC",
+          "theme": "dark",
+          "style": "1",
+          "locale": "en",
+          "toolbar_bg": "#0b0f19",
+          "enable_publishing": false,
+          "allow_symbol_change": true,
+          "container_id": "tradingview_chart_2"
+        });
+      }
+    }
+
+
+    async function fetchTradeHistory() {
+      try {
+        const res = await fetch('/api/trades');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const tbody = document.getElementById('tradeHistoryBody');
+        const netPnlEl = document.getElementById('historyNetPnL');
+
+        const pnlPrefix = data.total_pnl >= 0 ? '+' : '';
+        netPnlEl.innerText = `${pnlPrefix}$${data.total_pnl.toFixed(2)}`;
+        netPnlEl.className = `font-bold text-sm ml-1 ${data.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+        if (!data.trades || data.trades.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-gray-500">No executed trades recorded yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.trades.map(t => {
+          const isWin = t.realized_pnl > 0;
+          const isLoss = t.realized_pnl < 0;
+          const pnlColor = isWin ? 'text-emerald-400 font-bold' : (isLoss ? 'text-red-400 font-bold' : 'text-gray-400');
+          const sideColor = t.direction === 'BUY' ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800' : 'text-rose-400 bg-rose-950/60 border-rose-800';
+          const pnlSign = t.realized_pnl >= 0 ? '+' : '';
+
+          return `
+            <tr class="hover:bg-gray-800/50 transition-colors">
+              <td class="py-3 px-4 font-mono text-gray-400">#${t.id}</td>
+              <td class="py-3 px-4 font-mono text-[11px] text-gray-400">${t.timestamp}</td>
+              <td class="py-3 px-4 font-bold text-white">${t.symbol}</td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${sideColor}">${t.direction}</span>
+              </td>
+              <td class="py-3 px-4 font-mono">${t.entry_price}</td>
+              <td class="py-3 px-4 font-mono text-rose-400">${t.stop_loss}</td>
+              <td class="py-3 px-4 font-mono text-emerald-400">${t.take_profit}</td>
+              <td class="py-3 px-4 font-mono">${t.lot_size}</td>
+              <td class="py-3 px-4">
+                <span class="text-[11px] font-medium text-gray-300">${t.status}</span>
+              </td>
+              <td class="py-3 px-4 text-right font-mono ${pnlColor}">${pnlSign}$${t.realized_pnl.toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        console.error("Failed to fetch trade history:", err);
+      }
+    }
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        isBotActive = data.is_active;
+        currentSymbols = data.selected_symbols || ["XAUUSD", "EURUSD"];
+
+        const dot = document.getElementById('statusDot');
+        const label = document.getElementById('statusLabel');
+        const btn = document.getElementById('toggleActiveBtn');
+        const btnText = document.getElementById('toggleBtnText');
+        const lockNotice = document.getElementById('lockNotice');
+
+        const c1 = document.getElementById('chart1Select');
+        const c2 = document.getElementById('chart2Select');
+        const lot = document.getElementById('lotSizeInput');
+        const saveBtn = document.getElementById('saveConfigBtn');
+        const tickBtn = document.getElementById('tickBtn');
+
+        if (isBotActive) {
+          dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
+          label.innerText = "ACTIVE (ANALYZING & EXECUTING)";
+          label.className = "text-sm font-bold text-emerald-400";
+          btn.className = "flex-1 py-3.5 px-6 rounded-xl font-bold text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white pulse-glow-red";
+          btnText.innerText = "DEACTIVATE BOT";
+          lockNotice.classList.remove('hidden');
+
+          c1.disabled = true;
+          c2.disabled = true;
+          lot.disabled = true;
+          document.getElementById('slPipsInput').disabled = true;
+          document.getElementById('aiToggleCheckbox').disabled = true;
+          saveBtn.disabled = true;
+          tickBtn.disabled = false;
+        } else {
+          dot.className = "w-3 h-3 rounded-full bg-red-500";
+          label.innerText = "DEACTIVATED (IDLE)";
+          label.className = "text-sm font-semibold text-gray-300";
+          btn.className = "flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green";
+          btnText.innerText = "ACTIVATE BOT";
+          lockNotice.classList.add('hidden');
+
+          c1.disabled = false;
+          c2.disabled = false;
+          lot.disabled = false;
+          document.getElementById('slPipsInput').disabled = false;
+          document.getElementById('aiToggleCheckbox').disabled = false;
+          saveBtn.disabled = false;
+          tickBtn.disabled = true;
+        }
+
+
+        if (data.selected_symbols && data.selected_symbols.length > 0) {
+          c1.value = data.selected_symbols[0] || "XAUUSD";
+          if (data.selected_symbols.length >= 2) {
+            c2.value = data.selected_symbols[1];
+          } else {
+            c2.value = "NONE";
+          }
+        }
+
+        if (data.fixed_lot_size) {
+          lot.value = data.fixed_lot_size;
+        }
+        if (data.fixed_sl_pips) {
+          document.getElementById('slPipsInput').value = data.fixed_sl_pips;
+        }
+
+
+        const aiCb = document.getElementById('aiToggleCheckbox');
+        const aiBadge = document.getElementById('aiStatusBadge');
+        if (data.ai_confirmation_enabled !== undefined) {
+          aiCb.checked = data.ai_confirmation_enabled;
+          if (data.ai_confirmation_enabled) {
+            aiBadge.innerText = `ACTIVE (≥${data.ai_confidence_threshold || 75}%)`;
+            aiBadge.className = "text-[10px] text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded border border-purple-800";
+          } else {
+            aiBadge.innerText = "DISABLED";
+            aiBadge.className = "text-[10px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700";
+          }
+        }
+
+
+        document.getElementById('kpiEquity').innerText = `$${data.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+        
+        const pnlEl = document.getElementById('kpiPnL');
+        const pnlPrefix = data.daily_pnl >= 0 ? '+' : '';
+        pnlEl.innerText = `${pnlPrefix}$${data.daily_pnl.toFixed(2)}`;
+        pnlEl.className = `text-2xl md:text-3xl font-bold mt-2 ${data.daily_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+        document.getElementById('kpiTrades').innerText = `${data.trades_today} (Testing Mode)`;
+
+        const cbEl = document.getElementById('kpiBreaker');
+        if (data.circuit_breaker_active) {
+          cbEl.innerText = "TRIPPED";
+          cbEl.className = "text-2xl md:text-3xl font-bold mt-2 text-red-500";
+        } else {
+          cbEl.innerText = "NORMAL";
+          cbEl.className = "text-2xl md:text-3xl font-bold mt-2 text-emerald-400";
+        }
+
+        document.getElementById('modeBadge').innerText = data.mock_mode ? "Simulation Mock Mode" : "Live MT5 Connected";
+
+        const term = document.getElementById('terminalContainer');
+        if (data.recent_logs && data.recent_logs.length > 0) {
+          term.innerHTML = data.recent_logs.map(log => {
+            let color = "text-gray-300";
+            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) color = "text-emerald-400 font-semibold";
+            if (log.includes("⛔") || log.includes("🚫") || log.includes("DEACTIVATED")) color = "text-amber-400";
+            if (log.includes("❌") || log.includes("🛑") || log.includes("ERROR") || log.includes("FAILED")) color = "text-red-400 font-bold";
+            return `<div class="${color}">${log}</div>`;
+          }).join('');
+        }
+
+      } catch (err) {
+        console.error("Failed to fetch bot state:", err);
+      }
+    }
+
+    async function toggleActivation() {
+      const endpoint = isBotActive ? '/api/deactivate' : '/api/activate';
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message);
+          await fetchState();
+        } else {
+          showToast(data.detail || "Action failed", true);
+        }
+      } catch (err) {
+        showToast("Network error connecting to bot server", true);
+      }
+    }
+
+    async function saveConfig() {
+      const c1 = document.getElementById('chart1Select').value;
+      const c2 = document.getElementById('chart2Select').value;
+      const lotVal = document.getElementById('lotSizeInput').value;
+
+      if (c1 === "NONE" && c2 === "NONE") {
+        showToast("Please select at least 1 valid chart instrument (cannot both be None).", true);
+        return;
+      }
+
+      if (c1 !== "NONE" && c2 !== "NONE" && c1 === c2) {
+        showToast("Please choose 2 different chart instruments or set one to None.", true);
+        return;
+      }
+
+      const slPipsVal = document.getElementById('slPipsInput').value;
+      const aiEnabled = document.getElementById('aiToggleCheckbox').checked;
+
+      const payload = {
+        selected_symbols: [c1, c2],
+        fixed_lot_size: lotVal ? parseFloat(lotVal) : null,
+        fixed_sl_pips: slPipsVal ? parseFloat(slPipsVal) : null,
+        ai_confirmation_enabled: aiEnabled
+      };
+
+
+      try {
+        const res = await fetch('/api/configure', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast("Configuration saved successfully!");
+          await fetchState();
+        } else {
+          showToast(data.detail || "Failed to update configuration", true);
+        }
+      } catch (err) {
+        showToast("Error sending configuration to bot server", true);
+      }
+
+    }
+
+    async function triggerManualTick() {
+      try {
+        const res = await fetch('/api/trigger_tick', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast("Manual tick cycle triggered!");
+          setTimeout(fetchState, 600);
+        } else {
+          showToast(data.detail, true);
+        }
+      } catch (err) {
+        showToast("Error triggering tick", true);
+      }
+    }
+
+    // Initial load & periodic polling
+    fetchState();
+    setInterval(fetchState, 2500);
+  </script>
+</body>
+</html>
