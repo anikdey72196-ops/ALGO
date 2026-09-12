@@ -84,9 +84,19 @@ def test_api_workflow():
     assert state['selected_symbols'] == ["XAUUSD"], f"Symbols: {state['selected_symbols']}"
     print(f"   Single pair configured successfully: active_symbols={state['selected_symbols']}")
 
+    print("\n11. Testing Dashboard HTML for Strategy Selection Dropdown...")
+    dash_res = client.get("/")
+    assert dash_res.status_code == 200
+    html_text = dash_res.text
+    assert 'id="strategySelect"' in html_text, "strategySelect dropdown missing from index.html"
+    assert 'value="15-Minute SMC Swing"' in html_text, "15-Minute SMC Swing option missing"
+    assert 'value="5-Minute Order Block Scalp"' in html_text, "5-Minute Order Block Scalp option missing"
+    assert 'strategySelect.disabled = true' in html_text, "strategySelect disable logic missing"
+    assert 'strategySelect.disabled = false' in html_text, "strategySelect enable logic missing"
+    print("   [PASSED] Strategy selection dropdown and active lock logic verified in dashboard HTML.")
+
     print("\nAll Web API integration tests passed successfully!")
 
 
 if __name__ == "__main__":
     test_api_workflow()
-
