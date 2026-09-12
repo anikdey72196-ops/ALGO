@@ -273,6 +273,10 @@ class TradingConfig(BaseModel):
         gt=0.0,
         description="Optional fixed Stop Loss in pips. If set, overrides dynamic SMC structure stop loss.",
     )
+    strategy_type: str = Field(
+        default="SMC",
+        description="Trading strategy algorithm selection (e.g. SMC, EMA_CROSS, GRID_TRADING).",
+    )
     selected_symbols: List[str] = Field(
         default_factory=lambda: ["XAUUSD", "EURUSD"],
         description="List of up to 2 active symbols to analyze concurrently.",
