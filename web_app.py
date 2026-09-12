@@ -76,6 +76,7 @@ class BotStateResponse(BaseModel):
     winning_trades: int = 0
     losing_trades: int = 0
     total_closed_trades: int = 0
+    active_session: Optional[dict] = None
 
 
 
@@ -119,6 +120,9 @@ async def lifespan(app: FastAPI):
     if scheduler_instance:
         scheduler_instance.shutdown(wait=False)
     if bot_instance:
+        if bot_instance.is_active:
+            bot_instance.state.record_deactivation("Server Shutdown")
+            bot_instance.is_active = False
         bot_instance.shutdown()
     logger.info("Web Control Server shut down cleanly.")
 
@@ -153,6 +157,7 @@ async def get_bot_state():
     daily_pnl = bot_instance.state.get_daily_pnl()
     trade_count = bot_instance.state.get_trade_count()
     cb_active = bot_instance.state.is_circuit_breaker_active()
+    active_session = bot_instance.state.get_active_session()
 
     available = [i.symbol for i in bot_instance.config.instruments]
     broker_info = None
@@ -185,6 +190,7 @@ async def get_bot_state():
         winning_trades=len(winning_trades),
         losing_trades=len(losing_trades),
         total_closed_trades=len(closed_trades),
+        active_session=active_session,
     )
 
 
@@ -200,14 +206,23 @@ async def activate_bot():
         return {"status": "already_active", "message": "Bot is already active."}
 
     bot_instance.is_active = True
+    session_id = bot_instance.state.record_activation(
+        symbols=bot_instance.config.selected_symbols[:2],
+        lot_size=bot_instance.config.fixed_lot_size,
+        trigger_source="Web Dashboard",
+    )
     bot_instance.log(
-        f"🟢 BOT ACTIVATED by user. Monitoring: {bot_instance.config.selected_symbols[:2]} | "
+        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring: {bot_instance.config.selected_symbols[:2]} | "
         f"Lot Size: {bot_instance.config.fixed_lot_size or 'Dynamic (0.5% risk)'}"
     )
 
     # Immediately trigger a tick cycle
     asyncio.create_task(asyncio.to_thread(bot_instance.tick))
-    return {"status": "success", "message": "Bot activated successfully. Market selection locked."}
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "message": f"Bot activated successfully (Session #{session_id}). Market selection locked.",
+    }
 
 
 @app.post("/api/deactivate")
@@ -216,9 +231,17 @@ async def deactivate_bot():
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+    if not bot_instance.is_active:
+        return {"status": "already_inactive", "message": "Bot is already deactivated."}
+
     bot_instance.is_active = False
-    bot_instance.log("🔴 BOT DEACTIVATED by user. No trade execution will occur.")
-    return {"status": "success", "message": "Bot deactivated. Trade execution halted."}
+    closed_id = bot_instance.state.record_deactivation("Manual User Stop")
+    bot_instance.log(f"🔴 BOT DEACTIVATED by user (Session #{closed_id or '---'}). No trade execution will occur.")
+    return {
+        "status": "success",
+        "session_id": closed_id,
+        "message": "Bot deactivated. Trade execution halted.",
+    }
 
 
 @app.post("/api/configure")
@@ -334,4 +357,32 @@ async def get_trade_history():
         "losing_trades": len(losses),
         "total_closed_trades": len(closed),
     }
+
+
+@app.get("/api/activation_history")
+@app.get("/api/activation-history")
+async def get_activation_history(limit: int = 100):
+    """Return historical bot activation / deactivation records and stats."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    history = bot_instance.state.get_activation_history(limit=limit)
+    stats = bot_instance.state.get_activation_stats()
+    return {
+        "sessions": history,
+        "stats": stats,
+    }
+
+
+@app.post("/api/activation_history/clear")
+@app.post("/api/activation-history/clear")
+async def clear_activation_history():
+    """Clear historical completed/interrupted sessions."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    bot_instance.state.clear_activation_history()
+    bot_instance.log("🧹 Bot activation/deactivation session history cleared.")
+    return {"status": "success", "message": "Activation history cleared."}
+
 

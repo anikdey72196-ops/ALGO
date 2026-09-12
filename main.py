@@ -183,6 +183,9 @@ class TradingBot:
     def shutdown(self) -> None:
         """Clean shutdown."""
         logger.info("Trading bot shutting down...")
+        if self.is_active:
+            self.state.record_deactivation("Server Shutdown")
+            self.is_active = False
         self.broker.disconnect()
         self.state.close()
         logger.info("Shutdown complete.")

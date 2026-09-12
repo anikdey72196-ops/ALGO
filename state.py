@@ -22,6 +22,20 @@ class TradeRecord:
     status: str  # 'OPEN', 'CLOSED_TP', 'CLOSED_SL', 'CLOSED_MANUAL'
 
 
+@dataclass
+class BotSessionRecord:
+    """Record of a bot activation / deactivation session."""
+    id: int | None
+    activation_time: datetime
+    deactivation_time: datetime | None
+    duration_seconds: float | None
+    symbols: str
+    lot_size: str
+    trigger_source: str
+    deactivation_reason: str | None
+    status: str  # 'ACTIVE', 'COMPLETED', 'INTERRUPTED'
+
+
 class StateManager:
     """Persistent state backed by SQLite."""
     
@@ -33,9 +47,10 @@ class StateManager:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._init_schema()
         self._ensure_daily_row(datetime.now(timezone.utc).date())
+        self.cleanup_interrupted_sessions()
     
     def _init_schema(self) -> None:
-        """Create tables: daily_state, trade_log."""
+        """Create tables: daily_state, trade_log, bot_sessions."""
         with self.conn:
             self.conn.execute('''
                 CREATE TABLE IF NOT EXISTS daily_state (
@@ -57,6 +72,19 @@ class StateManager:
                     lot_size REAL,
                     realized_pnl REAL DEFAULT 0.0,
                     status TEXT DEFAULT 'OPEN'
+                )
+            ''')
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS bot_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    activation_time TEXT NOT NULL,
+                    deactivation_time TEXT,
+                    duration_seconds REAL,
+                    symbols TEXT,
+                    lot_size TEXT,
+                    trigger_source TEXT DEFAULT 'Web Dashboard',
+                    deactivation_reason TEXT,
+                    status TEXT DEFAULT 'ACTIVE'
                 )
             ''')
         logger.info(f"Database schema initialized at {self.db_path}")
@@ -276,8 +304,250 @@ class StateManager:
             
         return trades
 
-    def close(self) -> None:
+    def cleanup_interrupted_sessions(self, reason: str = "Interrupted / Server Restarted") -> None:
+        """Mark any lingering 'ACTIVE' sessions as 'INTERRUPTED'."""
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        with self.conn:
+            cursor = self.conn.execute("SELECT id, activation_time FROM bot_sessions WHERE status = 'ACTIVE'")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    act_time = datetime.fromisoformat(r['activation_time'])
+                    if act_time.tzinfo is None:
+                        act_time = act_time.replace(tzinfo=timezone.utc)
+                    duration_sec = max(0.0, (now - act_time).total_seconds())
+                except Exception:
+                    duration_sec = 0.0
+                self.conn.execute('''
+                    UPDATE bot_sessions
+                    SET deactivation_time = ?,
+                        duration_seconds = ?,
+                        deactivation_reason = ?,
+                        status = 'INTERRUPTED'
+                    WHERE id = ?
+                ''', (now_iso, duration_sec, reason, r['id']))
+                logger.info(f"Cleaned up stale session #{r['id']} -> INTERRUPTED ({reason})")
 
+    def record_activation(
+        self,
+        symbols: list[str] | str,
+        lot_size: str | float | None = None,
+        trigger_source: str = "Web Dashboard",
+    ) -> int:
+        """
+        Record a new bot activation event.
+        Closes any currently active dangling session before creating a new one.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        
+        # Clean up any currently ACTIVE sessions
+        self.cleanup_interrupted_sessions(reason="Superseded by new activation")
+        
+        if isinstance(symbols, list):
+            symbols_str = ", ".join(s for s in symbols if s and s != "NONE")
+        else:
+            symbols_str = str(symbols)
+            
+        lot_size_str = str(lot_size) if lot_size is not None else "Dynamic"
+        
+        with self.conn:
+            cursor = self.conn.execute('''
+                INSERT INTO bot_sessions (
+                    activation_time, symbols, lot_size, trigger_source, status
+                ) VALUES (?, ?, ?, ?, 'ACTIVE')
+            ''', (now_iso, symbols_str, lot_size_str, trigger_source))
+            session_id = cursor.lastrowid
+            
+        logger.info(f"[ACTIVATED] Recorded bot activation session #{session_id} for {symbols_str} (Trigger: {trigger_source})")
+        return session_id
+
+    def record_deactivation(
+        self,
+        reason: str = "Manual User Stop",
+        session_id: int | None = None,
+    ) -> int | None:
+        """
+        Record a bot deactivation event.
+        Computes elapsed active duration in seconds and completes the session.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        
+        with self.conn:
+            if session_id is not None:
+                cursor = self.conn.execute(
+                    "SELECT id, activation_time FROM bot_sessions WHERE id = ? AND status = 'ACTIVE'",
+                    (session_id,)
+                )
+            else:
+                cursor = self.conn.execute(
+                    "SELECT id, activation_time FROM bot_sessions WHERE status = 'ACTIVE' ORDER BY id DESC LIMIT 1"
+                )
+            row = cursor.fetchone()
+            if not row:
+                logger.warning("No active session found to deactivate.")
+                return None
+                
+            active_id = row['id']
+            try:
+                act_time = datetime.fromisoformat(row['activation_time'])
+                if act_time.tzinfo is None:
+                    act_time = act_time.replace(tzinfo=timezone.utc)
+                duration_sec = max(0.0, (now - act_time).total_seconds())
+            except Exception:
+                duration_sec = 0.0
+                
+            self.conn.execute('''
+                UPDATE bot_sessions
+                SET deactivation_time = ?,
+                    duration_seconds = ?,
+                    deactivation_reason = ?,
+                    status = 'COMPLETED'
+                WHERE id = ?
+            ''', (now_iso, duration_sec, reason, active_id))
+            
+        logger.info(f"[DEACTIVATED] Recorded bot deactivation for session #{active_id}. Duration: {format_duration(duration_sec)} ({reason})")
+        return active_id
+
+    def get_active_session(self) -> dict | None:
+        """Return the currently active session if one exists, with live running duration."""
+        cursor = self.conn.execute(
+            "SELECT * FROM bot_sessions WHERE status = 'ACTIVE' ORDER BY id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+            
+        now = datetime.now(timezone.utc)
+        try:
+            act_time = datetime.fromisoformat(row['activation_time'])
+            if act_time.tzinfo is None:
+                act_time = act_time.replace(tzinfo=timezone.utc)
+            duration_sec = max(0.0, (now - act_time).total_seconds())
+        except Exception:
+            duration_sec = 0.0
+            
+        return {
+            "id": row["id"],
+            "activation_time": row["activation_time"],
+            "activation_time_formatted": act_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "deactivation_time": None,
+            "deactivation_time_formatted": "Active Now",
+            "duration_seconds": round(duration_sec, 1),
+            "formatted_duration": format_duration(duration_sec),
+            "symbols": row["symbols"] or "All",
+            "lot_size": row["lot_size"] or "Dynamic",
+            "trigger_source": row["trigger_source"] or "Web Dashboard",
+            "deactivation_reason": None,
+            "status": "ACTIVE",
+        }
+
+    def get_activation_history(self, limit: int = 100) -> list[dict]:
+        """Return historical bot activation / deactivation sessions ordered by id DESC."""
+        cursor = self.conn.execute(
+            "SELECT * FROM bot_sessions ORDER BY id DESC LIMIT ?", (limit,)
+        )
+        now = datetime.now(timezone.utc)
+        records = []
+        for row in cursor.fetchall():
+            try:
+                act_dt = datetime.fromisoformat(row["activation_time"])
+                if act_dt.tzinfo is None:
+                    act_dt = act_dt.replace(tzinfo=timezone.utc)
+                act_str = act_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+            except Exception:
+                act_dt = now
+                act_str = row["activation_time"]
+
+            deact_raw = row["deactivation_time"]
+            if deact_raw:
+                try:
+                    deact_dt = datetime.fromisoformat(deact_raw)
+                    if deact_dt.tzinfo is None:
+                        deact_dt = deact_dt.replace(tzinfo=timezone.utc)
+                    deact_str = deact_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+                except Exception:
+                    deact_str = deact_raw
+            else:
+                deact_str = "Active Now"
+
+            # Compute live duration for currently ACTIVE session
+            if row["status"] == "ACTIVE":
+                dur_sec = max(0.0, (now - act_dt).total_seconds())
+            else:
+                dur_sec = row["duration_seconds"] or 0.0
+
+            records.append({
+                "id": row["id"],
+                "activation_time": row["activation_time"],
+                "activation_time_formatted": act_str,
+                "deactivation_time": deact_raw,
+                "deactivation_time_formatted": deact_str,
+                "duration_seconds": round(dur_sec, 1),
+                "formatted_duration": format_duration(dur_sec),
+                "symbols": row["symbols"] or "All",
+                "lot_size": row["lot_size"] or "Dynamic",
+                "trigger_source": row["trigger_source"] or "Web Dashboard",
+                "deactivation_reason": row["deactivation_reason"] or ("Active Now" if row["status"] == "ACTIVE" else "---"),
+                "status": row["status"],
+            })
+        return records
+
+    def get_activation_stats(self) -> dict:
+        """Return aggregate operational uptime statistics."""
+        history = self.get_activation_history(limit=500)
+        total_sessions = len(history)
+        active_session = self.get_active_session()
+        
+        total_uptime_seconds = sum(item["duration_seconds"] for item in history)
+        completed_sessions = [s for s in history if s["status"] == "COMPLETED"]
+        completed_durations = [s["duration_seconds"] for s in completed_sessions]
+        avg_duration_sec = (sum(completed_durations) / len(completed_durations)) if completed_durations else 0.0
+        
+        last_activation = history[0]["activation_time_formatted"] if history else None
+        last_deactivation = None
+        for s in history:
+            if s["status"] != "ACTIVE" and s["deactivation_time"]:
+                last_deactivation = s["deactivation_time_formatted"]
+                break
+                
+        return {
+            "total_sessions": total_sessions,
+            "is_active": active_session is not None,
+            "current_session": active_session,
+            "total_uptime_seconds": round(total_uptime_seconds, 1),
+            "formatted_total_uptime": format_duration(total_uptime_seconds),
+            "average_duration_seconds": round(avg_duration_sec, 1),
+            "formatted_avg_duration": format_duration(avg_duration_sec),
+            "last_activation_time": last_activation,
+            "last_deactivation_time": last_deactivation,
+        }
+
+    def clear_activation_history(self) -> None:
+        """Clear all completed/interrupted session history records (keeps active session if one exists)."""
+        with self.conn:
+            self.conn.execute("DELETE FROM bot_sessions WHERE status != 'ACTIVE'")
+        logger.info("Cleared non-active bot session history.")
+
+    def close(self) -> None:
         """Close DB connection."""
         self.conn.close()
         logger.info("Database connection closed")
+
+
+def format_duration(seconds: float | None) -> str:
+    """Format seconds into a human-readable duration string."""
+    if seconds is None:
+        return "---"
+    sec = int(round(seconds))
+    if sec < 60:
+        return f"{sec}s"
+    minutes = sec // 60
+    rem_sec = sec % 60
+    if minutes < 60:
+        return f"{minutes}m {rem_sec:02d}s"
+    hours = minutes // 60
+    rem_min = minutes % 60
+    return f"{hours}h {rem_min:02d}m {rem_sec:02d}s"

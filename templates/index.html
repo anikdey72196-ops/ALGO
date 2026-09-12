@@ -64,11 +64,15 @@
         <button id="tabBtnHistory" onclick="switchTab('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
           Trade History & PnL
         </button>
+        <button id="tabBtnSessions" onclick="switchTab('sessions')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center gap-1.5">
+          <span>⏱️ Activation History</span>
+        </button>
       </nav>
 
       <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 shadow-inner">
         <div id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></div>
         <span id="statusLabel" class="text-sm font-semibold text-gray-300">DEACTIVATED (IDLE)</span>
+        <span id="headerUptimeBadge" class="hidden text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-md ml-1" title="Current session live uptime">00:00:00</span>
       </div>
     </div>
   </header>
@@ -314,6 +318,91 @@
     </div>
   </section>
 
+  <!-- TAB 4: BOT ACTIVATION & DEACTIVATION TIME HISTORY -->
+  <section id="viewSessions" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
+    <!-- Session KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <!-- Current State / Session Status -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+        <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Bot Status</div>
+        <div id="kpiSessionStatus" class="text-xl md:text-2xl font-bold mt-2 text-gray-400">IDLE</div>
+        <div id="kpiSessionUptime" class="text-xs text-gray-500 mt-1 font-mono">Not running</div>
+      </div>
+
+      <!-- Total Sessions Count -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+        <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Sessions</div>
+        <div id="kpiTotalSessions" class="text-2xl md:text-3xl font-bold mt-2 text-white">0</div>
+        <div class="text-xs text-gray-500 mt-1">Activation cycles</div>
+      </div>
+
+      <!-- Cumulative Uptime -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+        <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Bot Uptime</div>
+        <div id="kpiTotalUptime" class="text-2xl md:text-3xl font-bold mt-2 text-emerald-400">0s</div>
+        <div class="text-xs text-gray-500 mt-1">Cumulative active time</div>
+      </div>
+
+      <!-- Average Session Duration -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+        <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Avg Session Time</div>
+        <div id="kpiAvgDuration" class="text-2xl md:text-3xl font-bold mt-2 text-cyan-400">0s</div>
+        <div class="text-xs text-gray-500 mt-1">Per active cycle</div>
+      </div>
+
+      <!-- Last Active Time -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
+        <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Last Activity</div>
+        <div id="kpiLastActivity" class="text-sm md:text-base font-bold mt-2 text-white truncate">---</div>
+        <div id="kpiLastActivitySub" class="text-xs text-gray-500 mt-1 truncate">No records yet</div>
+      </div>
+    </div>
+
+    <!-- Activation History Table Card -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-gray-800 gap-3">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>Bot Activation & Deactivation Time History</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-0.5">Permanent operational log of bot run intervals, timestamps, active instruments, and triggers</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="fetchActivationHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+            <span>🔄 Refresh</span>
+          </button>
+          <button onclick="confirmClearSessions()" class="text-xs bg-gray-800 hover:bg-red-950/60 text-gray-400 hover:text-red-300 border border-gray-700 hover:border-red-800 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5" title="Clear past completed sessions">
+            <span>🗑️ Clear History</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sessions Table -->
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-300">
+          <thead class="bg-gray-900/90 text-gray-400 uppercase font-semibold border-b border-gray-800">
+            <tr>
+              <th class="py-3 px-4">Session #</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4">Activation Time (UTC)</th>
+              <th class="py-3 px-4">Deactivation Time (UTC)</th>
+              <th class="py-3 px-4">Active Duration</th>
+              <th class="py-3 px-4">Active Instruments</th>
+              <th class="py-3 px-4">Lot Size</th>
+              <th class="py-3 px-4">Trigger / Source</th>
+              <th class="py-3 px-4">Deactivation Reason</th>
+            </tr>
+          </thead>
+          <tbody id="sessionHistoryBody" class="divide-y divide-gray-800">
+            <tr>
+              <td colspan="9" class="py-8 text-center text-gray-500">Loading activation & deactivation history records...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- Notification Toast -->
   <div id="toast" class="fixed bottom-6 right-6 hidden bg-gray-900 border border-gray-700 text-white px-5 py-3 rounded-xl shadow-2xl text-sm transition-all z-50 flex items-center gap-2">
     <span id="toastMsg">Notification</span>
@@ -321,9 +410,61 @@
 
   <script>
     let isBotActive = false;
+    let hasLoadedInitialConfig = false;
     let currentSymbols = ["XAUUSD", "EURUSD"];
     let widget1 = null;
     let widget2 = null;
+    let currentActiveSession = null;
+    let currentActiveStartTime = null;
+
+    function formatDurationSec(sec) {
+      sec = Math.max(0, Math.floor(sec));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) {
+        return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+      }
+      return `${m}m ${String(s).padStart(2, '0')}s`;
+    }
+
+    function updateLiveTimer() {
+      const badge = document.getElementById('headerUptimeBadge');
+      const kpiStatus = document.getElementById('kpiSessionStatus');
+      const kpiUptime = document.getElementById('kpiSessionUptime');
+      const tableLiveCell = document.getElementById('activeSessionLiveDuration');
+
+      if (!isBotActive || !currentActiveStartTime) {
+        if (badge) badge.classList.add('hidden');
+        if (kpiStatus) {
+          kpiStatus.innerText = "IDLE";
+          kpiStatus.className = "text-xl md:text-2xl font-bold mt-2 text-gray-400";
+        }
+        if (kpiUptime) kpiUptime.innerText = "Not running";
+        return;
+      }
+
+      const now = new Date();
+      const elapsedSec = (now.getTime() - currentActiveStartTime.getTime()) / 1000;
+      const formatted = formatDurationSec(elapsedSec);
+
+      if (badge) {
+        badge.innerText = formatted;
+        badge.classList.remove('hidden');
+      }
+      if (kpiStatus) {
+        kpiStatus.innerText = "ACTIVE";
+        kpiStatus.className = "text-xl md:text-2xl font-bold mt-2 text-emerald-400 animate-pulse";
+      }
+      if (kpiUptime) {
+        kpiUptime.innerText = `Running: ${formatted}`;
+      }
+      if (tableLiveCell) {
+        tableLiveCell.innerText = formatted;
+      }
+    }
+
+    setInterval(updateLiveTimer, 1000);
 
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -338,10 +479,12 @@
       document.getElementById('viewControl').classList.add('hidden');
       document.getElementById('viewCharts').classList.add('hidden');
       document.getElementById('viewHistory').classList.add('hidden');
+      document.getElementById('viewSessions').classList.add('hidden');
 
       document.getElementById('tabBtnControl').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
       document.getElementById('tabBtnCharts').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
       document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      document.getElementById('tabBtnSessions').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center gap-1.5";
 
       if (tabId === 'control') {
         document.getElementById('viewControl').classList.remove('hidden');
@@ -354,6 +497,10 @@
         document.getElementById('viewHistory').classList.remove('hidden');
         document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
         fetchTradeHistory();
+      } else if (tabId === 'sessions') {
+        document.getElementById('viewSessions').classList.remove('hidden');
+        document.getElementById('tabBtnSessions').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm flex items-center gap-1.5";
+        fetchActivationHistory();
       }
     }
 
@@ -484,7 +631,7 @@
       }
     }
 
-    async function fetchState() {
+    async function fetchState(forceFormSync = false) {
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
@@ -492,6 +639,15 @@
 
         isBotActive = data.is_active;
         currentSymbols = data.selected_symbols || ["XAUUSD", "EURUSD"];
+
+        if (data.active_session && data.is_active) {
+          currentActiveSession = data.active_session;
+          currentActiveStartTime = new Date(data.active_session.activation_time);
+        } else {
+          currentActiveSession = null;
+          currentActiveStartTime = null;
+        }
+        updateLiveTimer();
 
         const dot = document.getElementById('statusDot');
         const label = document.getElementById('statusLabel');
@@ -538,27 +694,48 @@
         }
 
 
-        if (data.selected_symbols && data.selected_symbols.length > 0) {
-          c1.value = data.selected_symbols[0] || "XAUUSD";
-          if (data.selected_symbols.length >= 2) {
-            c2.value = data.selected_symbols[1];
-          } else {
-            c2.value = "NONE";
+        const slInput = document.getElementById('slPipsInput');
+        const lotInput = document.getElementById('lotSizeInput');
+
+        // Check if user is currently focused/typing in any input
+        const isEditingSl = document.activeElement === slInput;
+        const isEditingLot = document.activeElement === lotInput;
+        const isEditingC1 = document.activeElement === c1;
+        const isEditingC2 = document.activeElement === c2;
+
+        if (isBotActive) {
+          // When bot is active, controls are locked - reflect active server state
+          if (data.selected_symbols && data.selected_symbols.length > 0) {
+            c1.value = data.selected_symbols[0] || "XAUUSD";
+            c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
           }
+          if (data.fixed_lot_size !== null && data.fixed_lot_size !== undefined) {
+            lot.value = data.fixed_lot_size;
+          }
+          if (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) {
+            slInput.value = data.fixed_sl_pips;
+          }
+        } else if (!hasLoadedInitialConfig || forceFormSync) {
+          // When idle, only sync form values on initial load or after explicit user save / toggle
+          if (!isEditingC1 && !isEditingC2 && data.selected_symbols && data.selected_symbols.length > 0) {
+            c1.value = data.selected_symbols[0] || "XAUUSD";
+            c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
+          }
+          if (!isEditingLot) {
+            lot.value = (data.fixed_lot_size !== null && data.fixed_lot_size !== undefined) ? data.fixed_lot_size : "";
+          }
+          if (!isEditingSl) {
+            slInput.value = (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) ? data.fixed_sl_pips : "";
+          }
+          if (data.ai_confirmation_enabled !== undefined && document.activeElement !== aiCb) {
+            if (aiCb) aiCb.checked = data.ai_confirmation_enabled;
+          }
+          hasLoadedInitialConfig = true;
         }
-
-        if (data.fixed_lot_size) {
-          lot.value = data.fixed_lot_size;
-        }
-        if (data.fixed_sl_pips) {
-          document.getElementById('slPipsInput').value = data.fixed_sl_pips;
-        }
-
 
         const aiCb = document.getElementById('aiToggleCheckbox');
         const aiBadge = document.getElementById('aiStatusBadge');
         if (data.ai_confirmation_enabled !== undefined) {
-          if (aiCb) aiCb.checked = data.ai_confirmation_enabled;
           if (aiBadge) {
             if (data.ai_confirmation_enabled) {
               aiBadge.innerText = `ACTIVE (≥${data.ai_confidence_threshold || 75}%)`;
@@ -650,7 +827,8 @@
         const data = await res.json();
         if (res.ok) {
           showToast(data.message);
-          await fetchState();
+          await fetchState(true);
+          await fetchActivationHistory();
         } else {
           showToast(data.detail || "Action failed", true);
         }
@@ -662,7 +840,7 @@
     async function saveConfig() {
       const c1 = document.getElementById('chart1Select').value;
       const c2 = document.getElementById('chart2Select').value;
-      const lotVal = document.getElementById('lotSizeInput').value;
+      const lotVal = document.getElementById('lotSizeInput').value.trim();
 
       if (c1 === "NONE" && c2 === "NONE") {
         showToast("Please select at least 1 valid chart instrument (cannot both be None).", true);
@@ -674,16 +852,24 @@
         return;
       }
 
-      const slPipsVal = document.getElementById('slPipsInput').value;
+      const slInputEl = document.getElementById('slPipsInput');
+      const slPipsRaw = slInputEl ? slInputEl.value.trim() : "";
+      const fixedSlVal = (slPipsRaw !== "" && !isNaN(parseFloat(slPipsRaw)) && parseFloat(slPipsRaw) > 0) ? parseFloat(slPipsRaw) : null;
       const aiEnabled = document.getElementById('aiToggleCheckbox').checked;
 
       const payload = {
         selected_symbols: [c1, c2],
-        fixed_lot_size: lotVal ? parseFloat(lotVal) : null,
-        fixed_sl_pips: slPipsVal ? parseFloat(slPipsVal) : null,
+        fixed_lot_size: (lotVal && !isNaN(parseFloat(lotVal))) ? parseFloat(lotVal) : null,
+        fixed_sl_pips: fixedSlVal,
         ai_confirmation_enabled: aiEnabled
       };
 
+      const saveBtn = document.getElementById('saveConfigBtn');
+      const prevText = saveBtn ? saveBtn.innerText : "Save";
+      if (saveBtn) {
+        saveBtn.innerText = "Saving...";
+        saveBtn.disabled = true;
+      }
 
       try {
         const res = await fetch('/api/configure', {
@@ -694,15 +880,24 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast("Configuration saved successfully!");
-          await fetchState();
+          showToast(`Configuration saved! Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic SMC'}`);
+          await fetchState(true);
+          if (saveBtn) saveBtn.innerText = "Saved!";
         } else {
           showToast(data.detail || "Failed to update configuration", true);
+          if (saveBtn) saveBtn.innerText = prevText;
         }
       } catch (err) {
         showToast("Error sending configuration to bot server", true);
+        if (saveBtn) saveBtn.innerText = prevText;
+      } finally {
+        setTimeout(() => {
+          if (saveBtn && !isBotActive) {
+            saveBtn.innerText = "Save";
+            saveBtn.disabled = false;
+          }
+        }, 1200);
       }
-
     }
 
     async function triggerManualTick() {
@@ -720,9 +915,119 @@
       }
     }
 
+    async function fetchActivationHistory() {
+      try {
+        const res = await fetch('/api/activation_history');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update KPIs
+        const stats = data.stats || {};
+        const totalEl = document.getElementById('kpiTotalSessions');
+        const uptimeEl = document.getElementById('kpiTotalUptime');
+        const avgEl = document.getElementById('kpiAvgDuration');
+        const lastActEl = document.getElementById('kpiLastActivity');
+        const lastActSubEl = document.getElementById('kpiLastActivitySub');
+
+        if (totalEl) totalEl.innerText = stats.total_sessions || 0;
+        if (uptimeEl) uptimeEl.innerText = stats.formatted_total_uptime || '0s';
+        if (avgEl) avgEl.innerText = stats.formatted_avg_duration || '0s';
+
+        if (lastActEl && lastActSubEl) {
+          if (stats.is_active && stats.current_session) {
+            lastActEl.innerText = "Active Session";
+            lastActSubEl.innerText = `Started: ${stats.current_session.activation_time_formatted}`;
+          } else if (stats.last_activation_time) {
+            lastActEl.innerText = stats.last_activation_time;
+            lastActSubEl.innerText = stats.last_deactivation_time ? `Deactivated: ${stats.last_deactivation_time}` : 'Completed';
+          } else {
+            lastActEl.innerText = "---";
+            lastActSubEl.innerText = "No records yet";
+          }
+        }
+
+        const tbody = document.getElementById('sessionHistoryBody');
+        if (!tbody) return;
+
+        if (!data.sessions || data.sessions.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-gray-500">No activation or deactivation events recorded yet. Activate the bot to start a session.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.sessions.map(s => {
+          let statusBadge = '';
+          let deactCol = '';
+          let durationCol = '';
+
+          if (s.status === 'ACTIVE') {
+            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-bold border bg-emerald-950/70 border-emerald-700 text-emerald-400 animate-pulse">🟢 ACTIVE</span>`;
+            deactCol = `<span class="text-emerald-400 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>Running Now...</span>`;
+            durationCol = `<span id="activeSessionLiveDuration" class="font-mono font-bold text-emerald-400">${s.formatted_duration}</span>`;
+          } else if (s.status === 'COMPLETED') {
+            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-semibold border bg-gray-800 border-gray-700 text-gray-300">⚪ COMPLETED</span>`;
+            deactCol = `<span class="font-mono text-gray-300">${s.deactivation_time_formatted}</span>`;
+            durationCol = `<span class="font-mono font-medium text-white">${s.formatted_duration}</span>`;
+          } else {
+            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-semibold border bg-amber-950/60 border-amber-800 text-amber-300">🟡 ${s.status}</span>`;
+            deactCol = `<span class="font-mono text-gray-400">${s.deactivation_time_formatted || '---'}</span>`;
+            durationCol = `<span class="font-mono font-medium text-amber-300">${s.formatted_duration}</span>`;
+          }
+
+          // Active instruments pills
+          const syms = s.symbols ? s.symbols.split(',').map(item => item.trim()).filter(Boolean) : [];
+          const symPills = syms.map(sym => `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-900 border border-gray-700 text-gray-200">${sym}</span>`).join(' ') || '<span class="text-gray-500">None</span>';
+
+          const reasonText = s.deactivation_reason || (s.status === 'ACTIVE' ? 'Active session' : '---');
+
+          return `
+            <tr class="hover:bg-gray-800/50 transition-colors">
+              <td class="py-3 px-4 font-mono font-bold text-gray-300">#${s.id}</td>
+              <td class="py-3 px-4">${statusBadge}</td>
+              <td class="py-3 px-4 font-mono text-[11px] text-gray-300" title="ISO: ${s.activation_time}">${s.activation_time_formatted}</td>
+              <td class="py-3 px-4 font-mono text-[11px]">${deactCol}</td>
+              <td class="py-3 px-4">${durationCol}</td>
+              <td class="py-3 px-4"><div class="flex items-center gap-1">${symPills}</div></td>
+              <td class="py-3 px-4 font-mono text-gray-300">${s.lot_size || 'Dynamic'}</td>
+              <td class="py-3 px-4 text-gray-400">${s.trigger_source || 'Dashboard UI'}</td>
+              <td class="py-3 px-4 text-gray-300 text-[11px]">${reasonText}</td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        console.error("Failed to fetch activation history:", err);
+      }
+    }
+
+    async function confirmClearSessions() {
+      if (!confirm("Are you sure you want to clear historical activation records? (Active sessions will be preserved)")) {
+        return;
+      }
+      try {
+        const res = await fetch('/api/activation_history/clear', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || "History cleared");
+          await fetchActivationHistory();
+        } else {
+          showToast(data.detail || "Failed to clear history", true);
+        }
+      } catch (err) {
+        showToast("Error communicating with bot server", true);
+      }
+    }
+
     // Initial load & periodic polling
     fetchState();
+    fetchActivationHistory();
     setInterval(fetchState, 2500);
+    setInterval(() => {
+      // Periodic history refresh if sessions tab is active
+      const sessionTab = document.getElementById('viewSessions');
+      if (sessionTab && !sessionTab.classList.contains('hidden')) {
+        fetchActivationHistory();
+      }
+    }, 5000);
   </script>
 </body>
 </html>
