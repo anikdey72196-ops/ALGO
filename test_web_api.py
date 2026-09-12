@@ -14,17 +14,21 @@ def test_api_workflow():
     res = client.get("/api/state")
     assert res.status_code == 200, f"Status code: {res.status_code}"
     state = res.json()
-    print(f"   Initial state: is_active={state['is_active']}, symbols={state['selected_symbols']}, equity={state['equity']}")
+    print(f"   Initial state: is_active={state['is_active']}, symbols={state['selected_symbols']}, strategy_type={state['strategy_type']}, equity={state['equity']}")
     assert state['is_active'] is False, "Bot should start deactivated"
+    assert "strategy_type" in state, "strategy_type must be in BotStateResponse"
+    assert state['strategy_type'] == "SMC", f"Expected default strategy_type SMC, got {state['strategy_type']}"
 
-    print("\n2. Testing POST /api/configure (set symbols to XAUUSD + BTCUSD and lot size to 0.10)...")
+    print("\n2. Testing POST /api/configure (set symbols to XAUUSD + BTCUSD, strategy_type to EMA_CROSS and lot size to 0.10)...")
     res = client.post("/api/configure", json={
         "selected_symbols": ["XAUUSD", "BTCUSD"],
+        "strategy_type": "EMA_CROSS",
         "fixed_lot_size": 0.10
     })
     assert res.status_code == 200, f"Configure failed: {res.text}"
     conf_data = res.json()
-    print(f"   Updated config: symbols={conf_data['selected_symbols']}, fixed_lot={conf_data['fixed_lot_size']}")
+    print(f"   Updated config: symbols={conf_data['selected_symbols']}, strategy_type={conf_data['strategy_type']}, fixed_lot={conf_data['fixed_lot_size']}")
+    assert conf_data['strategy_type'] == "EMA_CROSS"
 
     print("\n3. Testing POST /api/activate...")
     res = client.post("/api/activate")
@@ -40,7 +44,18 @@ def test_api_workflow():
     })
     print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")
     assert res.status_code == 400, "Should reject symbol change while active!"
-    print("   [PASSED] Lock enforcement verified.")
+    print("   [PASSED] Symbol lock enforcement verified.")
+
+    print("\n4b. Testing STRICT LOCK: attempting to change strategy_type while ACTIVE (must fail with 400)...")
+    res = client.post("/api/configure", json={
+        "selected_symbols": ["XAUUSD", "BTCUSD"],
+        "strategy_type": "GRID_TRADING",
+        "fixed_lot_size": 0.05
+    })
+    print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")
+    assert res.status_code == 400, "Should reject strategy change while active!"
+    assert "Strategy type changes are LOCKED" in res.json().get("detail", ""), "Detail should state strategy changes are locked"
+    print("   [PASSED] Strategy lock enforcement verified.")
 
     print("\n5. Testing POST /api/trigger_tick (while active)...")
     res = client.post("/api/trigger_tick")
@@ -53,6 +68,17 @@ def test_api_workflow():
     state = client.get("/api/state").json()
     print(f"   State after deactivation: is_active={state['is_active']}")
     assert state['is_active'] is False, "Bot should now be deactivated"
+
+    print("\n7. Testing configuration change when DEACTIVATED (should succeed)...")
+    res = client.post("/api/configure", json={
+        "selected_symbols": ["XAUUSD", "EURUSD"],
+        "strategy_type": "SMC",
+        "fixed_lot_size": 0.05
+    })
+    assert res.status_code == 200
+    conf_data = res.json()
+    assert conf_data['strategy_type'] == "SMC"
+    print("   [PASSED] Deactivated strategy change verified.")
 
     print("\n8. Testing GET /api/trades (Trade history ledger)...")
     res = client.get("/api/trades")
@@ -89,4 +115,3 @@ def test_api_workflow():
 
 if __name__ == "__main__":
     test_api_workflow()
-

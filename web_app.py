@@ -41,6 +41,10 @@ class BotConfigUpdate(BaseModel):
         max_length=2,
         description="List of exactly 1 or 2 symbols to monitor simultaneously."
     )
+    strategy_type: Optional[str] = Field(
+        default=None,
+        description="Trading strategy algorithm selection (e.g. SMC, EMA_CROSS)."
+    )
     fixed_lot_size: Optional[float] = Field(
         default=None,
         gt=0.0,
@@ -60,6 +64,7 @@ class BotConfigUpdate(BaseModel):
 class BotStateResponse(BaseModel):
     is_active: bool
     selected_symbols: List[str]
+    strategy_type: str
     fixed_lot_size: Optional[float]
     fixed_sl_pips: Optional[float]
     ai_confirmation_enabled: bool
@@ -174,6 +179,7 @@ async def get_bot_state():
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols[:2],
+        strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
@@ -213,6 +219,7 @@ async def activate_bot():
     )
     bot_instance.log(
         f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring: {bot_instance.config.selected_symbols[:2]} | "
+        f"Strategy: {bot_instance.config.strategy_type} | "
         f"Lot Size: {bot_instance.config.fixed_lot_size or 'Dynamic (0.5% risk)'}"
     )
 
@@ -247,8 +254,8 @@ async def deactivate_bot():
 @app.post("/api/configure")
 async def update_configuration(payload: BotConfigUpdate):
     """
-    Update selected charts and lot size.
-    STRICT RULE: Cannot change symbols if bot is currently ACTIVE.
+    Update selected charts, strategy, and lot size.
+    STRICT RULE: Cannot change symbols or strategy if bot is currently ACTIVE.
     """
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
@@ -273,6 +280,12 @@ async def update_configuration(payload: BotConfigUpdate):
                 status_code=400,
                 detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch charts."
             )
+        if payload.strategy_type is not None and payload.strategy_type != bot_instance.config.strategy_type:
+            bot_instance.log("⚠️ Configuration rejected: Cannot change strategy type while bot is ACTIVE.", level="WARNING")
+            raise HTTPException(
+                status_code=400,
+                detail="Strategy type changes are LOCKED during activation! Deactivate the bot first to switch strategies."
+            )
 
     # Validate symbols exist
     available = {i.symbol for i in bot_instance.config.instruments}
@@ -282,6 +295,8 @@ async def update_configuration(payload: BotConfigUpdate):
 
     # Update config
     bot_instance.config.selected_symbols = valid_symbols[:2]
+    if payload.strategy_type is not None:
+        bot_instance.config.strategy_type = payload.strategy_type
     bot_instance.config.fixed_lot_size = payload.fixed_lot_size
     bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
     if payload.ai_confirmation_enabled is not None:
@@ -289,6 +304,7 @@ async def update_configuration(payload: BotConfigUpdate):
 
     bot_instance.log(
         f"⚙️ Configuration updated: Symbols={bot_instance.config.selected_symbols} | "
+        f"Strategy={bot_instance.config.strategy_type} | "
         f"Lot Size={payload.fixed_lot_size if payload.fixed_lot_size else 'Dynamic'} | "
         f"Fixed SL={f'{payload.fixed_sl_pips} pips' if payload.fixed_sl_pips else 'Dynamic SMC'} | "
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'}"
@@ -298,6 +314,7 @@ async def update_configuration(payload: BotConfigUpdate):
     return {
         "status": "success",
         "selected_symbols": bot_instance.config.selected_symbols,
+        "strategy_type": bot_instance.config.strategy_type,
         "fixed_lot_size": bot_instance.config.fixed_lot_size,
         "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
@@ -384,5 +401,4 @@ async def clear_activation_history():
     bot_instance.state.clear_activation_history()
     bot_instance.log("🧹 Bot activation/deactivation session history cleared.")
     return {"status": "success", "message": "Activation history cleared."}
-
 
