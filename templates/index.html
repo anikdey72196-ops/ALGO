@@ -126,7 +126,19 @@
         <span>Execution Controls & Dual-Chart Setup</span>
       </h2>
 
-      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
+      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
+        <!-- Strategy Dropdown -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2">
+            Strategy
+          </label>
+          <div class="relative">
+            <select id="strategySelect" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <option value="15-Minute SMC Swing">15-Minute SMC Swing</option>
+              <option value="5-Minute Order Block Scalp">5-Minute Order Block Scalp</option>
+            </select>
+          </div>
+        </div>
         <!-- Chart 1 Dropdown -->
         <div>
           <label class="block text-xs font-medium text-gray-400 mb-2">
@@ -502,6 +514,7 @@
         const c1 = document.getElementById('chart1Select');
         const c2 = document.getElementById('chart2Select');
         const lot = document.getElementById('lotSizeInput');
+        const strategySelect = document.getElementById('strategySelect');
         const saveBtn = document.getElementById('saveConfigBtn');
         const tickBtn = document.getElementById('tickBtn');
 
@@ -516,6 +529,7 @@
           c1.disabled = true;
           c2.disabled = true;
           lot.disabled = true;
+          if (strategySelect) strategySelect.disabled = true;
           document.getElementById('slPipsInput').disabled = true;
           document.getElementById('aiToggleCheckbox').disabled = true;
           saveBtn.disabled = true;
@@ -531,6 +545,7 @@
           c1.disabled = false;
           c2.disabled = false;
           lot.disabled = false;
+          if (strategySelect) strategySelect.disabled = false;
           document.getElementById('slPipsInput').disabled = false;
           document.getElementById('aiToggleCheckbox').disabled = false;
           saveBtn.disabled = false;
