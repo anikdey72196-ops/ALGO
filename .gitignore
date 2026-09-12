@@ -1,7 +1,9 @@
 .env 
 .env.example
 run_dashboard.py
-logs
-__pycache__
-trading_state.db
+logs/
+__pycache__/
+*.pyc
+*.db
+*.db-*
 assistant.db
