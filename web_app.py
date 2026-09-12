@@ -82,6 +82,7 @@ class BotStateResponse(BaseModel):
     losing_trades: int = 0
     total_closed_trades: int = 0
     active_session: Optional[dict] = None
+    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M"]
 
 
 
@@ -197,6 +198,7 @@ async def get_bot_state():
         losing_trades=len(losing_trades),
         total_closed_trades=len(closed_trades),
         active_session=active_session,
+        available_strategies=["SMC", "SMC_SCALP_5M"],
     )
 
 
@@ -297,6 +299,16 @@ async def update_configuration(payload: BotConfigUpdate):
     bot_instance.config.selected_symbols = valid_symbols[:2]
     if payload.strategy_type is not None:
         bot_instance.config.strategy_type = payload.strategy_type
+        if scheduler_instance:
+            try:
+                active_ltf = "5m" if payload.strategy_type == "SMC_SCALP_5M" else bot_instance.config.timeframes.ltf
+                new_interval = parse_ltf_to_seconds(active_ltf)
+                job = scheduler_instance.get_job("web_trading_tick")
+                if job:
+                    job.reschedule(trigger=IntervalTrigger(seconds=new_interval))
+                    logger.info(f"Rescheduled tick job for interval: {new_interval}s ({active_ltf})")
+            except Exception as e:
+                logger.warning(f"Could not reschedule tick interval: {e}")
     bot_instance.config.fixed_lot_size = payload.fixed_lot_size
     bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
     if payload.ai_confirmation_enabled is not None:

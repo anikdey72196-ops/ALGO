@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from loguru import logger
 from config import RiskConfig, MarketBias, Direction
-from strategy import TradeSignal
+from strategy import TradeSignal, LTFConfirmation
 
 @dataclass(frozen=True)
 class FilterResult:
@@ -34,7 +34,7 @@ class ConflictResolver:
           If htf_bias == NEUTRAL, reject all.
         
         Gate 2 — Minimum R:R:
-          Reject if rr_ratio < risk_config.min_rr_ratio (default 2.5).
+          Reject if rr_ratio < min_rr (1.4 for 5M scalps, risk_config.min_rr_ratio for swing).
         
         Gate 3 — Spread Viability:
           Reject if tp_distance < risk_config.min_tp_spread_multiple * current_spread.
@@ -65,9 +65,10 @@ class ConflictResolver:
                 rejection_reasons.append(reason)
                 continue
                 
-            # Gate 2: Minimum R:R
-            if signal.rr_ratio < self.risk_config.min_rr_ratio:
-                reason = f"[LOW_RR] {signal.symbol} R:R {signal.rr_ratio:.2f} < minimum {self.risk_config.min_rr_ratio}"
+            # Gate 2: Minimum R:R (Adaptive: 1.4 for 5M OB scalps, standard min_rr_ratio for swing)
+            min_rr = 1.4 if signal.ltf_confirmation == LTFConfirmation.OB_SCALP_5M else self.risk_config.min_rr_ratio
+            if signal.rr_ratio < min_rr:
+                reason = f"[LOW_RR] {signal.symbol} R:R {signal.rr_ratio:.2f} < minimum {min_rr}"
                 logger.info(reason)
                 rejection_reasons.append(reason)
                 continue

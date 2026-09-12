@@ -258,7 +258,11 @@ class TradingBot:
             if symbol not in active_symbols:
                 continue
 
-            self.log(f"Analyzing {symbol}...")
+            strategy_type = self.config.strategy_type
+            htf_tf = "1H"
+            ltf_tf = "5m" if strategy_type == "SMC_SCALP_5M" else self.config.timeframes.ltf
+
+            self.log(f"Analyzing {symbol} (Strategy: {strategy_type} | HTF: {htf_tf} | LTF: {ltf_tf})...")
 
             # ── Step 2a: Fetch current price ──
             quote = self.broker.get_current_price(symbol)
@@ -288,10 +292,10 @@ class TradingBot:
 
 
             # ── Step 2b: Fetch OHLCV data ──
-            htf_data = self._get_ohlcv(symbol, self.config.timeframes.htf)
-            ltf_data = self._get_ohlcv(symbol, self.config.timeframes.ltf)
+            htf_data = self._get_ohlcv(symbol, htf_tf)
+            ltf_data = self._get_ohlcv(symbol, ltf_tf)
             if htf_data is None or ltf_data is None:
-                logger.warning(f"  No OHLCV data for {symbol}. Skipping.")
+                logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
 
             # ── Step 2b: Generate signals ──
@@ -302,6 +306,7 @@ class TradingBot:
                 instrument=instrument,
                 current_spread=current_spread,
                 fixed_sl_pips=self.config.fixed_sl_pips,
+                strategy_type=strategy_type,
             )
 
 
@@ -324,7 +329,7 @@ class TradingBot:
 
             best_signal = filter_result.accepted_signal
             self.log(
-                f"  ✅ SMC SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
+                f"  ✅ {strategy_type} SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
                 f"| Entry={best_signal.entry_price:.5f} "
                 f"| SL={best_signal.stop_loss:.5f} "
                 f"| TP={best_signal.take_profit:.5f} "

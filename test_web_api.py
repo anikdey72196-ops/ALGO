@@ -18,17 +18,19 @@ def test_api_workflow():
     assert state['is_active'] is False, "Bot should start deactivated"
     assert "strategy_type" in state, "strategy_type must be in BotStateResponse"
     assert state['strategy_type'] == "SMC", f"Expected default strategy_type SMC, got {state['strategy_type']}"
+    assert "available_strategies" in state, "available_strategies must be in BotStateResponse"
+    assert "SMC_SCALP_5M" in state['available_strategies'], "SMC_SCALP_5M must be in available_strategies"
 
-    print("\n2. Testing POST /api/configure (set symbols to XAUUSD + BTCUSD, strategy_type to EMA_CROSS and lot size to 0.10)...")
+    print("\n2. Testing POST /api/configure (set symbols to XAUUSD + BTCUSD, strategy_type to SMC_SCALP_5M and lot size to 0.10)...")
     res = client.post("/api/configure", json={
         "selected_symbols": ["XAUUSD", "BTCUSD"],
-        "strategy_type": "EMA_CROSS",
+        "strategy_type": "SMC_SCALP_5M",
         "fixed_lot_size": 0.10
     })
     assert res.status_code == 200, f"Configure failed: {res.text}"
     conf_data = res.json()
     print(f"   Updated config: symbols={conf_data['selected_symbols']}, strategy_type={conf_data['strategy_type']}, fixed_lot={conf_data['fixed_lot_size']}")
-    assert conf_data['strategy_type'] == "EMA_CROSS"
+    assert conf_data['strategy_type'] == "SMC_SCALP_5M"
 
     print("\n3. Testing POST /api/activate...")
     res = client.post("/api/activate")
@@ -49,7 +51,7 @@ def test_api_workflow():
     print("\n4b. Testing STRICT LOCK: attempting to change strategy_type while ACTIVE (must fail with 400)...")
     res = client.post("/api/configure", json={
         "selected_symbols": ["XAUUSD", "BTCUSD"],
-        "strategy_type": "GRID_TRADING",
+        "strategy_type": "SMC",
         "fixed_lot_size": 0.05
     })
     print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")

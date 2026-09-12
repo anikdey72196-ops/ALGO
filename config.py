@@ -52,6 +52,12 @@ class Impact(str, Enum):
     LOW = "LOW"
 
 
+class StrategyType(str, Enum):
+    """Supported trading strategies."""
+    SMC = "SMC"                      # 15m Institutional Swing Liquidity Sweep
+    SMC_SCALP_5M = "SMC_SCALP_5M"    # 5m Order Block (OB) Scalp
+
+
 # ─────────────────────────────────────────────
 #  Configuration Models
 # ─────────────────────────────────────────────
@@ -274,8 +280,25 @@ class TradingConfig(BaseModel):
         description="Optional fixed Stop Loss in pips. If set, overrides dynamic SMC structure stop loss.",
     )
     strategy_type: str = Field(
-        default="SMC",
-        description="Trading strategy algorithm selection (e.g. SMC, EMA_CROSS, GRID_TRADING).",
+        default=StrategyType.SMC.value,
+        description="Trading strategy algorithm selection: SMC (15m Swing) or SMC_SCALP_5M (5m Scalp).",
+    )
+    scalp_session_start_utc: int = Field(
+        default=7,
+        ge=0,
+        le=23,
+        description="UTC hour when London session opens for scalping (default 07:00 UTC).",
+    )
+    scalp_session_end_utc: int = Field(
+        default=16,
+        ge=0,
+        le=23,
+        description="UTC hour when New York AM session closes for scalping (default 16:00 UTC).",
+    )
+    scalp_target_rr: float = Field(
+        default=1.5,
+        ge=1.0,
+        description="Target Risk-to-Reward ratio for 5M scalping strategy.",
     )
     selected_symbols: List[str] = Field(
         default_factory=lambda: ["XAUUSD", "EURUSD"],

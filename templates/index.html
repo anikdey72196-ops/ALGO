@@ -123,14 +123,28 @@
       <!-- Active Lock Overlay Badge -->
       <div id="lockNotice" class="hidden absolute top-4 right-6 flex items-center gap-1.5 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/80 px-3 py-1 rounded-full font-medium">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-        <span>Market Selection Locked While Active</span>
+        <span>Market & Strategy Locked While Active</span>
       </div>
 
       <h2 class="text-lg font-semibold tracking-tight text-white mb-4 flex items-center gap-2">
         <span>Execution Controls & Dual-Chart Setup</span>
       </h2>
 
-      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
+      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
+        <!-- Strategy Dropdown -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
+            <span class="text-amber-400 font-semibold">Strategy Engine</span>
+            <span id="strategyBadge" class="text-[10px] text-amber-300 font-mono">15M/5M</span>
+          </label>
+          <div class="relative">
+            <select id="strategySelect" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-xs font-semibold text-white focus:outline-none focus:border-amber-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              <option value="SMC">SMC (15m Swing)</option>
+              <option value="SMC_SCALP_5M">SMC 5M OB Scalp</option>
+            </select>
+          </div>
+        </div>
+
         <!-- Chart 1 Dropdown -->
         <div>
           <label class="block text-xs font-medium text-gray-400 mb-2">
@@ -255,7 +269,7 @@
         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
           <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
             <span id="chart1Title" class="text-xs font-bold text-gray-200">Chart 1: XAUUSD (Gold)</span>
-            <span class="text-[10px] text-gray-500 uppercase">15m Execution View</span>
+            <span id="chart1TfBadge" class="text-[10px] text-gray-400 uppercase font-mono">15m Execution View</span>
           </div>
           <div id="tradingview_chart_1" class="w-full h-[450px]"></div>
         </div>
@@ -264,7 +278,7 @@
         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
           <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
             <span id="chart2Title" class="text-xs font-bold text-gray-200">Chart 2: EURUSD</span>
-            <span class="text-[10px] text-gray-500 uppercase">15m Execution View</span>
+            <span id="chart2TfBadge" class="text-[10px] text-gray-400 uppercase font-mono">15m Execution View</span>
           </div>
           <div id="tradingview_chart_2" class="w-full h-[450px]"></div>
         </div>
@@ -657,6 +671,8 @@
 
         const c1 = document.getElementById('chart1Select');
         const c2 = document.getElementById('chart2Select');
+        const strat = document.getElementById('strategySelect');
+        const stratBadge = document.getElementById('strategyBadge');
         const lot = document.getElementById('lotSizeInput');
         const saveBtn = document.getElementById('saveConfigBtn');
         const tickBtn = document.getElementById('tickBtn');
@@ -669,6 +685,7 @@
           btnText.innerText = "DEACTIVATE BOT";
           lockNotice.classList.remove('hidden');
 
+          if (strat) strat.disabled = true;
           c1.disabled = true;
           c2.disabled = true;
           lot.disabled = true;
@@ -684,6 +701,7 @@
           btnText.innerText = "ACTIVATE BOT";
           lockNotice.classList.add('hidden');
 
+          if (strat) strat.disabled = false;
           c1.disabled = false;
           c2.disabled = false;
           lot.disabled = false;
@@ -702,9 +720,16 @@
         const isEditingLot = document.activeElement === lotInput;
         const isEditingC1 = document.activeElement === c1;
         const isEditingC2 = document.activeElement === c2;
+        const isEditingStrat = document.activeElement === strat;
 
         if (isBotActive) {
           // When bot is active, controls are locked - reflect active server state
+          if (strat && data.strategy_type) {
+            strat.value = data.strategy_type;
+            if (stratBadge) {
+              stratBadge.innerText = data.strategy_type === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
+            }
+          }
           if (data.selected_symbols && data.selected_symbols.length > 0) {
             c1.value = data.selected_symbols[0] || "XAUUSD";
             c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
@@ -717,6 +742,12 @@
           }
         } else if (!hasLoadedInitialConfig || forceFormSync) {
           // When idle, only sync form values on initial load or after explicit user save / toggle
+          if (strat && data.strategy_type && !isEditingStrat) {
+            strat.value = data.strategy_type;
+            if (stratBadge) {
+              stratBadge.innerText = data.strategy_type === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
+            }
+          }
           if (!isEditingC1 && !isEditingC2 && data.selected_symbols && data.selected_symbols.length > 0) {
             c1.value = data.selected_symbols[0] || "XAUUSD";
             c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
@@ -732,6 +763,12 @@
           }
           hasLoadedInitialConfig = true;
         }
+
+        const tfBadgeText = data.strategy_type === "SMC_SCALP_5M" ? "5m Scalp View" : "15m Swing View";
+        const c1Tf = document.getElementById('chart1TfBadge');
+        const c2Tf = document.getElementById('chart2TfBadge');
+        if (c1Tf) c1Tf.innerText = tfBadgeText;
+        if (c2Tf) c2Tf.innerText = tfBadgeText;
 
         const aiCb = document.getElementById('aiToggleCheckbox');
         const aiBadge = document.getElementById('aiStatusBadge');
@@ -857,8 +894,12 @@
       const fixedSlVal = (slPipsRaw !== "" && !isNaN(parseFloat(slPipsRaw)) && parseFloat(slPipsRaw) > 0) ? parseFloat(slPipsRaw) : null;
       const aiEnabled = document.getElementById('aiToggleCheckbox').checked;
 
+      const stratEl = document.getElementById('strategySelect');
+      const stratVal = stratEl ? stratEl.value : "SMC";
+
       const payload = {
         selected_symbols: [c1, c2],
+        strategy_type: stratVal,
         fixed_lot_size: (lotVal && !isNaN(parseFloat(lotVal))) ? parseFloat(lotVal) : null,
         fixed_sl_pips: fixedSlVal,
         ai_confirmation_enabled: aiEnabled
@@ -880,7 +921,7 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast(`Configuration saved! Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic SMC'}`);
+          showToast(`Configuration saved! Strategy: ${stratVal} | Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic'}`);
           await fetchState(true);
           if (saveBtn) saveBtn.innerText = "Saved!";
         } else {

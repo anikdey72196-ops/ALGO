@@ -173,9 +173,12 @@ Decision Rules:
                 reason="AI Rejected: Setup opposes macro institutional order flow.",
             )
 
-        # 2. SMC Confirmation Type (+30 pts)
+        # 2. SMC Confirmation Type (+30-35 pts)
         conf_name = signal.ltf_confirmation.value
-        if "OB_PLUS_FVG" in conf_name:
+        if "OB_SCALP_5M" in conf_name:
+            score += 35.0
+            reasons.append("5M Break of Structure & Order Block retest scalp")
+        elif "OB_PLUS_FVG" in conf_name:
             score += 35.0
             reasons.append("Order Block + Fair Value Gap confluence retest")
         elif "OB_MITIGATION" in conf_name:
@@ -189,12 +192,20 @@ Decision Rules:
             reasons.append("Liquidity sweep confirmed")
 
         # 3. Risk-Reward Asymmetry (+20 pts)
-        if signal.rr_ratio >= 3.0:
-            score += 20.0
-            reasons.append(f"Strong asymmetric R:R ({signal.rr_ratio:.2f}:1)")
-        elif signal.rr_ratio >= 2.5:
-            score += 15.0
-            reasons.append(f"Acceptable R:R ({signal.rr_ratio:.2f}:1)")
+        if "OB_SCALP_5M" in conf_name:
+            if signal.rr_ratio >= 1.5:
+                score += 20.0
+                reasons.append(f"Optimal 5M Scalp R:R ({signal.rr_ratio:.2f}:1)")
+            elif signal.rr_ratio >= 1.4:
+                score += 15.0
+                reasons.append(f"Acceptable 5M Scalp R:R ({signal.rr_ratio:.2f}:1)")
+        else:
+            if signal.rr_ratio >= 3.0:
+                score += 20.0
+                reasons.append(f"Strong asymmetric R:R ({signal.rr_ratio:.2f}:1)")
+            elif signal.rr_ratio >= 2.5:
+                score += 15.0
+                reasons.append(f"Acceptable R:R ({signal.rr_ratio:.2f}:1)")
 
         # 4. Invalidation quality check
         if signal.sl_distance > 0:

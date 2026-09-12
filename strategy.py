@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig
+from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig, StrategyType
 
 
 # ─────────────────────────────────────────────
@@ -34,6 +34,7 @@ class LTFConfirmation(str, Enum):
     FVG_MITIGATION = "FVG_MITIGATION"     # Retest of Fair Value Gap
     OB_PLUS_FVG = "OB_PLUS_FVG"           # Overlapping OB + FVG (Prime Confluence)
     LIQUIDITY_SWEEP = "LIQUIDITY_SWEEP"   # Direct sweep & reversal confirmation
+    OB_SCALP_5M = "OB_SCALP_5M"           # 5M Break of Structure & Order Block Retest Scalp
     PULLBACK = "PULLBACK"                 # Compatibility fallback
     STRUCTURAL_BREAK = "STRUCTURAL_BREAK" # Compatibility fallback
     NONE = "NONE"
@@ -614,6 +615,276 @@ class SMCEntryDetector:
 
 
 # ─────────────────────────────────────────────
+#  5-Minute Order Block (OB) Scalp Engine (SMC)
+# ─────────────────────────────────────────────
+
+class SMCScalp5MEngine:
+    """
+    5-Minute Order Block (OB) Scalp Strategy (SMC).
+    
+    Setup: Establish directional bias on 1-Hour (1H) chart.
+    BOS: Wait for a Break of Structure (BOS) on the 5-minute (5M) chart in that same direction.
+    Order Block: The specific origin candle that caused this 5M BOS.
+    Entry: Retest of this Order Block.
+    Stop-Loss: Just beyond the wick of the OB candle (or user-defined fixed SL).
+    Target: 1.5R reward for partial profit, with potential runner to next 5M liquidity pool.
+    Session: London and New York AM sessions (07:00 - 16:00 UTC).
+    """
+
+    def __init__(
+        self,
+        swing_lookback: int = 3,
+        session_start_utc: int = 7,
+        session_end_utc: int = 16,
+        target_rr: float = 1.5,
+    ):
+        self.swing_lookback = swing_lookback
+        self.session_start_utc = session_start_utc
+        self.session_end_utc = session_end_utc
+        self.target_rr = target_rr
+
+    def check_trading_session(self, current_time: datetime) -> bool:
+        """Check if timestamp is within London or NY AM high-volume sessions (07:00 - 16:00 UTC)."""
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        hour = current_time.hour
+        return self.session_start_utc <= hour < self.session_end_utc
+
+    def detect_scalp_entry(
+        self,
+        df: pd.DataFrame,
+        htf_analysis: HTFAnalysis,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+        enforce_session: bool = True,
+    ) -> dict | None:
+        """
+        Scans 5M OHLCV data for:
+        1. Trading session validation (07:00 - 16:00 UTC).
+        2. Break of Structure (BOS) in the direction of HTF bias.
+        3. Origin Order Block (OB) candle identification.
+        4. Current bar retest of the OB price zone [low, high].
+        5. Invalidation stop loss beyond the OB wick and 1.5R target.
+        """
+        n = len(df)
+        if n < 10:
+            return None
+
+        bias = htf_analysis.bias
+        if bias not in (MarketBias.BULLISH, MarketBias.BEARISH):
+            return None
+
+        current_bar = df.iloc[-1]
+        timestamp = current_bar['time'] if 'time' in df.columns else datetime.now(timezone.utc)
+        if isinstance(timestamp, pd.Timestamp):
+            timestamp = timestamp.to_pydatetime()
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        # 1. Trading Session Validation
+        if enforce_session and not self.check_trading_session(timestamp):
+            logger.debug(f"[SCALP_5M] Outside London/NY AM active session ({timestamp.strftime('%H:%M UTC')}). Skipping.")
+            return None
+
+        atr_series = compute_atr(df, period=14)
+        current_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 10 * instrument.pip_size
+
+        swings = find_swing_points_logic(df['high'], df['low'], lookback=self.swing_lookback)
+        if not swings:
+            return None
+
+        current_close = float(current_bar['close'])
+        current_low = float(current_bar['low'])
+        current_high = float(current_bar['high'])
+
+        # Scan for the most recent 5M BOS within the last 15 bars
+        lookback_window = min(15, n - 2)
+
+        if bias == MarketBias.BULLISH:
+            swing_highs = [sp for sp in swings if sp.is_high and sp.index < n - 1]
+            if not swing_highs:
+                return None
+
+            bos_detected = False
+            bos_bar_idx = -1
+            broken_swing_price = 0.0
+
+            for offset in range(1, lookback_window + 1):
+                idx = n - 1 - offset
+                bar = df.iloc[idx]
+                bar_close = float(bar['close'])
+                for sp in reversed(swing_highs):
+                    if sp.index < idx and bar_close > sp.price:
+                        bos_detected = True
+                        bos_bar_idx = idx
+                        broken_swing_price = sp.price
+                        break
+                if bos_detected:
+                    break
+
+            if not bos_detected or bos_bar_idx <= 0:
+                return None
+
+            # Identify Bullish Order Block (OB):
+            # The last down/bearish candle preceding the upward displacement that broke structure.
+            ob_idx = -1
+            search_start = max(0, bos_bar_idx - 8)
+            for j in range(bos_bar_idx - 1, search_start - 1, -1):
+                c = df.iloc[j]
+                if float(c['close']) <= float(c['open']):
+                    ob_idx = j
+                    break
+
+            if ob_idx == -1:
+                ob_idx = int(df.iloc[search_start:bos_bar_idx]['low'].astype(float).idxmin())
+
+            ob_candle = df.iloc[ob_idx]
+            ob_high = float(ob_candle['high'])
+            ob_low = float(ob_candle['low'])
+
+            # Retest Check: Price pulls back into the OB zone [ob_low, ob_high]
+            retest_confirmed = False
+            if current_low <= ob_high and current_close >= ob_low:
+                retest_confirmed = True
+            else:
+                prev_bar = df.iloc[-2]
+                if float(prev_bar['low']) <= ob_high and current_close >= ob_low:
+                    retest_confirmed = True
+
+            if not retest_confirmed:
+                return None
+
+            # Invalidation / Stop Loss: Just beyond the wick of the OB candle
+            sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
+            stop_loss = ob_low - sl_buffer
+            entry_price = current_close
+
+            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                sl_distance = fixed_sl_pips * instrument.pip_size
+                stop_loss = entry_price - sl_distance
+            else:
+                sl_distance = abs(entry_price - stop_loss)
+
+            min_buffer = 1.0 * instrument.pip_size
+            if sl_distance < min_buffer:
+                sl_distance = min_buffer
+                stop_loss = entry_price - sl_distance
+
+            # Take Profit: 1.5R target for partial profit
+            take_profit = entry_price + (sl_distance * self.target_rr)
+
+            # Potential runner target to the next 5M liquidity pool
+            opposing_pools = [sp.price for sp in swing_highs if sp.price > take_profit]
+            runner_tp = min(opposing_pools) if opposing_pools else take_profit
+
+            return {
+                'direction': Direction.BUY,
+                'entry': entry_price,
+                'sl': stop_loss,
+                'tp': take_profit,
+                'runner_tp': runner_tp,
+                'conf': LTFConfirmation.OB_SCALP_5M,
+                'timestamp': timestamp,
+                'ob_high': ob_high,
+                'ob_low': ob_low,
+                'bos_price': broken_swing_price,
+            }
+
+        elif bias == MarketBias.BEARISH:
+            swing_lows = [sp for sp in swings if not sp.is_high and sp.index < n - 1]
+            if not swing_lows:
+                return None
+
+            bos_detected = False
+            bos_bar_idx = -1
+            broken_swing_price = 0.0
+
+            for offset in range(1, lookback_window + 1):
+                idx = n - 1 - offset
+                bar = df.iloc[idx]
+                bar_close = float(bar['close'])
+                for sp in reversed(swing_lows):
+                    if sp.index < idx and bar_close < sp.price:
+                        bos_detected = True
+                        bos_bar_idx = idx
+                        broken_swing_price = sp.price
+                        break
+                if bos_detected:
+                    break
+
+            if not bos_detected or bos_bar_idx <= 0:
+                return None
+
+            # Identify Bearish Order Block (OB):
+            # The last up/bullish candle preceding the downward displacement that broke structure.
+            ob_idx = -1
+            search_start = max(0, bos_bar_idx - 8)
+            for j in range(bos_bar_idx - 1, search_start - 1, -1):
+                c = df.iloc[j]
+                if float(c['close']) >= float(c['open']):
+                    ob_idx = j
+                    break
+
+            if ob_idx == -1:
+                ob_idx = int(df.iloc[search_start:bos_bar_idx]['high'].astype(float).idxmax())
+
+            ob_candle = df.iloc[ob_idx]
+            ob_high = float(ob_candle['high'])
+            ob_low = float(ob_candle['low'])
+
+            # Retest Check: Price pulls back up into the OB zone [ob_low, ob_high]
+            retest_confirmed = False
+            if current_high >= ob_low and current_close <= ob_high:
+                retest_confirmed = True
+            else:
+                prev_bar = df.iloc[-2]
+                if float(prev_bar['high']) >= ob_low and current_close <= ob_high:
+                    retest_confirmed = True
+
+            if not retest_confirmed:
+                return None
+
+            # Invalidation / Stop Loss: Just beyond the wick of the OB candle
+            sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
+            stop_loss = ob_high + sl_buffer
+            entry_price = current_close
+
+            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                sl_distance = fixed_sl_pips * instrument.pip_size
+                stop_loss = entry_price + sl_distance
+            else:
+                sl_distance = abs(stop_loss - entry_price)
+
+            min_buffer = 1.0 * instrument.pip_size
+            if sl_distance < min_buffer:
+                sl_distance = min_buffer
+                stop_loss = entry_price + sl_distance
+
+            # Take Profit: 1.5R target for partial profit
+            take_profit = entry_price - (sl_distance * self.target_rr)
+
+            # Potential runner target to the next 5M liquidity pool
+            opposing_pools = [sp.price for sp in swing_lows if sp.price < take_profit]
+            runner_tp = max(opposing_pools) if opposing_pools else take_profit
+
+            return {
+                'direction': Direction.SELL,
+                'entry': entry_price,
+                'sl': stop_loss,
+                'tp': take_profit,
+                'runner_tp': runner_tp,
+                'conf': LTFConfirmation.OB_SCALP_5M,
+                'timestamp': timestamp,
+                'ob_high': ob_high,
+                'ob_low': ob_low,
+                'bos_price': broken_swing_price,
+            }
+
+        return None
+
+
+# ─────────────────────────────────────────────
 #  Strategy Orchestrator Engine
 # ─────────────────────────────────────────────
 
@@ -627,6 +898,7 @@ class StrategyEngine:
             equal_level_tolerance=config.equal_level_tolerance,
         )
         self.smc_detector = SMCEntryDetector(config)
+        self.scalp_engine = SMCScalp5MEngine()
         self.config = config
 
     def generate_signals(
@@ -637,25 +909,33 @@ class StrategyEngine:
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
+        strategy_type: str = "SMC",
     ) -> list[TradeSignal]:
         """
-        Generates SMC Institutional Order Flow signals:
-        1. HTF Trend & Liquidity Pools
-        2. LTF Sweep -> Displacement -> Order Block / FVG Mitigation
-        3. Strict Risk-Reward & Quality Scoring (0-100)
-        4. Supports manual fixed_sl_pips override if set by user.
+        Generates trade signals based on strategy_type:
+        - "SMC": 15m Institutional Swing Liquidity Sweeps
+        - "SMC_SCALP_5M": 5m Order Block (OB) Retest Scalps
         """
         htf_analysis = self.htf_analyzer.analyze(htf_data)
 
         if htf_analysis.bias == MarketBias.NEUTRAL:
             return []
 
-        raw_signal = self.smc_detector.detect_smc_entry(
-            df=ltf_data,
-            htf_analysis=htf_analysis,
-            instrument=instrument,
-            current_spread=current_spread,
-        )
+        if strategy_type == StrategyType.SMC_SCALP_5M.value or strategy_type == "SMC_SCALP_5M":
+            raw_signal = self.scalp_engine.detect_scalp_entry(
+                df=ltf_data,
+                htf_analysis=htf_analysis,
+                instrument=instrument,
+                current_spread=current_spread,
+                fixed_sl_pips=fixed_sl_pips,
+            )
+        else:
+            raw_signal = self.smc_detector.detect_smc_entry(
+                df=ltf_data,
+                htf_analysis=htf_analysis,
+                instrument=instrument,
+                current_spread=current_spread,
+            )
 
         if not raw_signal:
             return []
@@ -683,16 +963,17 @@ class StrategyEngine:
             sl_distance = min_buffer
             sl = entry - sl_distance if direction == Direction.BUY else entry + sl_distance
 
-
         rr_ratio = tp_distance / sl_distance if sl_distance > 0 else 0.0
 
-        # Quality scoring (SMC-tuned, max 100)
+        # Quality scoring (max 100)
         # 1. HTF Trend Clarity: up to 25
         quality_score = min(25.0, htf_analysis.trend_clarity_score)
 
-        # 2. Confirmation Type Score (up to 30)
+        # 2. Confirmation Type Score (up to 35)
         if conf == LTFConfirmation.OB_PLUS_FVG:
             quality_score += 30.0
+        elif conf == LTFConfirmation.OB_SCALP_5M:
+            quality_score += 35.0  # High-conviction BOS + OB retest
         elif conf == LTFConfirmation.OB_MITIGATION:
             quality_score += 25.0
         elif conf == LTFConfirmation.FVG_MITIGATION:
@@ -700,19 +981,22 @@ class StrategyEngine:
         elif conf == LTFConfirmation.LIQUIDITY_SWEEP:
             quality_score += 15.0
 
-        # 3. Sweep Depth / Invalidation Quality (up to 15)
+        # 3. Invalidation Quality (up to 15)
         quality_score += 15.0
 
         # 4. R:R Bonus (up to 15 points)
-        rr_bonus = min(15.0, rr_ratio * 2.5)
+        if conf == LTFConfirmation.OB_SCALP_5M:
+            rr_bonus = min(15.0, (rr_ratio / 1.5) * 15.0)
+        else:
+            rr_bonus = min(15.0, rr_ratio * 2.5)
         quality_score += rr_bonus
 
-        # 5. Spread Viability (up to 15 points)
+        # 5. Spread Viability (up to 10 points)
         if current_spread > 0:
             spread_ratio = tp_distance / current_spread
-            quality_score += min(15.0, spread_ratio * 1.5)
+            quality_score += min(10.0, spread_ratio * 1.0)
         else:
-            quality_score += 15.0
+            quality_score += 10.0
 
         quality_score = min(100.0, quality_score)
 
@@ -732,3 +1016,4 @@ class StrategyEngine:
         )
 
         return [signal]
+
