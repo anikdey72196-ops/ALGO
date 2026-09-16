@@ -7,3 +7,4 @@ __pycache__/
 *.db
 *.db-*
 assistant.db
+bot_settings.json

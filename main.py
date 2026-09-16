@@ -140,6 +140,47 @@ class TradingBot:
         self._htf_cache: dict[str, object] = {}
         self._ltf_cache: dict[str, object] = {}
 
+        # Load persisted settings if present
+        self.load_settings()
+
+    def load_settings(self) -> None:
+        """Load persisted user settings from bot_settings.json."""
+        settings_path = Path("bot_settings.json")
+        if settings_path.exists():
+            try:
+                import json
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                if "selected_symbols" in saved and isinstance(saved["selected_symbols"], list):
+                    self.config.selected_symbols = saved["selected_symbols"]
+                if "strategy_type" in saved and isinstance(saved["strategy_type"], str):
+                    self.config.strategy_type = saved["strategy_type"]
+                if "fixed_lot_size" in saved:
+                    self.config.fixed_lot_size = saved["fixed_lot_size"]
+                if "fixed_sl_pips" in saved:
+                    self.config.fixed_sl_pips = saved["fixed_sl_pips"]
+                if "ai_confirmation_enabled" in saved:
+                    self.config.ai_confirmation_enabled = bool(saved["ai_confirmation_enabled"])
+                logger.info(f"Loaded persisted settings from {settings_path}: Strategy={self.config.strategy_type} | Symbols={self.config.selected_symbols} | SL={self.config.fixed_sl_pips}")
+            except Exception as e:
+                logger.warning(f"Failed to load bot_settings.json: {e}")
+
+    def save_settings(self) -> None:
+        """Persist user dashboard settings to bot_settings.json."""
+        try:
+            import json
+            data = {
+                "selected_symbols": self.config.selected_symbols,
+                "strategy_type": self.config.strategy_type,
+                "fixed_lot_size": self.config.fixed_lot_size,
+                "fixed_sl_pips": self.config.fixed_sl_pips,
+                "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
+            }
+            with open("bot_settings.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save bot settings to bot_settings.json: {e}")
+
     def log(self, message: str, level: str = "INFO") -> None:
         """Helper to append to recent logs and send to logger."""
         timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")

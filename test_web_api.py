@@ -112,8 +112,32 @@ def test_api_workflow():
     assert state['selected_symbols'] == ["XAUUSD"], f"Symbols: {state['selected_symbols']}"
     print(f"   Single pair configured successfully: active_symbols={state['selected_symbols']}")
 
+    print("\n11. Testing Persistence to bot_settings.json (167 pips SL, SMC_SCALP_5M strategy)...")
+    res = client.post("/api/configure", json={
+        "selected_symbols": ["XAUUSD", "EURUSD"],
+        "strategy_type": "SMC_SCALP_5M",
+        "fixed_lot_size": 0.05,
+        "fixed_sl_pips": 167.0,
+        "ai_confirmation_enabled": True
+    })
+    assert res.status_code == 200
+    state = client.get("/api/state").json()
+    assert state['strategy_type'] == "SMC_SCALP_5M"
+    assert state['fixed_sl_pips'] == 167.0
+
+    from pathlib import Path
+    import json
+    settings_file = Path("bot_settings.json")
+    assert settings_file.exists(), "bot_settings.json must be created upon configuration update!"
+    with open(settings_file, "r", encoding="utf-8") as f:
+        saved_data = json.load(f)
+    assert saved_data["strategy_type"] == "SMC_SCALP_5M", f"Saved strategy: {saved_data.get('strategy_type')}"
+    assert saved_data["fixed_sl_pips"] == 167.0, f"Saved SL: {saved_data.get('fixed_sl_pips')}"
+    print(f"   [PASSED] Persisted settings verified in bot_settings.json: {saved_data}")
+
     print("\nAll Web API integration tests passed successfully!")
 
 
 if __name__ == "__main__":
     test_api_workflow()
+

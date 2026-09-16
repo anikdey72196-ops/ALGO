@@ -673,9 +673,13 @@
         const c2 = document.getElementById('chart2Select');
         const strat = document.getElementById('strategySelect');
         const stratBadge = document.getElementById('strategyBadge');
-        const lot = document.getElementById('lotSizeInput');
+        const lotInput = document.getElementById('lotSizeInput');
+        const lot = lotInput;
         const saveBtn = document.getElementById('saveConfigBtn');
         const tickBtn = document.getElementById('tickBtn');
+        const slInput = document.getElementById('slPipsInput');
+        const aiCb = document.getElementById('aiToggleCheckbox');
+        const aiBadge = document.getElementById('aiStatusBadge');
 
         if (isBotActive) {
           dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
@@ -689,8 +693,8 @@
           c1.disabled = true;
           c2.disabled = true;
           lot.disabled = true;
-          document.getElementById('slPipsInput').disabled = true;
-          document.getElementById('aiToggleCheckbox').disabled = true;
+          if (slInput) slInput.disabled = true;
+          if (aiCb) aiCb.disabled = true;
           saveBtn.disabled = true;
           tickBtn.disabled = false;
         } else {
@@ -705,15 +709,11 @@
           c1.disabled = false;
           c2.disabled = false;
           lot.disabled = false;
-          document.getElementById('slPipsInput').disabled = false;
-          document.getElementById('aiToggleCheckbox').disabled = false;
+          if (slInput) slInput.disabled = false;
+          if (aiCb) aiCb.disabled = false;
           saveBtn.disabled = false;
           tickBtn.disabled = true;
         }
-
-
-        const slInput = document.getElementById('slPipsInput');
-        const lotInput = document.getElementById('lotSizeInput');
 
         // Check if user is currently focused/typing in any input
         const isEditingSl = document.activeElement === slInput;
@@ -738,7 +738,7 @@
             lot.value = data.fixed_lot_size;
           }
           if (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) {
-            slInput.value = data.fixed_sl_pips;
+            if (slInput) slInput.value = data.fixed_sl_pips;
           }
         } else if (!hasLoadedInitialConfig || forceFormSync) {
           // When idle, only sync form values on initial load or after explicit user save / toggle
@@ -755,11 +755,11 @@
           if (!isEditingLot) {
             lot.value = (data.fixed_lot_size !== null && data.fixed_lot_size !== undefined) ? data.fixed_lot_size : "";
           }
-          if (!isEditingSl) {
+          if (!isEditingSl && slInput) {
             slInput.value = (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) ? data.fixed_sl_pips : "";
           }
-          if (data.ai_confirmation_enabled !== undefined && document.activeElement !== aiCb) {
-            if (aiCb) aiCb.checked = data.ai_confirmation_enabled;
+          if (data.ai_confirmation_enabled !== undefined && aiCb && document.activeElement !== aiCb) {
+            aiCb.checked = data.ai_confirmation_enabled;
           }
           hasLoadedInitialConfig = true;
         }
@@ -770,8 +770,6 @@
         if (c1Tf) c1Tf.innerText = tfBadgeText;
         if (c2Tf) c2Tf.innerText = tfBadgeText;
 
-        const aiCb = document.getElementById('aiToggleCheckbox');
-        const aiBadge = document.getElementById('aiStatusBadge');
         if (data.ai_confirmation_enabled !== undefined) {
           if (aiBadge) {
             if (data.ai_confirmation_enabled) {
@@ -857,7 +855,31 @@
       }
     }
 
+    let autoSaveTimer = null;
+    function triggerAutoSave(delay = 400) {
+      if (isBotActive) return;
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        saveConfig(false);
+      }, delay);
+    }
+
+    function onStrategyChange() {
+      const strat = document.getElementById('strategySelect');
+      const stratBadge = document.getElementById('strategyBadge');
+      if (strat && stratBadge) {
+        stratBadge.innerText = strat.value === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
+      }
+      triggerAutoSave(0);
+    }
+
     async function toggleActivation() {
+      if (!isBotActive) {
+        // Automatically save current form settings (strategy, SL, symbols, lot) prior to activating
+        const ok = await saveConfig(false);
+        if (!ok) return;
+      }
+
       const endpoint = isBotActive ? '/api/deactivate' : '/api/activate';
       try {
         const res = await fetch(endpoint, { method: 'POST' });
@@ -874,19 +896,19 @@
       }
     }
 
-    async function saveConfig() {
+    async function saveConfig(showNotification = true) {
       const c1 = document.getElementById('chart1Select').value;
       const c2 = document.getElementById('chart2Select').value;
       const lotVal = document.getElementById('lotSizeInput').value.trim();
 
       if (c1 === "NONE" && c2 === "NONE") {
-        showToast("Please select at least 1 valid chart instrument (cannot both be None).", true);
-        return;
+        if (showNotification) showToast("Please select at least 1 valid chart instrument (cannot both be None).", true);
+        return false;
       }
 
       if (c1 !== "NONE" && c2 !== "NONE" && c1 === c2) {
-        showToast("Please choose 2 different chart instruments or set one to None.", true);
-        return;
+        if (showNotification) showToast("Please choose 2 different chart instruments or set one to None.", true);
+        return false;
       }
 
       const slInputEl = document.getElementById('slPipsInput');
@@ -907,7 +929,7 @@
 
       const saveBtn = document.getElementById('saveConfigBtn');
       const prevText = saveBtn ? saveBtn.innerText : "Save";
-      if (saveBtn) {
+      if (saveBtn && showNotification) {
         saveBtn.innerText = "Saving...";
         saveBtn.disabled = true;
       }
@@ -921,23 +943,30 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast(`Configuration saved! Strategy: ${stratVal} | Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic'}`);
+          if (showNotification) {
+            showToast(`Configuration saved! Strategy: ${stratVal} | Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic'}`);
+          }
           await fetchState(true);
-          if (saveBtn) saveBtn.innerText = "Saved!";
+          if (saveBtn && showNotification) saveBtn.innerText = "Saved!";
+          return true;
         } else {
           showToast(data.detail || "Failed to update configuration", true);
-          if (saveBtn) saveBtn.innerText = prevText;
+          if (saveBtn && showNotification) saveBtn.innerText = prevText;
+          return false;
         }
       } catch (err) {
         showToast("Error sending configuration to bot server", true);
-        if (saveBtn) saveBtn.innerText = prevText;
+        if (saveBtn && showNotification) saveBtn.innerText = prevText;
+        return false;
       } finally {
-        setTimeout(() => {
-          if (saveBtn && !isBotActive) {
-            saveBtn.innerText = "Save";
-            saveBtn.disabled = false;
-          }
-        }, 1200);
+        if (showNotification) {
+          setTimeout(() => {
+            if (saveBtn && !isBotActive) {
+              saveBtn.innerText = "Save";
+              saveBtn.disabled = false;
+            }
+          }, 1200);
+        }
       }
     }
 
@@ -1069,6 +1098,22 @@
         fetchActivationHistory();
       }
     }, 5000);
+
+    // Auto-save event listeners for immediate responsiveness
+    const stratElem = document.getElementById('strategySelect');
+    if (stratElem) {
+      stratElem.addEventListener('change', onStrategyChange);
+    }
+    const c1Elem = document.getElementById('chart1Select');
+    if (c1Elem) c1Elem.addEventListener('change', () => triggerAutoSave(0));
+    const c2Elem = document.getElementById('chart2Select');
+    if (c2Elem) c2Elem.addEventListener('change', () => triggerAutoSave(0));
+    const aiElem = document.getElementById('aiToggleCheckbox');
+    if (aiElem) aiElem.addEventListener('change', () => triggerAutoSave(0));
+    const slElem = document.getElementById('slPipsInput');
+    if (slElem) slElem.addEventListener('input', () => triggerAutoSave(600));
+    const lotElem = document.getElementById('lotSizeInput');
+    if (lotElem) lotElem.addEventListener('input', () => triggerAutoSave(600));
   </script>
 </body>
 </html>

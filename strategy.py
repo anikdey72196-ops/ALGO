@@ -657,7 +657,7 @@ class SMCScalp5MEngine:
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
-        enforce_session: bool = True,
+        enforce_session: bool = False,
     ) -> dict | None:
         """
         Scans 5M OHLCV data for:
@@ -928,6 +928,7 @@ class StrategyEngine:
                 instrument=instrument,
                 current_spread=current_spread,
                 fixed_sl_pips=fixed_sl_pips,
+                enforce_session=getattr(self.config, 'scalp_enforce_session', False),
             )
         else:
             raw_signal = self.smc_detector.detect_smc_entry(

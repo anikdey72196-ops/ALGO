@@ -17,7 +17,7 @@ from typing import List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -145,6 +145,12 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # ─────────────────────────────────────────────
 #  Web API Routes
 # ─────────────────────────────────────────────
+
+@app.get("/favicon.ico")
+async def get_favicon():
+    """Silence browser favicon 404 request."""
+    return Response(status_code=204)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
@@ -313,6 +319,9 @@ async def update_configuration(payload: BotConfigUpdate):
     bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
     if payload.ai_confirmation_enabled is not None:
         bot_instance.config.ai_confirmation_enabled = payload.ai_confirmation_enabled
+
+    # Persist updated configuration to bot_settings.json
+    bot_instance.save_settings()
 
     bot_instance.log(
         f"⚙️ Configuration updated: Symbols={bot_instance.config.selected_symbols} | "

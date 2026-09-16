@@ -300,6 +300,10 @@ class TradingConfig(BaseModel):
         ge=1.0,
         description="Target Risk-to-Reward ratio for 5M scalping strategy.",
     )
+    scalp_enforce_session: bool = Field(
+        default=False,
+        description="Whether to restrict scalping to London/NY sessions (False = active 24/7 in all sessions).",
+    )
     selected_symbols: List[str] = Field(
         default_factory=lambda: ["XAUUSD", "EURUSD"],
         description="List of up to 2 active symbols to analyze concurrently.",
