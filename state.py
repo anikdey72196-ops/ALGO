@@ -20,6 +20,8 @@ class TradeRecord:
     lot_size: float
     realized_pnl: float  # 0.0 while open
     status: str  # 'OPEN', 'CLOSED_TP', 'CLOSED_SL', 'CLOSED_MANUAL'
+    strategy_name: str = "SMC"
+    magic_number: int = 123456
 
 
 @dataclass
@@ -50,7 +52,7 @@ class StateManager:
         self.cleanup_interrupted_sessions()
     
     def _init_schema(self) -> None:
-        """Create tables: daily_state, trade_log, bot_sessions."""
+        """Create tables: daily_state, trade_log, bot_sessions with migrations."""
         with self.conn:
             self.conn.execute('''
                 CREATE TABLE IF NOT EXISTS daily_state (
@@ -71,7 +73,9 @@ class StateManager:
                     take_profit REAL,
                     lot_size REAL,
                     realized_pnl REAL DEFAULT 0.0,
-                    status TEXT DEFAULT 'OPEN'
+                    status TEXT DEFAULT 'OPEN',
+                    strategy_name TEXT DEFAULT 'SMC',
+                    magic_number INTEGER DEFAULT 123456
                 )
             ''')
             self.conn.execute('''
@@ -87,6 +91,17 @@ class StateManager:
                     status TEXT DEFAULT 'ACTIVE'
                 )
             ''')
+
+            # Ensure migrations for existing databases
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN strategy_name TEXT DEFAULT 'SMC'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN magic_number INTEGER DEFAULT 123456")
+            except sqlite3.OperationalError:
+                pass
+
         logger.info(f"Database schema initialized at {self.db_path}")
     
     def _ensure_daily_row(self, today: date) -> None:
@@ -109,8 +124,9 @@ class StateManager:
                 cursor = self.conn.execute('''
                     INSERT INTO trade_log (
                         id, timestamp, symbol, direction, entry_price, 
-                        stop_loss, take_profit, lot_size, realized_pnl, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        stop_loss, take_profit, lot_size, realized_pnl, status,
+                        strategy_name, magic_number
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     trade.id,
                     trade.timestamp.isoformat(),
@@ -121,15 +137,18 @@ class StateManager:
                     trade.take_profit,
                     trade.lot_size,
                     trade.realized_pnl,
-                    trade.status
+                    trade.status,
+                    trade.strategy_name,
+                    trade.magic_number,
                 ))
                 trade_id = trade.id
             else:
                 cursor = self.conn.execute('''
                     INSERT INTO trade_log (
                         timestamp, symbol, direction, entry_price, 
-                        stop_loss, take_profit, lot_size, realized_pnl, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        stop_loss, take_profit, lot_size, realized_pnl, status,
+                        strategy_name, magic_number
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     trade.timestamp.isoformat(),
                     trade.symbol,
@@ -139,7 +158,9 @@ class StateManager:
                     trade.take_profit,
                     trade.lot_size,
                     trade.realized_pnl,
-                    trade.status
+                    trade.status,
+                    trade.strategy_name,
+                    trade.magic_number,
                 ))
                 trade_id = cursor.lastrowid
                 trade.id = trade_id
@@ -152,8 +173,9 @@ class StateManager:
                 WHERE date = ?
             ''', (trade.realized_pnl, date_str))
             
-        logger.info(f"Recorded trade {trade_id} for {trade.symbol} at {trade.entry_price}")
+        logger.info(f"Recorded trade {trade_id} ({trade.strategy_name}) for {trade.symbol} at {trade.entry_price}")
         return trade_id
+
     
     def update_trade_pnl(self, trade_id: int, pnl: float, status: str) -> None:
         """Update a trade's realized PnL and status."""
@@ -241,7 +263,8 @@ class StateManager:
         """Return all trades with status='OPEN'."""
         cursor = self.conn.execute('''
             SELECT id, timestamp, symbol, direction, entry_price, 
-                   stop_loss, take_profit, lot_size, realized_pnl, status
+                   stop_loss, take_profit, lot_size, realized_pnl, status,
+                   strategy_name, magic_number
             FROM trade_log
             WHERE status = 'OPEN'
         ''')
@@ -264,7 +287,9 @@ class StateManager:
                 take_profit=row['take_profit'],
                 lot_size=row['lot_size'],
                 realized_pnl=row['realized_pnl'],
-                status=row['status']
+                status=row['status'],
+                strategy_name=row['strategy_name'] if 'strategy_name' in row.keys() and row['strategy_name'] else "SMC",
+                magic_number=row['magic_number'] if 'magic_number' in row.keys() and row['magic_number'] else 123456,
             )
             open_trades.append(trade)
             
@@ -274,7 +299,8 @@ class StateManager:
         """Return all historical trades ordered by id DESC."""
         cursor = self.conn.execute('''
             SELECT id, timestamp, symbol, direction, entry_price, 
-                   stop_loss, take_profit, lot_size, realized_pnl, status
+                   stop_loss, take_profit, lot_size, realized_pnl, status,
+                   strategy_name, magic_number
             FROM trade_log
             ORDER BY id DESC
             LIMIT ?
@@ -298,11 +324,142 @@ class StateManager:
                 take_profit=row['take_profit'],
                 lot_size=row['lot_size'],
                 realized_pnl=row['realized_pnl'],
-                status=row['status']
+                status=row['status'],
+                strategy_name=row['strategy_name'] if 'strategy_name' in row.keys() and row['strategy_name'] else "SMC",
+                magic_number=row['magic_number'] if 'magic_number' in row.keys() and row['magic_number'] else 123456,
             )
             trades.append(trade)
             
         return trades
+
+    def get_stats_by_strategy(self) -> dict[str, dict]:
+        """
+        Calculate win rate, trade counts, and PnL grouped by strategy.
+        Returns: { strategy_name: { 'total': int, 'wins': int, 'losses': int, 'win_rate': float, 'pnl': float } }
+        """
+        cursor = self.conn.execute('''
+            SELECT strategy_name, status, realized_pnl
+            FROM trade_log
+            WHERE status != 'OPEN'
+        ''')
+        rows = cursor.fetchall()
+        
+        stats: dict[str, dict] = {}
+        for row in rows:
+            strat = row['strategy_name'] or "SMC"
+            if strat not in stats:
+                stats[strat] = {
+                    "strategy_name": strat,
+                    "total": 0,
+                    "total_trades": 0,
+                    "wins": 0,
+                    "winning_trades": 0,
+                    "losses": 0,
+                    "losing_trades": 0,
+                    "win_rate": 0.0,
+                    "pnl": 0.0,
+                    "total_pnl": 0.0,
+                }
+            
+            stats[strat]["total"] += 1
+            stats[strat]["total_trades"] += 1
+            pnl = float(row['realized_pnl'] or 0.0)
+            stats[strat]["pnl"] += pnl
+            stats[strat]["total_pnl"] += pnl
+            
+            if row['status'] == 'CLOSED_TP' or pnl > 0:
+                stats[strat]["wins"] += 1
+                stats[strat]["winning_trades"] += 1
+            elif row['status'] == 'CLOSED_SL' or pnl < 0:
+                stats[strat]["losses"] += 1
+                stats[strat]["losing_trades"] += 1
+
+        for strat, data in stats.items():
+            if data["total"] > 0:
+                data["win_rate"] = round((data["wins"] / data["total"]) * 100.0, 1)
+                data["pnl"] = round(data["pnl"], 2)
+                data["total_pnl"] = round(data["total_pnl"], 2)
+                
+        return stats
+
+    def get_stats_by_pair(self) -> dict[str, dict]:
+        """
+        Calculate win rate, trade counts, and PnL grouped by pair / symbol.
+        Returns: { symbol: { 'total': int, 'wins': int, 'losses': int, 'win_rate': float, 'pnl': float } }
+        """
+        cursor = self.conn.execute('''
+            SELECT symbol, status, realized_pnl
+            FROM trade_log
+            WHERE status != 'OPEN'
+        ''')
+        rows = cursor.fetchall()
+        
+        stats: dict[str, dict] = {}
+        for row in rows:
+            sym = row['symbol']
+            if sym not in stats:
+                stats[sym] = {
+                    "symbol": sym,
+                    "total": 0,
+                    "total_trades": 0,
+                    "wins": 0,
+                    "winning_trades": 0,
+                    "losses": 0,
+                    "losing_trades": 0,
+                    "win_rate": 0.0,
+                    "pnl": 0.0,
+                    "total_pnl": 0.0,
+                }
+            
+            stats[sym]["total"] += 1
+            stats[sym]["total_trades"] += 1
+            pnl = float(row['realized_pnl'] or 0.0)
+            stats[sym]["pnl"] += pnl
+            stats[sym]["total_pnl"] += pnl
+            
+            if row['status'] == 'CLOSED_TP' or pnl > 0:
+                stats[sym]["wins"] += 1
+                stats[sym]["winning_trades"] += 1
+            elif row['status'] == 'CLOSED_SL' or pnl < 0:
+                stats[sym]["losses"] += 1
+                stats[sym]["losing_trades"] += 1
+
+        for sym, data in stats.items():
+            if data["total"] > 0:
+                data["win_rate"] = round((data["wins"] / data["total"]) * 100.0, 1)
+                data["pnl"] = round(data["pnl"], 2)
+                data["total_pnl"] = round(data["total_pnl"], 2)
+                
+        return stats
+
+    def get_performance_metrics(self) -> dict:
+        """Aggregate performance metrics across all trades."""
+        cursor = self.conn.execute('''
+            SELECT COUNT(*) as total_closed,
+                   SUM(CASE WHEN status = 'CLOSED_TP' OR realized_pnl > 0 THEN 1 ELSE 0 END) as wins,
+                   SUM(CASE WHEN status = 'CLOSED_SL' OR realized_pnl < 0 THEN 1 ELSE 0 END) as losses,
+                   SUM(realized_pnl) as total_pnl
+            FROM trade_log
+            WHERE status != 'OPEN'
+        ''')
+        row = cursor.fetchone()
+        
+        total = int(row['total_closed'] or 0)
+        wins = int(row['wins'] or 0)
+        losses = int(row['losses'] or 0)
+        pnl = float(row['total_pnl'] or 0.0)
+        win_rate = round((wins / total * 100.0), 1) if total > 0 else 0.0
+        
+        return {
+            "total_closed_trades": total,
+            "winning_trades": wins,
+            "losing_trades": losses,
+            "accuracy": win_rate,
+            "total_pnl": round(pnl, 2),
+            "by_strategy": self.get_stats_by_strategy(),
+            "by_pair": self.get_stats_by_pair(),
+        }
+
 
     def cleanup_interrupted_sessions(self, reason: str = "Interrupted / Server Restarted") -> None:
         """Mark any lingering 'ACTIVE' sessions as 'INTERRUPTED'."""

@@ -15,6 +15,7 @@ Core Philosophy:
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -22,7 +23,8 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig, StrategyType
+from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig, StrategyType, ICTConfig
+
 
 
 # ─────────────────────────────────────────────
@@ -35,6 +37,10 @@ class LTFConfirmation(str, Enum):
     OB_PLUS_FVG = "OB_PLUS_FVG"           # Overlapping OB + FVG (Prime Confluence)
     LIQUIDITY_SWEEP = "LIQUIDITY_SWEEP"   # Direct sweep & reversal confirmation
     OB_SCALP_5M = "OB_SCALP_5M"           # 5M Break of Structure & Order Block Retest Scalp
+    ICT_KILLZONE_FVG = "ICT_KILLZONE_FVG" # ICT Kill Zone FVG Retest
+    ICT_SILVER_BULLET = "ICT_SILVER_BULLET" # ICT Silver Bullet Model
+    ICT_JUDAS_SWING = "ICT_JUDAS_SWING"   # ICT Judas Swing Liquidity Purge
+    ICT_OTE_RETEST = "ICT_OTE_RETEST"     # ICT Optimal Trade Entry (61.8%-78.6% Fib)
     PULLBACK = "PULLBACK"                 # Compatibility fallback
     STRUCTURAL_BREAK = "STRUCTURAL_BREAK" # Compatibility fallback
     NONE = "NONE"
@@ -106,6 +112,11 @@ class TradeSignal:
     timestamp: datetime
     sl_distance: float = 0.0  # |entry - sl| in price
     tp_distance: float = 0.0  # |entry - tp| in price
+    strategy_id: str = "SMC"
+    strategy_name: str = "SMC Swing"
+    magic_number: int = 123456
+    runner_tp: float | None = None
+
 
 
 # ─────────────────────────────────────────────
@@ -885,21 +896,863 @@ class SMCScalp5MEngine:
 
 
 # ─────────────────────────────────────────────
+#  ICT (Inner Circle Trader) Strategy Engine
+# ─────────────────────────────────────────────
+
+class ICTKillZone(str, Enum):
+    """ICT Defined Trading Kill Zones."""
+    LONDON_OPEN = "LONDON_KILLZONE"
+    NY_AM = "NY_AM_KILLZONE"
+    SILVER_BULLET = "NY_SILVER_BULLET"
+    LONDON_CLOSE = "LONDON_CLOSE_KILLZONE"
+    ASIA = "ASIAN_SESSION"
+    NONE = "NONE"
+
+
+class ICTEngine:
+    """
+    Inner Circle Trader (ICT) Methodology Engine.
+    
+    Core ICT Pillars:
+    1. Kill Zones (Time-Based Institutional Order Flow Delivery):
+       - London Kill Zone: 07:00 - 10:00 UTC
+       - New York AM Kill Zone: 12:00 - 15:00 UTC
+       - Silver Bullet Hour: 14:00 - 15:00 UTC
+       - London Close: 15:00 - 17:00 UTC
+    2. Liquidity Runs & Judas Swing (Stop hunts above/below session extremes).
+    3. Market Structure Shift (MSS): Impulsive displacement break of swing structure.
+    4. Fair Value Gaps (FVG) & Optimal Trade Entry (OTE - 61.8% to 78.6% Fib).
+    5. External Range Liquidity (ERL) vs. Internal Range Liquidity (IRL) delivery.
+    """
+
+    def __init__(self, config: ICTConfig | None = None):
+        self.config = config or ICTConfig()
+
+    def identify_kill_zone(self, current_time: datetime) -> ICTKillZone:
+        """Identify which ICT Kill Zone enum is active at current_time UTC."""
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        hour = current_time.hour
+
+        if self.config.silver_bullet_start_utc <= hour < self.config.silver_bullet_end_utc:
+            return ICTKillZone.SILVER_BULLET
+        elif self.config.london_kz_start_utc <= hour < self.config.london_kz_end_utc:
+            return ICTKillZone.LONDON_OPEN
+        elif self.config.ny_am_kz_start_utc <= hour < self.config.ny_am_kz_end_utc:
+            return ICTKillZone.NY_AM
+        elif self.config.london_close_start_utc <= hour < self.config.london_close_end_utc:
+            return ICTKillZone.LONDON_CLOSE
+        elif 0 <= hour < 6:
+            return ICTKillZone.ASIA
+        return ICTKillZone.NONE
+
+    def get_active_killzone(self, current_time: datetime) -> str | None:
+        """Identify which ICT Kill Zone is active at current_time UTC (string name)."""
+        kz = self.identify_kill_zone(current_time)
+        return kz.value if kz != ICTKillZone.NONE and kz != ICTKillZone.ASIA else None
+
+    def detect_fvg(self, df: pd.DataFrame, index: int = -1, direction: Direction = Direction.BUY) -> dict | None:
+        """Detect a Fair Value Gap (FVG) at the specified bar index in a DataFrame."""
+        n = len(df)
+        if index < 0:
+            index = n + index
+        if index < 2 or index >= n:
+            return None
+
+        c_curr = df.iloc[index]
+        c_p2 = df.iloc[index - 2]
+
+        if direction == Direction.BUY:
+            # Bullish FVG: Low of candle[i] > High of candle[i-2]
+            if float(c_curr['low']) > float(c_p2['high']):
+                top = float(c_curr['low'])
+                bottom = float(c_p2['high'])
+                return {
+                    'type': 'BULLISH_FVG',
+                    'top': top,
+                    'bottom': bottom,
+                    'midpoint': (top + bottom) / 2.0,
+                    'gap_size': top - bottom,
+                    'index': index,
+                }
+        elif direction == Direction.SELL:
+            # Bearish FVG: High of candle[i] < Low of candle[i-2]
+            if float(c_curr['high']) < float(c_p2['low']):
+                top = float(c_p2['low'])
+                bottom = float(c_curr['high'])
+                return {
+                    'type': 'BEARISH_FVG',
+                    'top': top,
+                    'bottom': bottom,
+                    'midpoint': (top + bottom) / 2.0,
+                    'gap_size': top - bottom,
+                    'index': index,
+                }
+        return None
+
+    def calculate_ote_zone(self, low: float, high: float, direction: Direction = Direction.BUY) -> dict:
+        """Calculate the Optimal Trade Entry (61.8% to 78.6% Fib) zone."""
+        rng = abs(high - low)
+        if direction == Direction.BUY:
+            return {
+                'fib_618': high - (rng * 0.618),
+                'fib_705': high - (rng * 0.705),
+                'fib_786': high - (rng * 0.786),
+                'direction': Direction.BUY,
+            }
+        else:
+            return {
+                'fib_618': low + (rng * 0.618),
+                'fib_705': low + (rng * 0.705),
+                'fib_786': low + (rng * 0.786),
+                'direction': Direction.SELL,
+            }
+
+    def detect_ict_entry(
+        self,
+        df: pd.DataFrame,
+        htf_analysis: HTFAnalysis,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> dict | None:
+        """
+        Scan for high-probability ICT Setup:
+        1. Check active Kill Zone (or 24/7 if enforce_killzones=False).
+        2. Detect Liquidity Sweep / Judas Swing against the HTF trend.
+        3. Confirm Market Structure Shift (MSS) with displacement.
+        4. Detect FVG tap or OTE (61.8% - 78.6% Fib) mitigation entry.
+        5. Target opposing External Range Liquidity (ERL).
+        """
+        n = len(df)
+        if n < 15:
+            return None
+
+        bias = htf_analysis.bias
+        if bias not in (MarketBias.BULLISH, MarketBias.BEARISH):
+            return None
+
+        current_bar = df.iloc[-1]
+        timestamp = current_bar['time'] if 'time' in df.columns else datetime.now(timezone.utc)
+        if isinstance(timestamp, pd.Timestamp):
+            timestamp = timestamp.to_pydatetime()
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        active_kz = self.get_active_killzone(timestamp)
+        if self.config.enforce_killzones and not active_kz:
+            logger.debug(f"[ICT] Outside Kill Zones ({timestamp.strftime('%H:%M UTC')}). Skipping.")
+            return None
+
+        atr_series = compute_atr(df, period=14)
+        current_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 10 * instrument.pip_size
+
+        swings = find_swing_points_logic(df['high'], df['low'], lookback=3)
+        if not swings:
+            return None
+
+        current_close = float(current_bar['close'])
+        current_low = float(current_bar['low'])
+        current_high = float(current_bar['high'])
+
+        lookback_window = min(20, n - 2)
+
+        if bias == MarketBias.BULLISH:
+            low_swings = [sp for sp in swings if not sp.is_high and sp.index < n - 1]
+            high_swings = [sp for sp in swings if sp.is_high and sp.index < n - 1]
+            if not low_swings or not high_swings:
+                return None
+
+            # 1. Detect Judas Swing / Liquidity Sweep below a recent swing low
+            sweep_found = False
+            swept_level = 0.0
+            sweep_extreme = 0.0
+            sweep_idx = -1
+
+            for offset in range(2, lookback_window + 1):
+                idx = n - 1 - offset
+                bar = df.iloc[idx]
+                for sp in reversed(low_swings):
+                    if sp.index < idx and float(bar['low']) < sp.price:
+                        sweep_found = True
+                        swept_level = sp.price
+                        sweep_extreme = float(bar['low'])
+                        sweep_idx = idx
+                        break
+                if sweep_found:
+                    break
+
+            if not sweep_found or sweep_idx <= 0:
+                return None
+
+            # 2. Detect Bullish Market Structure Shift (MSS) displacement breaking recent swing high
+            mss_confirmed = False
+            mss_idx = -1
+            broken_high = 0.0
+            for post_idx in range(sweep_idx, min(sweep_idx + 8, n)):
+                p_bar = df.iloc[post_idx]
+                p_close = float(p_bar['close'])
+                for sp in high_swings:
+                    if sweep_idx <= sp.index < post_idx and p_close > sp.price:
+                        # Displacement check: candle body >= 1.2x ATR
+                        body = p_close - float(p_bar['open'])
+                        if body >= current_atr * 1.0:
+                            mss_confirmed = True
+                            mss_idx = post_idx
+                            broken_high = sp.price
+                            break
+                if mss_confirmed:
+                    break
+
+            if not mss_confirmed or mss_idx <= 0:
+                return None
+
+            # 3. Calculate Optimal Trade Entry (OTE) & FVG in the displacement leg
+            leg_low = sweep_extreme
+            leg_high = float(df.iloc[sweep_idx:n]['high'].max())
+            leg_range = leg_high - leg_low
+
+            if leg_range <= 0:
+                return None
+
+            # OTE zone: 61.8% to 78.6% retracement down from leg_high
+            ote_top = leg_high - (leg_range * self.config.ote_fib_min)
+            ote_bottom = leg_high - (leg_range * self.config.ote_fib_max)
+
+            # Check FVG in the displacement impulse
+            fvg_touched = False
+            fvg_top, fvg_bottom = 0.0, 0.0
+            for i in range(max(2, sweep_idx), min(mss_idx + 3, n)):
+                c_curr = df.iloc[i]
+                c_p2 = df.iloc[i - 2]
+                if float(c_curr['low']) > float(c_p2['high']):
+                    gap = float(c_curr['low']) - float(c_p2['high'])
+                    if gap >= current_atr * 0.3:
+                        fvg_top = float(c_curr['low'])
+                        fvg_bottom = float(c_p2['high'])
+                        if current_low <= fvg_top and current_close >= fvg_bottom:
+                            fvg_touched = True
+                            break
+
+            ote_touched = (current_low <= ote_top and current_close >= ote_bottom)
+
+            if not (fvg_touched or ote_touched or (current_close > broken_high and current_low <= broken_high)):
+                return None
+
+            # Confirmation classification
+            if active_kz == "NY_SILVER_BULLET":
+                conf = LTFConfirmation.ICT_SILVER_BULLET
+            elif fvg_touched:
+                conf = LTFConfirmation.ICT_KILLZONE_FVG
+            elif ote_touched:
+                conf = LTFConfirmation.ICT_OTE_RETEST
+            else:
+                conf = LTFConfirmation.ICT_JUDAS_SWING
+
+            # Stop Loss & Take Profit
+            sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
+            stop_loss = sweep_extreme - sl_buffer
+            entry_price = current_close
+
+            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                sl_distance = fixed_sl_pips * instrument.pip_size
+                stop_loss = entry_price - sl_distance
+            else:
+                sl_distance = abs(entry_price - stop_loss)
+
+            min_buffer = 1.0 * instrument.pip_size
+            if sl_distance < min_buffer:
+                sl_distance = min_buffer
+                stop_loss = entry_price - sl_distance
+
+            # Target Opposing External Range Liquidity (ERL)
+            erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + (sl_distance * self.config.target_rr)]
+            take_profit = min(erl_targets) if erl_targets else entry_price + (sl_distance * self.config.target_rr)
+
+            return {
+                'direction': Direction.BUY,
+                'entry': entry_price,
+                'sl': stop_loss,
+                'tp': take_profit,
+                'conf': conf,
+                'timestamp': timestamp,
+                'kz': active_kz or "ALL_HOURS",
+            }
+
+        elif bias == MarketBias.BEARISH:
+            high_swings = [sp for sp in swings if sp.is_high and sp.index < n - 1]
+            low_swings = [sp for sp in swings if not sp.is_high and sp.index < n - 1]
+            if not high_swings or not low_swings:
+                return None
+
+            # 1. Detect Judas Swing / Liquidity Sweep above a recent swing high
+            sweep_found = False
+            swept_level = 0.0
+            sweep_extreme = 0.0
+            sweep_idx = -1
+
+            for offset in range(2, lookback_window + 1):
+                idx = n - 1 - offset
+                bar = df.iloc[idx]
+                for sp in reversed(high_swings):
+                    if sp.index < idx and float(bar['high']) > sp.price:
+                        sweep_found = True
+                        swept_level = sp.price
+                        sweep_extreme = float(bar['high'])
+                        sweep_idx = idx
+                        break
+                if sweep_found:
+                    break
+
+            if not sweep_found or sweep_idx <= 0:
+                return None
+
+            # 2. Detect Bearish Market Structure Shift (MSS) displacement breaking recent swing low
+            mss_confirmed = False
+            mss_idx = -1
+            broken_low = 0.0
+            for post_idx in range(sweep_idx, min(sweep_idx + 8, n)):
+                p_bar = df.iloc[post_idx]
+                p_close = float(p_bar['close'])
+                for sp in low_swings:
+                    if sweep_idx <= sp.index < post_idx and p_close < sp.price:
+                        body = float(p_bar['open']) - p_close
+                        if body >= current_atr * 1.0:
+                            mss_confirmed = True
+                            mss_idx = post_idx
+                            broken_low = sp.price
+                            break
+                if mss_confirmed:
+                    break
+
+            if not mss_confirmed or mss_idx <= 0:
+                return None
+
+            # 3. Calculate OTE & FVG in the displacement leg
+            leg_high = sweep_extreme
+            leg_low = float(df.iloc[sweep_idx:n]['low'].min())
+            leg_range = leg_high - leg_low
+
+            if leg_range <= 0:
+                return None
+
+            # OTE zone: 61.8% to 78.6% retracement up from leg_low
+            ote_bottom = leg_low + (leg_range * self.config.ote_fib_min)
+            ote_top = leg_low + (leg_range * self.config.ote_fib_max)
+
+            # Check Bearish FVG
+            fvg_touched = False
+            for i in range(max(2, sweep_idx), min(mss_idx + 3, n)):
+                c_curr = df.iloc[i]
+                c_p2 = df.iloc[i - 2]
+                if float(c_curr['high']) < float(c_p2['low']):
+                    gap = float(c_p2['low']) - float(c_curr['high'])
+                    if gap >= current_atr * 0.3:
+                        fvg_top = float(c_p2['low'])
+                        fvg_bottom = float(c_curr['high'])
+                        if current_high >= fvg_bottom and current_close <= fvg_top:
+                            fvg_touched = True
+                            break
+
+            ote_touched = (current_high >= ote_bottom and current_close <= ote_top)
+
+            if not (fvg_touched or ote_touched or (current_close < broken_low and current_high >= broken_low)):
+                return None
+
+            if active_kz == "NY_SILVER_BULLET":
+                conf = LTFConfirmation.ICT_SILVER_BULLET
+            elif fvg_touched:
+                conf = LTFConfirmation.ICT_KILLZONE_FVG
+            elif ote_touched:
+                conf = LTFConfirmation.ICT_OTE_RETEST
+            else:
+                conf = LTFConfirmation.ICT_JUDAS_SWING
+
+            sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
+            stop_loss = sweep_extreme + sl_buffer
+            entry_price = current_close
+
+            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                sl_distance = fixed_sl_pips * instrument.pip_size
+                stop_loss = entry_price + sl_distance
+            else:
+                sl_distance = abs(stop_loss - entry_price)
+
+            min_buffer = 1.0 * instrument.pip_size
+            if sl_distance < min_buffer:
+                sl_distance = min_buffer
+                stop_loss = entry_price + sl_distance
+
+            erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - (sl_distance * self.config.target_rr)]
+            take_profit = max(erl_targets) if erl_targets else entry_price - (sl_distance * self.config.target_rr)
+
+            return {
+                'direction': Direction.SELL,
+                'entry': entry_price,
+                'sl': stop_loss,
+                'tp': take_profit,
+                'conf': conf,
+                'timestamp': timestamp,
+                'kz': active_kz or "ALL_HOURS",
+            }
+
+        return None
+
+
+# ─────────────────────────────────────────────
+#  Strategy Classes (Unified BaseStrategy Interface)
+# ─────────────────────────────────────────────
+
+class BaseStrategy(ABC):
+    """Abstract Strategy Base Class for all trading algorithms."""
+    id: str
+    name: str
+    enabled: bool = True
+    magic_offset: int = 0
+
+    @abstractmethod
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> list[TradeSignal]:
+        """Evaluate market data and return candidate TradeSignals."""
+        pass
+
+    @abstractmethod
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        """Calculate default Stop Loss price for this strategy."""
+        pass
+
+    @abstractmethod
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        """Calculate default Take Profit price for this strategy."""
+        pass
+
+
+class SMCSwingStrategy(BaseStrategy):
+    """Strategy A: 15m Institutional Swing Liquidity Sweep."""
+    id = "SMC"
+    name = "SMC Swing (15m)"
+    magic_offset = 1000
+
+    def __init__(self, htf_analyzer_or_config: HTFAnalyzer | TimeframeConfig | TradingConfig, config_or_instrument: TimeframeConfig | InstrumentConfig | None = None):
+        if isinstance(htf_analyzer_or_config, HTFAnalyzer):
+            self.htf_analyzer = htf_analyzer_or_config
+            self.config = config_or_instrument if isinstance(config_or_instrument, TimeframeConfig) else TimeframeConfig()
+        elif hasattr(htf_analyzer_or_config, 'timeframes'):
+            self.config = htf_analyzer_or_config.timeframes
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=self.config.htf_ema_period,
+                swing_lookback=self.config.swing_lookback,
+                equal_level_tolerance=self.config.equal_level_tolerance,
+            )
+        else:
+            self.config = htf_analyzer_or_config
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=self.config.htf_ema_period,
+                swing_lookback=self.config.swing_lookback,
+                equal_level_tolerance=self.config.equal_level_tolerance,
+            )
+        self.detector = SMCEntryDetector(self.config)
+
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        dist = 25.0 * instrument.pip_size
+        return entry_price - dist if direction == Direction.BUY else entry_price + dist
+
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        sl_dist = abs(entry_price - sl)
+        return entry_price + (sl_dist * 3.0) if direction == Direction.BUY else entry_price - (sl_dist * 3.0)
+
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> list[TradeSignal]:
+        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis.bias == MarketBias.NEUTRAL:
+            return []
+
+        raw = self.detector.detect_smc_entry(
+            df=ltf_data,
+            htf_analysis=htf_analysis,
+            instrument=instrument,
+            current_spread=current_spread,
+        )
+        if not raw:
+            return []
+
+        entry = raw['entry']
+        direction = raw['direction']
+        conf = raw['conf']
+
+        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+            sl_dist = fixed_sl_pips * instrument.pip_size
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+        else:
+            sl = raw['sl']
+            sl_dist = abs(entry - sl)
+
+        tp = raw['tp']
+        tp_dist = abs(entry - tp)
+        min_buffer = 1.0 * instrument.pip_size
+        if sl_dist < min_buffer:
+            sl_dist = min_buffer
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
+
+        # Quality scoring
+        quality_score = min(25.0, htf_analysis.trend_clarity_score)
+        if conf == LTFConfirmation.OB_PLUS_FVG:
+            quality_score += 30.0
+        elif conf == LTFConfirmation.OB_MITIGATION:
+            quality_score += 25.0
+        elif conf == LTFConfirmation.FVG_MITIGATION:
+            quality_score += 20.0
+        else:
+            quality_score += 15.0
+        quality_score += 15.0  # Invalidation quality
+        quality_score += min(15.0, rr_ratio * 2.5)
+        if current_spread > 0:
+            quality_score += min(10.0, (tp_dist / current_spread) * 1.0)
+        else:
+            quality_score += 10.0
+        quality_score = min(100.0, quality_score)
+
+        return [TradeSignal(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=htf_analysis.bias,
+            ltf_confirmation=conf,
+            rr_ratio=rr_ratio,
+            quality_score=quality_score,
+            timestamp=raw['timestamp'],
+            sl_distance=sl_dist,
+            tp_distance=tp_dist,
+            strategy_id=self.id,
+            strategy_name=self.name,
+            magic_number=123456 + self.magic_offset,
+        )]
+
+
+class SMCScalp5MStrategy(BaseStrategy):
+    """Strategy B: 5M Break of Structure & Order Block Retest Scalp."""
+    id = "SMC_SCALP_5M"
+    name = "SMC Scalp (5m)"
+    magic_offset = 2000
+
+    def __init__(self, htf_analyzer_or_config: HTFAnalyzer | TimeframeConfig | TradingConfig, config_or_instrument: TimeframeConfig | InstrumentConfig | None = None):
+        if isinstance(htf_analyzer_or_config, HTFAnalyzer):
+            self.htf_analyzer = htf_analyzer_or_config
+            self.config = config_or_instrument if isinstance(config_or_instrument, TimeframeConfig) else TimeframeConfig()
+        elif hasattr(htf_analyzer_or_config, 'timeframes'):
+            self.config = htf_analyzer_or_config.timeframes
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=self.config.htf_ema_period,
+                swing_lookback=self.config.swing_lookback,
+                equal_level_tolerance=self.config.equal_level_tolerance,
+            )
+        else:
+            self.config = htf_analyzer_or_config
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=self.config.htf_ema_period,
+                swing_lookback=self.config.swing_lookback,
+                equal_level_tolerance=self.config.equal_level_tolerance,
+            )
+        self.engine = SMCScalp5MEngine()
+
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        dist = 15.0 * instrument.pip_size
+        return entry_price - dist if direction == Direction.BUY else entry_price + dist
+
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        sl_dist = abs(entry_price - sl)
+        return entry_price + (sl_dist * 1.5) if direction == Direction.BUY else entry_price - (sl_dist * 1.5)
+
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> list[TradeSignal]:
+        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis.bias == MarketBias.NEUTRAL:
+            return []
+
+        raw = self.engine.detect_scalp_entry(
+            df=ltf_data,
+            htf_analysis=htf_analysis,
+            instrument=instrument,
+            current_spread=current_spread,
+            fixed_sl_pips=fixed_sl_pips,
+            enforce_session=getattr(self.config, 'scalp_enforce_session', False),
+        )
+        if not raw:
+            return []
+
+        entry = raw['entry']
+        direction = raw['direction']
+        conf = raw['conf']
+
+        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+            sl_dist = fixed_sl_pips * instrument.pip_size
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+        else:
+            sl = raw['sl']
+            sl_dist = abs(entry - sl)
+
+        tp = raw['tp']
+        tp_dist = abs(entry - tp)
+        min_buffer = 1.0 * instrument.pip_size
+        if sl_dist < min_buffer:
+            sl_dist = min_buffer
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
+
+        quality_score = min(25.0, htf_analysis.trend_clarity_score)
+        quality_score += 35.0  # High-conviction BOS + OB retest
+        quality_score += 15.0  # Invalidation quality
+        quality_score += min(15.0, (rr_ratio / 1.5) * 15.0)
+        if current_spread > 0:
+            quality_score += min(10.0, (tp_dist / current_spread) * 1.0)
+        else:
+            quality_score += 10.0
+        quality_score = min(100.0, quality_score)
+
+        return [TradeSignal(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=htf_analysis.bias,
+            ltf_confirmation=conf,
+            rr_ratio=rr_ratio,
+            quality_score=quality_score,
+            timestamp=raw['timestamp'],
+            sl_distance=sl_dist,
+            tp_distance=tp_dist,
+            strategy_id=self.id,
+            strategy_name=self.name,
+            magic_number=123456 + self.magic_offset,
+            runner_tp=raw.get('runner_tp'),
+        )]
+
+
+class ICTStrategy(BaseStrategy):
+    """Strategy C: ICT KillZone, Judas Swing, MSS & FVG/OTE Model."""
+    id = "ICT"
+    name = "ICT KillZone / Silver Bullet"
+    magic_offset = 3000
+
+    def __init__(self, htf_analyzer_or_config: HTFAnalyzer | TimeframeConfig | TradingConfig, ict_config: ICTConfig | InstrumentConfig | None = None):
+        if isinstance(htf_analyzer_or_config, HTFAnalyzer):
+            self.htf_analyzer = htf_analyzer_or_config
+            self.ict_config = ict_config if isinstance(ict_config, ICTConfig) else ICTConfig()
+        elif hasattr(htf_analyzer_or_config, 'ict'):
+            self.ict_config = htf_analyzer_or_config.ict
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=htf_analyzer_or_config.timeframes.htf_ema_period,
+                swing_lookback=htf_analyzer_or_config.timeframes.swing_lookback,
+                equal_level_tolerance=htf_analyzer_or_config.timeframes.equal_level_tolerance,
+            )
+        else:
+            self.ict_config = ict_config if isinstance(ict_config, ICTConfig) else ICTConfig()
+            self.htf_analyzer = HTFAnalyzer()
+        self.engine = ICTEngine(self.ict_config)
+
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        dist = 20.0 * instrument.pip_size
+        return entry_price - dist if direction == Direction.BUY else entry_price + dist
+
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        sl_dist = abs(entry_price - sl)
+        return entry_price + (sl_dist * 2.0) if direction == Direction.BUY else entry_price - (sl_dist * 2.0)
+
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> list[TradeSignal]:
+        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis.bias == MarketBias.NEUTRAL:
+            return []
+
+        raw = self.engine.detect_ict_entry(
+            df=ltf_data,
+            htf_analysis=htf_analysis,
+            instrument=instrument,
+            current_spread=current_spread,
+            fixed_sl_pips=fixed_sl_pips,
+        )
+        if not raw:
+            return []
+
+        entry = raw['entry']
+        direction = raw['direction']
+        conf = raw['conf']
+
+        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+            sl_dist = fixed_sl_pips * instrument.pip_size
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+        else:
+            sl = raw['sl']
+            sl_dist = abs(entry - sl)
+
+        tp = raw['tp']
+        tp_dist = abs(entry - tp)
+        min_buffer = 1.0 * instrument.pip_size
+        if sl_dist < min_buffer:
+            sl_dist = min_buffer
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
+
+        # Quality scoring
+        quality_score = min(25.0, htf_analysis.trend_clarity_score)
+        if conf == LTFConfirmation.ICT_SILVER_BULLET:
+            quality_score += 35.0
+        elif conf == LTFConfirmation.ICT_KILLZONE_FVG:
+            quality_score += 30.0
+        elif conf == LTFConfirmation.ICT_OTE_RETEST:
+            quality_score += 30.0
+        else:
+            quality_score += 25.0
+        quality_score += 15.0  # Invalidation quality
+        quality_score += min(15.0, (rr_ratio / 2.0) * 15.0)
+        if current_spread > 0:
+            quality_score += min(10.0, (tp_dist / current_spread) * 1.0)
+        else:
+            quality_score += 10.0
+        quality_score = min(100.0, quality_score)
+
+        return [TradeSignal(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=htf_analysis.bias,
+            ltf_confirmation=conf,
+            rr_ratio=rr_ratio,
+            quality_score=quality_score,
+            timestamp=raw['timestamp'],
+            sl_distance=sl_dist,
+            tp_distance=tp_dist,
+            strategy_id=self.id,
+            strategy_name=self.name,
+            magic_number=123456 + self.magic_offset,
+        )]
+
+
+# ─────────────────────────────────────────────
 #  Strategy Orchestrator Engine
 # ─────────────────────────────────────────────
 
 class StrategyEngine:
-    """Orchestrates HTF macro structure and LTF Smart Money Concepts (SMC) entry engine."""
+    """Orchestrates HTF macro structure and executes registered strategies."""
 
-    def __init__(self, config: TimeframeConfig):
+    def __init__(self, config: TradingConfig | TimeframeConfig, instrument: InstrumentConfig | None = None, ict_config: ICTConfig | None = None):
+        if hasattr(config, 'timeframes'):
+            self.tf_config = config.timeframes
+            self.ict_config = ict_config or config.ict
+            self.trading_config = config
+        else:
+            self.tf_config = config
+            self.ict_config = ict_config or ICTConfig()
+            self.trading_config = None
+
+        self.instrument = instrument
         self.htf_analyzer = HTFAnalyzer(
-            ema_period=config.htf_ema_period,
-            swing_lookback=config.swing_lookback,
-            equal_level_tolerance=config.equal_level_tolerance,
+            ema_period=self.tf_config.htf_ema_period,
+            swing_lookback=self.tf_config.swing_lookback,
+            equal_level_tolerance=self.tf_config.equal_level_tolerance,
         )
-        self.smc_detector = SMCEntryDetector(config)
-        self.scalp_engine = SMCScalp5MEngine()
-        self.config = config
+
+        # Strategy registry
+        self.strategies: dict[str, BaseStrategy] = {
+            "SMC": SMCSwingStrategy(self.htf_analyzer, self.tf_config),
+            "SMC_SCALP_5M": SMCScalp5MStrategy(self.htf_analyzer, self.tf_config),
+            "ICT": ICTStrategy(self.htf_analyzer, self.ict_config),
+        }
+        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT"]
+
+    @property
+    def active_strategies(self) -> list[BaseStrategy]:
+        return [self.strategies[k] for k in self.enabled_strategies if k in self.strategies]
+
+    def set_enabled_strategies(self, strategy_types: list[str | StrategyType]):
+        """Update active strategies list."""
+        self.enabled_strategies = [s.value if hasattr(s, 'value') else str(s) for s in strategy_types]
+
+    def evaluate_all(
+        self,
+        symbol: str | None = None,
+        htf_data: pd.DataFrame | None = None,
+        ltf_data: pd.DataFrame | None = None,
+        instrument: InstrumentConfig | None = None,
+        current_spread: float = 0.0,
+        fixed_sl_pips: float | None = None,
+        enabled_strategies: list[str] | None = None,
+        bars_15m: pd.DataFrame | None = None,
+        bars_1h: pd.DataFrame | None = None,
+        bars_5m: pd.DataFrame | None = None,
+        current_spread_points: float | None = None,
+        account_balance: float | None = None,
+    ) -> list[TradeSignal]:
+        """Runs all enabled strategies concurrently and returns aggregate signals."""
+        inst = instrument or self.instrument
+        sym = symbol or (inst.symbol if inst else "XAUUSD")
+        htf = htf_data if htf_data is not None else bars_1h
+        ltf = ltf_data if ltf_data is not None else (bars_15m if bars_15m is not None else bars_5m)
+        spread = current_spread if current_spread > 0 else (current_spread_points or 0.0)
+
+        targets = enabled_strategies if enabled_strategies else self.enabled_strategies
+        all_signals: list[TradeSignal] = []
+
+        if htf is None or ltf is None:
+            return []
+
+        for strat_id in targets:
+            strat = self.strategies.get(strat_id)
+            if strat is None:
+                continue
+            try:
+                # If scalping strategy and 5m bars available, prefer 5m bars as LTF
+                active_ltf = bars_5m if (strat_id == "SMC_SCALP_5M" and bars_5m is not None) else ltf
+                sigs = strat.evaluate(
+                    symbol=sym,
+                    htf_data=htf,
+                    ltf_data=active_ltf,
+                    instrument=inst,
+                    current_spread=spread,
+                    fixed_sl_pips=fixed_sl_pips,
+                )
+                all_signals.extend(sigs)
+            except Exception as e:
+                logger.error(f"Error evaluating strategy {strat_id} on {sym}: {e}")
+
+        return all_signals
 
     def generate_signals(
         self,
@@ -910,111 +1763,28 @@ class StrategyEngine:
         current_spread: float,
         fixed_sl_pips: float | None = None,
         strategy_type: str = "SMC",
+        enabled_strategies: list[str] | None = None,
     ) -> list[TradeSignal]:
-        """
-        Generates trade signals based on strategy_type:
-        - "SMC": 15m Institutional Swing Liquidity Sweeps
-        - "SMC_SCALP_5M": 5m Order Block (OB) Retest Scalps
-        """
-        htf_analysis = self.htf_analyzer.analyze(htf_data)
-
-        if htf_analysis.bias == MarketBias.NEUTRAL:
-            return []
-
-        if strategy_type == StrategyType.SMC_SCALP_5M.value or strategy_type == "SMC_SCALP_5M":
-            raw_signal = self.scalp_engine.detect_scalp_entry(
-                df=ltf_data,
-                htf_analysis=htf_analysis,
+        """Backward-compatible signal generation method."""
+        if enabled_strategies:
+            return self.evaluate_all(
+                symbol=symbol,
+                htf_data=htf_data,
+                ltf_data=ltf_data,
                 instrument=instrument,
                 current_spread=current_spread,
                 fixed_sl_pips=fixed_sl_pips,
-                enforce_session=getattr(self.config, 'scalp_enforce_session', False),
+                enabled_strategies=enabled_strategies,
             )
         else:
-            raw_signal = self.smc_detector.detect_smc_entry(
-                df=ltf_data,
-                htf_analysis=htf_analysis,
+            return self.evaluate_all(
+                symbol=symbol,
+                htf_data=htf_data,
+                ltf_data=ltf_data,
                 instrument=instrument,
                 current_spread=current_spread,
+                fixed_sl_pips=fixed_sl_pips,
+                enabled_strategies=[strategy_type],
             )
 
-        if not raw_signal:
-            return []
-
-        entry = raw_signal['entry']
-        direction = raw_signal['direction']
-        conf = raw_signal['conf']
-
-        # Check if user specified a manual fixed stop loss in pips
-        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-            sl_distance = fixed_sl_pips * instrument.pip_size
-            if direction == Direction.BUY:
-                sl = entry - sl_distance
-            else:
-                sl = entry + sl_distance
-        else:
-            sl = raw_signal['sl']
-            sl_distance = abs(entry - sl)
-
-        tp = raw_signal['tp']
-        tp_distance = abs(entry - tp)
-
-        min_buffer = 1.0 * instrument.pip_size
-        if sl_distance < min_buffer:
-            sl_distance = min_buffer
-            sl = entry - sl_distance if direction == Direction.BUY else entry + sl_distance
-
-        rr_ratio = tp_distance / sl_distance if sl_distance > 0 else 0.0
-
-        # Quality scoring (max 100)
-        # 1. HTF Trend Clarity: up to 25
-        quality_score = min(25.0, htf_analysis.trend_clarity_score)
-
-        # 2. Confirmation Type Score (up to 35)
-        if conf == LTFConfirmation.OB_PLUS_FVG:
-            quality_score += 30.0
-        elif conf == LTFConfirmation.OB_SCALP_5M:
-            quality_score += 35.0  # High-conviction BOS + OB retest
-        elif conf == LTFConfirmation.OB_MITIGATION:
-            quality_score += 25.0
-        elif conf == LTFConfirmation.FVG_MITIGATION:
-            quality_score += 20.0
-        elif conf == LTFConfirmation.LIQUIDITY_SWEEP:
-            quality_score += 15.0
-
-        # 3. Invalidation Quality (up to 15)
-        quality_score += 15.0
-
-        # 4. R:R Bonus (up to 15 points)
-        if conf == LTFConfirmation.OB_SCALP_5M:
-            rr_bonus = min(15.0, (rr_ratio / 1.5) * 15.0)
-        else:
-            rr_bonus = min(15.0, rr_ratio * 2.5)
-        quality_score += rr_bonus
-
-        # 5. Spread Viability (up to 10 points)
-        if current_spread > 0:
-            spread_ratio = tp_distance / current_spread
-            quality_score += min(10.0, spread_ratio * 1.0)
-        else:
-            quality_score += 10.0
-
-        quality_score = min(100.0, quality_score)
-
-        signal = TradeSignal(
-            symbol=symbol,
-            direction=direction,
-            entry_price=entry,
-            stop_loss=sl,
-            take_profit=tp,
-            htf_bias=htf_analysis.bias,
-            ltf_confirmation=conf,
-            rr_ratio=rr_ratio,
-            quality_score=quality_score,
-            timestamp=raw_signal['timestamp'],
-            sl_distance=sl_distance,
-            tp_distance=tp_distance,
-        )
-
-        return [signal]
 

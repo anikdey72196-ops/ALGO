@@ -118,113 +118,237 @@
   <!-- TAB 1: CONTROL STATION (Main View) -->
   <section id="viewControl" class="max-w-7xl mx-auto mt-6 space-y-6">
 
-    <!-- Interactive Control Deck Form -->
-    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+    <!-- Interactive Multi-Strategy & Dual-Pair Control Deck -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl relative overflow-hidden space-y-6">
       <!-- Active Lock Overlay Badge -->
       <div id="lockNotice" class="hidden absolute top-4 right-6 flex items-center gap-1.5 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/80 px-3 py-1 rounded-full font-medium">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-        <span>Market & Strategy Locked While Active</span>
+        <span>Configurations Locked While Active</span>
       </div>
 
-      <h2 class="text-lg font-semibold tracking-tight text-white mb-4 flex items-center gap-2">
-        <span>Execution Controls & Dual-Chart Setup</span>
-      </h2>
-
-      <form id="botControlForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 items-end" onsubmit="event.preventDefault(); saveConfig();">
-        <!-- Strategy Dropdown -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
-          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
-            <span class="text-amber-400 font-semibold">Strategy Engine</span>
-            <span id="strategyBadge" class="text-[10px] text-amber-300 font-mono">15M/5M</span>
-          </label>
-          <div class="relative">
-            <select id="strategySelect" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-3 text-xs font-semibold text-white focus:outline-none focus:border-amber-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-              <option value="SMC">SMC (15m Swing)</option>
-              <option value="SMC_SCALP_5M">SMC 5M OB Scalp</option>
-            </select>
-          </div>
+          <h2 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
+            <span>Institutional Multi-Strategy Engine & Dual-Pair Setup</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-0.5">Run up to 3 institutional strategies concurrently with independent per-pair risk & stop loss controls</p>
         </div>
-
-        <!-- Chart 1 Dropdown -->
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-2">
-            Primary Chart (Chart 1)
-          </label>
-          <div class="relative">
-            <select id="chart1Select" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-              <option value="XAUUSD">XAUUSD (Gold)</option>
-              <option value="EURUSD">EURUSD (Forex)</option>
-              <option value="GBPUSD">GBPUSD (Forex)</option>
-              <option value="BTCUSD">BTCUSD (Crypto)</option>
-              <option value="ETHUSD">ETHUSD (Crypto)</option>
-              <option value="NONE">None (Disabled)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Chart 2 Dropdown -->
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-2">
-            Secondary Chart (Chart 2)
-          </label>
-          <div class="relative">
-            <select id="chart2Select" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-              <option value="NONE">None (Disabled)</option>
-              <option value="EURUSD">EURUSD (Forex)</option>
-              <option value="XAUUSD">XAUUSD (Gold)</option>
-              <option value="GBPUSD">GBPUSD (Forex)</option>
-              <option value="BTCUSD">BTCUSD (Crypto)</option>
-              <option value="ETHUSD">ETHUSD (Crypto)</option>
-            </select>
-          </div>
-        </div>
-
-
-        <!-- Manual Lot Size Input -->
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
-            <span>Lot Size</span>
-            <span class="text-gray-500">(Blank=0.5%)</span>
-          </label>
-          <div class="relative">
-            <input type="number" step="0.01" min="0.01" max="100.0" id="lotSizeInput" placeholder="e.g. 0.05" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-          </div>
-        </div>
-
-        <!-- Manual Stop Loss in Pips -->
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-2 flex justify-between">
-            <span class="text-emerald-400 font-semibold">Fixed Stop Loss (Pips)</span>
-            <span class="text-gray-500">(Blank=SMC)</span>
-          </label>
-          <div class="relative">
-            <input type="number" step="1" min="1" max="1000" id="slPipsInput" placeholder="e.g. 20 (pips)" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
-          </div>
-        </div>
-
-        <!-- AI Second-Opinion Gatekeeper & Actions Container -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between bg-gray-900 border border-gray-700 rounded-xl px-3 py-1.5">
-            <span class="text-[11px] text-purple-300 font-semibold flex items-center gap-1">
+        <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between bg-gray-900 border border-gray-700 rounded-xl px-3 py-2">
+            <span class="text-[11px] text-purple-300 font-semibold flex items-center gap-1 mr-2">
               <span>🤖 AI Gate (≥75%)</span>
             </span>
             <input type="checkbox" id="aiToggleCheckbox" checked class="w-4 h-4 text-purple-600 bg-gray-900 border-gray-700 rounded focus:ring-purple-500">
           </div>
+          <button type="button" id="saveConfigBtn" onclick="saveConfig()" class="py-2.5 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl font-semibold text-xs text-gray-200 transition-all shadow" title="Save market selections, lot sizes, fixed SLs, and strategy selections">
+            Save Config
+          </button>
+          <button type="button" id="toggleActiveBtn" onclick="toggleActivation()" class="py-2.5 px-5 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green">
+            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+            <span id="toggleBtnText">ACTIVATE BOT</span>
+          </button>
+        </div>
+      </div>
 
-          <div class="flex items-center gap-2">
-            <button type="button" id="toggleActiveBtn" onclick="toggleActivation()" class="flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green">
-              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
-              <span id="toggleBtnText">ACTIVATE BOT</span>
-            </button>
-            <button type="button" id="saveConfigBtn" onclick="saveConfig()" class="py-3 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl font-semibold text-xs text-gray-200 transition-all" title="Save market selections, lot size, fixed SL, and AI gate">
-              Save
-            </button>
+      <!-- Strategy Multi-Select Cards -->
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-3">
+          1. Active Strategies (Select 1 to 3 Concurrent Strategies)
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- SMC Swing Card -->
+          <label class="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-amber-500/50 p-4 rounded-xl cursor-pointer transition-all">
+            <input type="checkbox" id="stratSMC" value="SMC" checked class="w-4 h-4 mt-0.5 text-amber-500 bg-gray-800 border-gray-700 rounded focus:ring-amber-500">
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-2">
+                <span>SMC (15m Swing)</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800 text-amber-400 font-mono">15M</span>
+              </div>
+              <p class="text-[11px] text-gray-400 mt-1">HTF Market Structure Breaks (BOS/CHoCH), Order Block mitigation & FVG validation.</p>
+            </div>
+          </label>
+
+          <!-- SMC 5M Scalp Card -->
+          <label class="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-cyan-500/50 p-4 rounded-xl cursor-pointer transition-all">
+            <input type="checkbox" id="stratScalp" value="SMC_SCALP_5M" class="w-4 h-4 mt-0.5 text-cyan-500 bg-gray-800 border-gray-700 rounded focus:ring-cyan-500">
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-2">
+                <span>SMC Scalp (5m)</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-400 font-mono">5M</span>
+              </div>
+              <p class="text-[11px] text-gray-400 mt-1">High-frequency 5M micro order block scalping, 3-candle rejection confirm & fast 1:1.5 RR.</p>
+            </div>
+          </label>
+
+          <!-- ICT Card -->
+          <label class="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-emerald-500/50 p-4 rounded-xl cursor-pointer transition-all">
+            <input type="checkbox" id="stratICT" value="ICT" checked class="w-4 h-4 mt-0.5 text-emerald-500 bg-gray-800 border-gray-700 rounded focus:ring-emerald-500">
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-2">
+                <span>ICT Institutional (KillZone & SB)</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-400 font-mono">15M/5M</span>
+              </div>
+              <p class="text-[11px] text-gray-400 mt-1">London/NY KillZones, Judas Swings, MSS Displacement, FVG & OTE 61.8%-78.6% Fib.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Dual Pair Independent Setup Cards -->
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
+          2. Dual-Pair Settings (Independent Lot Size & Stop Loss)
+        </label>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Pair 1 Card -->
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-800">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-white">Pair 1 (Primary)</h3>
+              </div>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <span>Enable Pair 1</span>
+                <input type="checkbox" id="pair1Enabled" checked class="w-4 h-4 text-emerald-600 bg-gray-800 border-gray-700 rounded focus:ring-emerald-500">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Symbol</label>
+                <select id="chart1Select" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-emerald-500 transition-all disabled:opacity-60">
+                  <option value="XAUUSD">XAUUSD (Gold)</option>
+                  <option value="EURUSD">EURUSD (Forex)</option>
+                  <option value="GBPUSD">GBPUSD (Forex)</option>
+                  <option value="BTCUSD">BTCUSD (Crypto)</option>
+                  <option value="ETHUSD">ETHUSD (Crypto)</option>
+                  <option value="NONE">None (Disabled)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5 flex justify-between">
+                  <span>Fixed Lot</span>
+                  <span class="text-gray-500 text-[10px]">(Blank=0.5%)</span>
+                </label>
+                <input type="number" step="0.01" min="0.01" max="100.0" id="pair1Lot" placeholder="e.g. 0.05" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-emerald-500 transition-all disabled:opacity-60">
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5 flex justify-between">
+                  <span class="text-emerald-400">Fixed SL (Pips)</span>
+                  <span class="text-gray-500 text-[10px]">(Blank=Dynamic)</span>
+                </label>
+                <input type="number" step="1" min="1" max="1000" id="pair1Sl" placeholder="e.g. 25" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-emerald-500 transition-all disabled:opacity-60">
+              </div>
+            </div>
+          </div>
+
+          <!-- Pair 2 Card -->
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-gray-800">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-white">Pair 2 (Secondary)</h3>
+              </div>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <span>Enable Pair 2</span>
+                <input type="checkbox" id="pair2Enabled" checked class="w-4 h-4 text-cyan-600 bg-gray-800 border-gray-700 rounded focus:ring-cyan-500">
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Symbol</label>
+                <select id="chart2Select" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 transition-all disabled:opacity-60">
+                  <option value="EURUSD">EURUSD (Forex)</option>
+                  <option value="XAUUSD">XAUUSD (Gold)</option>
+                  <option value="GBPUSD">GBPUSD (Forex)</option>
+                  <option value="BTCUSD">BTCUSD (Crypto)</option>
+                  <option value="ETHUSD">ETHUSD (Crypto)</option>
+                  <option value="NONE">None (Disabled)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5 flex justify-between">
+                  <span>Fixed Lot</span>
+                  <span class="text-gray-500 text-[10px]">(Blank=0.5%)</span>
+                </label>
+                <input type="number" step="0.01" min="0.01" max="100.0" id="pair2Lot" placeholder="e.g. 0.02" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 transition-all disabled:opacity-60">
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5 flex justify-between">
+                  <span class="text-cyan-400">Fixed SL (Pips)</span>
+                  <span class="text-gray-500 text-[10px]">(Blank=Dynamic)</span>
+                </label>
+                <input type="number" step="1" min="1" max="1000" id="pair2Sl" placeholder="e.g. 15" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 transition-all disabled:opacity-60">
+              </div>
+            </div>
           </div>
         </div>
-      </form>
+      </div>
     </div>
 
+    <!-- Strategy & Pair Win-Rate Analytics Matrix -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Performance by Strategy -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+          <h3 class="text-sm font-bold tracking-wide uppercase text-white flex items-center gap-2">
+            <span>🎯 Win-Rate by Strategy</span>
+          </h3>
+          <span class="text-[11px] text-gray-400">Live Breakdown</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-gray-900/90 text-gray-400 uppercase font-semibold border-b border-gray-800">
+              <tr>
+                <th class="py-2.5 px-3">Strategy</th>
+                <th class="py-2.5 px-3">Trades</th>
+                <th class="py-2.5 px-3">W / L</th>
+                <th class="py-2.5 px-3">Win Rate</th>
+                <th class="py-2.5 px-3 text-right">Net PnL</th>
+              </tr>
+            </thead>
+            <tbody id="stratStatsBody" class="divide-y divide-gray-800">
+              <tr>
+                <td colspan="5" class="py-4 text-center text-gray-500">No strategy trades recorded yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
+      <!-- Performance by Pair -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+          <h3 class="text-sm font-bold tracking-wide uppercase text-white flex items-center gap-2">
+            <span>📊 Win-Rate by Pair</span>
+          </h3>
+          <span class="text-[11px] text-gray-400">Live Breakdown</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-gray-900/90 text-gray-400 uppercase font-semibold border-b border-gray-800">
+              <tr>
+                <th class="py-2.5 px-3">Symbol</th>
+                <th class="py-2.5 px-3">Trades</th>
+                <th class="py-2.5 px-3">W / L</th>
+                <th class="py-2.5 px-3">Win Rate</th>
+                <th class="py-2.5 px-3 text-right">Net PnL</th>
+              </tr>
+            </thead>
+            <tbody id="pairStatsBody" class="divide-y divide-gray-800">
+              <tr>
+                <td colspan="5" class="py-4 text-center text-gray-500">No pair trades recorded yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
     <!-- Live Execution Terminal & Log Feed -->
     <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
@@ -234,7 +358,7 @@
           <h3 class="text-sm font-bold tracking-wide uppercase text-gray-300">Live Decision Feed & Trade Activity</h3>
         </div>
         <div class="flex items-center gap-3">
-          <button onclick="triggerManualTick()" id="tickBtn" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50" title="Forces an instant SMC strategy analysis cycle across both selected charts right now without waiting for the automated 15-minute bar close">
+          <button onclick="triggerManualTick()" id="tickBtn" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50" title="Forces an instant multi-strategy analysis cycle across active pairs right now">
             ⚡ Run Tick Now
           </button>
           <span class="text-xs text-gray-500">Auto-refreshing every 2.5s</span>
@@ -671,114 +795,136 @@
 
         const c1 = document.getElementById('chart1Select');
         const c2 = document.getElementById('chart2Select');
-        const strat = document.getElementById('strategySelect');
-        const stratBadge = document.getElementById('strategyBadge');
-        const lotInput = document.getElementById('lotSizeInput');
-        const lot = lotInput;
+        const p1Enabled = document.getElementById('pair1Enabled');
+        const p1Lot = document.getElementById('pair1Lot');
+        const p1Sl = document.getElementById('pair1Sl');
+        const p2Enabled = document.getElementById('pair2Enabled');
+        const p2Lot = document.getElementById('pair2Lot');
+        const p2Sl = document.getElementById('pair2Sl');
+
+        const stratSMC = document.getElementById('stratSMC');
+        const stratScalp = document.getElementById('stratScalp');
+        const stratICT = document.getElementById('stratICT');
+
         const saveBtn = document.getElementById('saveConfigBtn');
         const tickBtn = document.getElementById('tickBtn');
-        const slInput = document.getElementById('slPipsInput');
         const aiCb = document.getElementById('aiToggleCheckbox');
         const aiBadge = document.getElementById('aiStatusBadge');
+
+        const formElements = [c1, c2, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, stratSMC, stratScalp, stratICT, aiCb];
 
         if (isBotActive) {
           dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
           label.innerText = "ACTIVE (ANALYZING & EXECUTING)";
           label.className = "text-sm font-bold text-emerald-400";
-          btn.className = "flex-1 py-3.5 px-6 rounded-xl font-bold text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white pulse-glow-red";
+          btn.className = "py-2.5 px-5 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white pulse-glow-red";
           btnText.innerText = "DEACTIVATE BOT";
           lockNotice.classList.remove('hidden');
 
-          if (strat) strat.disabled = true;
-          c1.disabled = true;
-          c2.disabled = true;
-          lot.disabled = true;
-          if (slInput) slInput.disabled = true;
-          if (aiCb) aiCb.disabled = true;
-          saveBtn.disabled = true;
-          tickBtn.disabled = false;
+          formElements.forEach(el => { if (el) el.disabled = true; });
+          if (saveBtn) saveBtn.disabled = true;
+          if (tickBtn) tickBtn.disabled = false;
         } else {
           dot.className = "w-3 h-3 rounded-full bg-red-500";
           label.innerText = "DEACTIVATED (IDLE)";
           label.className = "text-sm font-semibold text-gray-300";
-          btn.className = "flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green";
+          btn.className = "py-2.5 px-5 rounded-xl font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white pulse-glow-green";
           btnText.innerText = "ACTIVATE BOT";
           lockNotice.classList.add('hidden');
 
-          if (strat) strat.disabled = false;
-          c1.disabled = false;
-          c2.disabled = false;
-          lot.disabled = false;
-          if (slInput) slInput.disabled = false;
-          if (aiCb) aiCb.disabled = false;
-          saveBtn.disabled = false;
-          tickBtn.disabled = true;
+          formElements.forEach(el => { if (el) el.disabled = false; });
+          if (saveBtn) saveBtn.disabled = false;
+          if (tickBtn) tickBtn.disabled = true;
         }
 
-        // Check if user is currently focused/typing in any input
-        const isEditingSl = document.activeElement === slInput;
-        const isEditingLot = document.activeElement === lotInput;
-        const isEditingC1 = document.activeElement === c1;
-        const isEditingC2 = document.activeElement === c2;
-        const isEditingStrat = document.activeElement === strat;
+        // Check if user is actively typing in inputs
+        const isEditingP1Lot = document.activeElement === p1Lot;
+        const isEditingP1Sl = document.activeElement === p1Sl;
+        const isEditingP2Lot = document.activeElement === p2Lot;
+        const isEditingP2Sl = document.activeElement === p2Sl;
 
-        if (isBotActive) {
-          // When bot is active, controls are locked - reflect active server state
-          if (strat && data.strategy_type) {
-            strat.value = data.strategy_type;
-            if (stratBadge) {
-              stratBadge.innerText = data.strategy_type === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
-            }
+        if (isBotActive || !hasLoadedInitialConfig || forceFormSync) {
+          // Sync strategy checkboxes
+          const enabledStrats = data.enabled_strategies || [data.strategy_type || "SMC"];
+          if (stratSMC) stratSMC.checked = enabledStrats.includes("SMC");
+          if (stratScalp) stratScalp.checked = enabledStrats.includes("SMC_SCALP_5M");
+          if (stratICT) stratICT.checked = enabledStrats.includes("ICT");
+
+          // Sync Pair 1
+          if (data.pair1) {
+            if (c1) c1.value = data.pair1.symbol || "XAUUSD";
+            if (p1Enabled) p1Enabled.checked = data.pair1.enabled;
+            if (!isEditingP1Lot && p1Lot) p1Lot.value = data.pair1.fixed_lot_size !== null && data.pair1.fixed_lot_size !== undefined ? data.pair1.fixed_lot_size : "";
+            if (!isEditingP1Sl && p1Sl) p1Sl.value = data.pair1.fixed_sl_pips !== null && data.pair1.fixed_sl_pips !== undefined ? data.pair1.fixed_sl_pips : "";
+          } else if (data.selected_symbols && data.selected_symbols.length > 0) {
+            if (c1) c1.value = data.selected_symbols[0] || "XAUUSD";
+            if (!isEditingP1Lot && p1Lot && data.fixed_lot_size !== undefined) p1Lot.value = data.fixed_lot_size || "";
+            if (!isEditingP1Sl && p1Sl && data.fixed_sl_pips !== undefined) p1Sl.value = data.fixed_sl_pips || "";
           }
-          if (data.selected_symbols && data.selected_symbols.length > 0) {
-            c1.value = data.selected_symbols[0] || "XAUUSD";
-            c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
+
+          // Sync Pair 2
+          if (data.pair2) {
+            if (c2) c2.value = data.pair2.symbol || "EURUSD";
+            if (p2Enabled) p2Enabled.checked = data.pair2.enabled;
+            if (!isEditingP2Lot && p2Lot) p2Lot.value = data.pair2.fixed_lot_size !== null && data.pair2.fixed_lot_size !== undefined ? data.pair2.fixed_lot_size : "";
+            if (!isEditingP2Sl && p2Sl) p2Sl.value = data.pair2.fixed_sl_pips !== null && data.pair2.fixed_sl_pips !== undefined ? data.pair2.fixed_sl_pips : "";
+          } else if (data.selected_symbols && data.selected_symbols.length > 1) {
+            if (c2) c2.value = data.selected_symbols[1] || "EURUSD";
           }
-          if (data.fixed_lot_size !== null && data.fixed_lot_size !== undefined) {
-            lot.value = data.fixed_lot_size;
-          }
-          if (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) {
-            if (slInput) slInput.value = data.fixed_sl_pips;
-          }
-        } else if (!hasLoadedInitialConfig || forceFormSync) {
-          // When idle, only sync form values on initial load or after explicit user save / toggle
-          if (strat && data.strategy_type && !isEditingStrat) {
-            strat.value = data.strategy_type;
-            if (stratBadge) {
-              stratBadge.innerText = data.strategy_type === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
-            }
-          }
-          if (!isEditingC1 && !isEditingC2 && data.selected_symbols && data.selected_symbols.length > 0) {
-            c1.value = data.selected_symbols[0] || "XAUUSD";
-            c2.value = data.selected_symbols.length >= 2 ? data.selected_symbols[1] : "NONE";
-          }
-          if (!isEditingLot) {
-            lot.value = (data.fixed_lot_size !== null && data.fixed_lot_size !== undefined) ? data.fixed_lot_size : "";
-          }
-          if (!isEditingSl && slInput) {
-            slInput.value = (data.fixed_sl_pips !== null && data.fixed_sl_pips !== undefined) ? data.fixed_sl_pips : "";
-          }
+
           if (data.ai_confirmation_enabled !== undefined && aiCb && document.activeElement !== aiCb) {
             aiCb.checked = data.ai_confirmation_enabled;
           }
           hasLoadedInitialConfig = true;
         }
 
-        const tfBadgeText = data.strategy_type === "SMC_SCALP_5M" ? "5m Scalp View" : "15m Swing View";
-        const c1Tf = document.getElementById('chart1TfBadge');
-        const c2Tf = document.getElementById('chart2TfBadge');
-        if (c1Tf) c1Tf.innerText = tfBadgeText;
-        if (c2Tf) c2Tf.innerText = tfBadgeText;
+        // Render Strategy Win-Rate Breakdown Matrix
+        const stratBody = document.getElementById('stratStatsBody');
+        if (stratBody && data.stats_by_strategy) {
+          const stratKeys = Object.keys(data.stats_by_strategy);
+          if (stratKeys.length === 0) {
+            stratBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">No strategy trades recorded yet</td></tr>`;
+          } else {
+            stratBody.innerHTML = stratKeys.map(k => {
+              const st = data.stats_by_strategy[k];
+              const pnlSign = st.total_pnl >= 0 ? '+' : '';
+              const pnlColor = st.total_pnl >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold';
+              const wrColor = st.win_rate >= 50 ? 'text-emerald-400 font-bold' : (st.total_trades > 0 ? 'text-red-400 font-bold' : 'text-gray-400');
+              return `
+                <tr class="hover:bg-gray-800/40 transition-colors">
+                  <td class="py-2.5 px-3 font-semibold text-white">${st.strategy_name || k}</td>
+                  <td class="py-2.5 px-3 font-mono">${st.total_trades}</td>
+                  <td class="py-2.5 px-3 font-mono text-[11px] text-gray-400">${st.winning_trades}W / ${st.losing_trades}L</td>
+                  <td class="py-2.5 px-3 font-mono ${wrColor}">${st.win_rate.toFixed(1)}%</td>
+                  <td class="py-2.5 px-3 font-mono text-right ${pnlColor}">${pnlSign}$${st.total_pnl.toFixed(2)}</td>
+                </tr>
+              `;
+            }).join('');
+          }
+        }
 
-        if (data.ai_confirmation_enabled !== undefined) {
-          if (aiBadge) {
-            if (data.ai_confirmation_enabled) {
-              aiBadge.innerText = `ACTIVE (≥${data.ai_confidence_threshold || 75}%)`;
-              aiBadge.className = "text-[10px] text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded border border-purple-800";
-            } else {
-              aiBadge.innerText = "DISABLED";
-              aiBadge.className = "text-[10px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700";
-            }
+        // Render Pair Win-Rate Breakdown Matrix
+        const pairBody = document.getElementById('pairStatsBody');
+        if (pairBody && data.stats_by_pair) {
+          const pairKeys = Object.keys(data.stats_by_pair);
+          if (pairKeys.length === 0) {
+            pairBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">No pair trades recorded yet</td></tr>`;
+          } else {
+            pairBody.innerHTML = pairKeys.map(k => {
+              const pt = data.stats_by_pair[k];
+              const pnlSign = pt.total_pnl >= 0 ? '+' : '';
+              const pnlColor = pt.total_pnl >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold';
+              const wrColor = pt.win_rate >= 50 ? 'text-emerald-400 font-bold' : (pt.total_trades > 0 ? 'text-red-400 font-bold' : 'text-gray-400');
+              return `
+                <tr class="hover:bg-gray-800/40 transition-colors">
+                  <td class="py-2.5 px-3 font-bold text-white">${k}</td>
+                  <td class="py-2.5 px-3 font-mono">${pt.total_trades}</td>
+                  <td class="py-2.5 px-3 font-mono text-[11px] text-gray-400">${pt.winning_trades}W / ${pt.losing_trades}L</td>
+                  <td class="py-2.5 px-3 font-mono ${wrColor}">${pt.win_rate.toFixed(1)}%</td>
+                  <td class="py-2.5 px-3 font-mono text-right ${pnlColor}">${pnlSign}$${pt.total_pnl.toFixed(2)}</td>
+                </tr>
+              `;
+            }).join('');
           }
         }
 
@@ -864,18 +1010,9 @@
       }, delay);
     }
 
-    function onStrategyChange() {
-      const strat = document.getElementById('strategySelect');
-      const stratBadge = document.getElementById('strategyBadge');
-      if (strat && stratBadge) {
-        stratBadge.innerText = strat.value === "SMC_SCALP_5M" ? "5M SCALP" : "15M SWING";
-      }
-      triggerAutoSave(0);
-    }
-
     async function toggleActivation() {
       if (!isBotActive) {
-        // Automatically save current form settings (strategy, SL, symbols, lot) prior to activating
+        // Automatically save current form settings prior to activating
         const ok = await saveConfig(false);
         if (!ok) return;
       }
@@ -899,36 +1036,65 @@
     async function saveConfig(showNotification = true) {
       const c1 = document.getElementById('chart1Select').value;
       const c2 = document.getElementById('chart2Select').value;
-      const lotVal = document.getElementById('lotSizeInput').value.trim();
+      const p1Enabled = document.getElementById('pair1Enabled').checked;
+      const p2Enabled = document.getElementById('pair2Enabled').checked;
 
-      if (c1 === "NONE" && c2 === "NONE") {
-        if (showNotification) showToast("Please select at least 1 valid chart instrument (cannot both be None).", true);
+      const p1LotVal = document.getElementById('pair1Lot').value.trim();
+      const p1SlVal = document.getElementById('pair1Sl').value.trim();
+      const p2LotVal = document.getElementById('pair2Lot').value.trim();
+      const p2SlVal = document.getElementById('pair2Sl').value.trim();
+
+      const stratSMC = document.getElementById('stratSMC').checked;
+      const stratScalp = document.getElementById('stratScalp').checked;
+      const stratICT = document.getElementById('stratICT').checked;
+
+      const enabledStrats = [];
+      if (stratSMC) enabledStrats.push("SMC");
+      if (stratScalp) enabledStrats.push("SMC_SCALP_5M");
+      if (stratICT) enabledStrats.push("ICT");
+
+      if (enabledStrats.length === 0) {
+        if (showNotification) showToast("Please select at least 1 strategy to run.", true);
         return false;
       }
 
-      if (c1 !== "NONE" && c2 !== "NONE" && c1 === c2) {
-        if (showNotification) showToast("Please choose 2 different chart instruments or set one to None.", true);
+      const pair1Config = {
+        symbol: c1,
+        enabled: p1Enabled && c1 !== "NONE",
+        fixed_lot_size: (p1LotVal && !isNaN(parseFloat(p1LotVal))) ? parseFloat(p1LotVal) : null,
+        fixed_sl_pips: (p1SlVal && !isNaN(parseFloat(p1SlVal))) ? parseFloat(p1SlVal) : null
+      };
+
+      const pair2Config = {
+        symbol: c2,
+        enabled: p2Enabled && c2 !== "NONE",
+        fixed_lot_size: (p2LotVal && !isNaN(parseFloat(p2LotVal))) ? parseFloat(p2LotVal) : null,
+        fixed_sl_pips: (p2SlVal && !isNaN(parseFloat(p2SlVal))) ? parseFloat(p2SlVal) : null
+      };
+
+      if (!pair1Config.enabled && !pair2Config.enabled) {
+        if (showNotification) showToast("Please enable at least 1 chart pair.", true);
         return false;
       }
 
-      const slInputEl = document.getElementById('slPipsInput');
-      const slPipsRaw = slInputEl ? slInputEl.value.trim() : "";
-      const fixedSlVal = (slPipsRaw !== "" && !isNaN(parseFloat(slPipsRaw)) && parseFloat(slPipsRaw) > 0) ? parseFloat(slPipsRaw) : null;
+      if (pair1Config.enabled && pair2Config.enabled && pair1Config.symbol === pair2Config.symbol) {
+        if (showNotification) showToast("Pair 1 and Pair 2 cannot both use the same symbol.", true);
+        return false;
+      }
+
       const aiEnabled = document.getElementById('aiToggleCheckbox').checked;
 
-      const stratEl = document.getElementById('strategySelect');
-      const stratVal = stratEl ? stratEl.value : "SMC";
-
       const payload = {
+        pair1: pair1Config,
+        pair2: pair2Config,
+        enabled_strategies: enabledStrats,
+        ai_confirmation_enabled: aiEnabled,
         selected_symbols: [c1, c2],
-        strategy_type: stratVal,
-        fixed_lot_size: (lotVal && !isNaN(parseFloat(lotVal))) ? parseFloat(lotVal) : null,
-        fixed_sl_pips: fixedSlVal,
-        ai_confirmation_enabled: aiEnabled
+        strategy_type: enabledStrats[0] || "SMC"
       };
 
       const saveBtn = document.getElementById('saveConfigBtn');
-      const prevText = saveBtn ? saveBtn.innerText : "Save";
+      const prevText = saveBtn ? saveBtn.innerText : "Save Config";
       if (saveBtn && showNotification) {
         saveBtn.innerText = "Saving...";
         saveBtn.disabled = true;
@@ -944,7 +1110,7 @@
         const data = await res.json();
         if (res.ok) {
           if (showNotification) {
-            showToast(`Configuration saved! Strategy: ${stratVal} | Fixed SL: ${fixedSlVal ? fixedSlVal + ' pips' : 'Dynamic'}`);
+            showToast(`Configuration saved! Active: [${enabledStrats.join(', ')}]`);
           }
           await fetchState(true);
           if (saveBtn && showNotification) saveBtn.innerText = "Saved!";
@@ -962,7 +1128,7 @@
         if (showNotification) {
           setTimeout(() => {
             if (saveBtn && !isBotActive) {
-              saveBtn.innerText = "Save";
+              saveBtn.innerText = "Save Config";
               saveBtn.disabled = false;
             }
           }, 1200);
@@ -975,7 +1141,7 @@
         const res = await fetch('/api/trigger_tick', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
-          showToast("Manual tick cycle triggered!");
+          showToast("Manual tick cycle triggered across all active strategies!");
           setTimeout(fetchState, 600);
         } else {
           showToast(data.detail, true);
@@ -1100,20 +1266,34 @@
     }, 5000);
 
     // Auto-save event listeners for immediate responsiveness
-    const stratElem = document.getElementById('strategySelect');
-    if (stratElem) {
-      stratElem.addEventListener('change', onStrategyChange);
-    }
+    const stratSMC_el = document.getElementById('stratSMC');
+    if (stratSMC_el) stratSMC_el.addEventListener('change', () => triggerAutoSave(0));
+    const stratScalp_el = document.getElementById('stratScalp');
+    if (stratScalp_el) stratScalp_el.addEventListener('change', () => triggerAutoSave(0));
+    const stratICT_el = document.getElementById('stratICT');
+    if (stratICT_el) stratICT_el.addEventListener('change', () => triggerAutoSave(0));
+
+    const p1En_el = document.getElementById('pair1Enabled');
+    if (p1En_el) p1En_el.addEventListener('change', () => triggerAutoSave(0));
+    const p2En_el = document.getElementById('pair2Enabled');
+    if (p2En_el) p2En_el.addEventListener('change', () => triggerAutoSave(0));
+
     const c1Elem = document.getElementById('chart1Select');
     if (c1Elem) c1Elem.addEventListener('change', () => triggerAutoSave(0));
     const c2Elem = document.getElementById('chart2Select');
     if (c2Elem) c2Elem.addEventListener('change', () => triggerAutoSave(0));
     const aiElem = document.getElementById('aiToggleCheckbox');
     if (aiElem) aiElem.addEventListener('change', () => triggerAutoSave(0));
-    const slElem = document.getElementById('slPipsInput');
-    if (slElem) slElem.addEventListener('input', () => triggerAutoSave(600));
-    const lotElem = document.getElementById('lotSizeInput');
-    if (lotElem) lotElem.addEventListener('input', () => triggerAutoSave(600));
+
+    const p1Sl_el = document.getElementById('pair1Sl');
+    if (p1Sl_el) p1Sl_el.addEventListener('input', () => triggerAutoSave(600));
+    const p1Lot_el = document.getElementById('pair1Lot');
+    if (p1Lot_el) p1Lot_el.addEventListener('input', () => triggerAutoSave(600));
+
+    const p2Sl_el = document.getElementById('pair2Sl');
+    if (p2Sl_el) p2Sl_el.addEventListener('input', () => triggerAutoSave(600));
+    const p2Lot_el = document.getElementById('pair2Lot');
+    if (p2Lot_el) p2Lot_el.addEventListener('input', () => triggerAutoSave(600));
   </script>
 </body>
 </html>

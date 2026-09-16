@@ -34,7 +34,9 @@ class BracketOrder:
     entry_price: float  # For market orders, this is the expected fill price
     stop_loss: float
     take_profit: float
+    magic: int = 123456
     comment: str = ''
+
 
 
 @dataclass
@@ -215,8 +217,9 @@ class MT5Adapter(BrokerAdapter):
             "sl": order.stop_loss,
             "tp": order.take_profit,
             "deviation": 20,
-            "magic": 123456,
+            "magic": order.magic,
             "comment": order.comment,
+
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }

@@ -151,8 +151,31 @@ class TradingBot:
                 import json
                 with open(settings_path, "r", encoding="utf-8") as f:
                     saved = json.load(f)
+                
+                # Pair 1 & Pair 2 independent configurations
+                if "pair1" in saved and isinstance(saved["pair1"], dict):
+                    p1 = saved["pair1"]
+                    self.config.pair1.symbol = p1.get("symbol", self.config.pair1.symbol)
+                    self.config.pair1.fixed_lot_size = p1.get("fixed_lot_size")
+                    self.config.pair1.fixed_sl_pips = p1.get("fixed_sl_pips")
+                    self.config.pair1.enabled = p1.get("enabled", True)
+                
+                if "pair2" in saved and isinstance(saved["pair2"], dict):
+                    p2 = saved["pair2"]
+                    self.config.pair2.symbol = p2.get("symbol", self.config.pair2.symbol)
+                    self.config.pair2.fixed_lot_size = p2.get("fixed_lot_size")
+                    self.config.pair2.fixed_sl_pips = p2.get("fixed_sl_pips")
+                    self.config.pair2.enabled = p2.get("enabled", True)
+
+                # Enabled strategies
+                if "enabled_strategies" in saved and isinstance(saved["enabled_strategies"], list):
+                    self.config.enabled_strategies = saved["enabled_strategies"]
+
                 if "selected_symbols" in saved and isinstance(saved["selected_symbols"], list):
                     self.config.selected_symbols = saved["selected_symbols"]
+                else:
+                    self.config.selected_symbols = [self.config.pair1.symbol, self.config.pair2.symbol]
+
                 if "strategy_type" in saved and isinstance(saved["strategy_type"], str):
                     self.config.strategy_type = saved["strategy_type"]
                 if "fixed_lot_size" in saved:
@@ -161,7 +184,13 @@ class TradingBot:
                     self.config.fixed_sl_pips = saved["fixed_sl_pips"]
                 if "ai_confirmation_enabled" in saved:
                     self.config.ai_confirmation_enabled = bool(saved["ai_confirmation_enabled"])
-                logger.info(f"Loaded persisted settings from {settings_path}: Strategy={self.config.strategy_type} | Symbols={self.config.selected_symbols} | SL={self.config.fixed_sl_pips}")
+
+                logger.info(
+                    f"Loaded persisted settings from {settings_path}: "
+                    f"Strategies={self.config.enabled_strategies} | "
+                    f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
+                    f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips})"
+                )
             except Exception as e:
                 logger.warning(f"Failed to load bot_settings.json: {e}")
 
@@ -170,7 +199,20 @@ class TradingBot:
         try:
             import json
             data = {
-                "selected_symbols": self.config.selected_symbols,
+                "pair1": {
+                    "symbol": self.config.pair1.symbol,
+                    "fixed_lot_size": self.config.pair1.fixed_lot_size,
+                    "fixed_sl_pips": self.config.pair1.fixed_sl_pips,
+                    "enabled": self.config.pair1.enabled,
+                },
+                "pair2": {
+                    "symbol": self.config.pair2.symbol,
+                    "fixed_lot_size": self.config.pair2.fixed_lot_size,
+                    "fixed_sl_pips": self.config.pair2.fixed_sl_pips,
+                    "enabled": self.config.pair2.enabled,
+                },
+                "enabled_strategies": self.config.enabled_strategies,
+                "selected_symbols": [self.config.pair1.symbol, self.config.pair2.symbol],
                 "strategy_type": self.config.strategy_type,
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
@@ -180,6 +222,7 @@ class TradingBot:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save bot settings to bot_settings.json: {e}")
+
 
     def log(self, message: str, level: str = "INFO") -> None:
         """Helper to append to recent logs and send to logger."""
@@ -281,29 +324,63 @@ class TradingBot:
         """
         Main trading loop — called once per LTF bar close.
         Only runs analysis and execution if is_active == True.
+        Evaluates Pair 1 and Pair 2 independently across all enabled strategies simultaneously.
         """
         if not self.is_active:
             logger.debug("TradingBot is DEACTIVATED (Idle). Skipping tick.")
             return
 
         now_utc = datetime.now(timezone.utc)
-        self.log(f"─── TICK @ {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} (Active Charts: {self.config.selected_symbols[:2]}) ───")
 
         # Step 1: Day rollover & position sync
         self._check_day_rollover()
         self._sync_open_positions()
 
-        active_symbols = set(self.config.selected_symbols[:2])
-        for instrument in self.config.instruments:
-            symbol = instrument.symbol
-            if symbol not in active_symbols:
+        # Build independent pair targets
+        active_pairs = []
+        if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol:
+            active_pairs.append({
+                "pair_num": 1,
+                "symbol": self.config.pair1.symbol,
+                "fixed_lot_size": self.config.pair1.fixed_lot_size,
+                "fixed_sl_pips": self.config.pair1.fixed_sl_pips,
+            })
+        if getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol:
+            active_pairs.append({
+                "pair_num": 2,
+                "symbol": self.config.pair2.symbol,
+                "fixed_lot_size": self.config.pair2.fixed_lot_size,
+                "fixed_sl_pips": self.config.pair2.fixed_sl_pips,
+            })
+        if not active_pairs:
+            for i, sym in enumerate(self.config.selected_symbols[:2], start=1):
+                active_pairs.append({
+                    "pair_num": i,
+                    "symbol": sym,
+                    "fixed_lot_size": self.config.fixed_lot_size,
+                    "fixed_sl_pips": self.config.fixed_sl_pips,
+                })
+
+        strats_str = ", ".join(self.config.enabled_strategies)
+        pairs_str = ", ".join(f"Pair {p['pair_num']}: {p['symbol']}" for p in active_pairs)
+        self.log(f"─── TICK @ {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} | Pairs: [{pairs_str}] | Active Strategies: [{strats_str}] ───")
+
+        for pair_info in active_pairs:
+            symbol = pair_info["symbol"]
+            pair_num = pair_info["pair_num"]
+            pair_lot = pair_info["fixed_lot_size"]
+            pair_sl = pair_info["fixed_sl_pips"]
+
+            try:
+                instrument = get_instrument(self.config, symbol)
+            except ValueError:
+                logger.warning(f"  Symbol '{symbol}' not in configured instruments. Skipping.")
                 continue
 
-            strategy_type = self.config.strategy_type
             htf_tf = "1H"
-            ltf_tf = "5m" if strategy_type == "SMC_SCALP_5M" else self.config.timeframes.ltf
+            ltf_tf = "5m" if "SMC_SCALP_5M" in self.config.enabled_strategies or "ICT" in self.config.enabled_strategies else self.config.timeframes.ltf
 
-            self.log(f"Analyzing {symbol} (Strategy: {strategy_type} | HTF: {htf_tf} | LTF: {ltf_tf})...")
+            self.log(f"Analyzing Pair {pair_num} ({symbol}) | Sizing: lot={pair_lot or 'Dynamic'}, SL={pair_sl or 'Dynamic'} pips | HTF: {htf_tf} | LTF: {ltf_tf}...")
 
             # ── Step 2a: Fetch current price ──
             quote = self.broker.get_current_price(symbol)
@@ -331,7 +408,6 @@ class TradingBot:
                 self.log(f"  ⛔ SPREAD EXCESSIVE: {spread_result.reason}", level="WARNING")
                 continue
 
-
             # ── Step 2b: Fetch OHLCV data ──
             htf_data = self._get_ohlcv(symbol, htf_tf)
             ltf_data = self._get_ohlcv(symbol, ltf_tf)
@@ -339,23 +415,22 @@ class TradingBot:
                 logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
 
-            # ── Step 2b: Generate signals ──
-            signals = self.strategy.generate_signals(
+            # ── Step 2b: Generate signals across all enabled strategies simultaneously ──
+            signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
                 ltf_data=ltf_data,
                 instrument=instrument,
                 current_spread=current_spread,
-                fixed_sl_pips=self.config.fixed_sl_pips,
-                strategy_type=strategy_type,
+                fixed_sl_pips=pair_sl,
+                enabled_strategies=self.config.enabled_strategies,
             )
 
-
             if not signals:
-                logger.info(f"  No signals generated for {symbol}.")
+                logger.info(f"  No signals generated for Pair {pair_num} ({symbol}).")
                 continue
 
-            logger.info(f"  {len(signals)} raw signal(s) generated for {symbol}.")
+            logger.info(f"  {len(signals)} raw signal(s) generated for {symbol} across strategies.")
 
             # ── Step 2c: Conflict resolution ──
             filter_result = self.conflict_resolver.resolve(signals, current_spread)
@@ -365,12 +440,12 @@ class TradingBot:
                     self.log(f"  🚫 {reason}")
 
             if filter_result.accepted_signal is None:
-                self.log(f"  No signal survived quality gates for {symbol}.")
+                self.log(f"  No signal survived quality gates for Pair {pair_num} ({symbol}).")
                 continue
 
             best_signal = filter_result.accepted_signal
             self.log(
-                f"  ✅ {strategy_type} SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
+                f"  ✅ [{best_signal.strategy_name}] SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
                 f"| Entry={best_signal.entry_price:.5f} "
                 f"| SL={best_signal.stop_loss:.5f} "
                 f"| TP={best_signal.take_profit:.5f} "
@@ -388,14 +463,13 @@ class TradingBot:
 
             self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
 
-            # ── Step 2c-3: Risk authorization ──
+            # ── Step 2c-3: Risk authorization (Pair-specific sizing override) ──
             equity = self.broker.get_account_equity()
-            auth = self.risk_engine.authorize_trade(best_signal, equity)
+            auth = self.risk_engine.authorize_trade(best_signal, equity, fixed_lot_size=pair_lot)
 
             if not auth.authorized:
                 self.log(f"  🛑 RISK REJECTED: {auth.rejection_reason}", level="WARNING")
                 continue
-
 
             self.log(
                 f"  💰 AUTHORIZED: {auth.lot_size} lots "
@@ -403,7 +477,7 @@ class TradingBot:
                 f"| Equity: ${auth.account_equity:.2f}"
             )
 
-            # ── Step 2d: Execute bracket order ──
+            # ── Step 2d: Execute bracket order with strategy Magic Number ──
             bracket = BracketOrder(
                 symbol=symbol,
                 direction=best_signal.direction,
@@ -411,7 +485,8 @@ class TradingBot:
                 entry_price=quote.ask if best_signal.direction == Direction.BUY else quote.bid,
                 stop_loss=best_signal.stop_loss,
                 take_profit=best_signal.take_profit,
-                comment=f"BOT|{best_signal.ltf_confirmation.value}|RR{best_signal.rr_ratio:.1f}",
+                magic=best_signal.magic_number,
+                comment=f"{best_signal.strategy_id}|{best_signal.ltf_confirmation.value}|RR{best_signal.rr_ratio:.1f}",
             )
 
             order_result = self.broker.send_bracket_order(bracket)
@@ -419,9 +494,9 @@ class TradingBot:
             if order_result.success:
                 self.log(
                     f"  ✅ ORDER FILLED: ID={order_result.order_id} "
-                    f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots)"
+                    f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
                 )
-                # Record in state
+                # Record in state with strategy attribution
                 trade_record = TradeRecord(
                     id=order_result.order_id,
                     timestamp=now_utc,
@@ -433,6 +508,8 @@ class TradingBot:
                     lot_size=bracket.lot_size,
                     realized_pnl=0.0,
                     status="OPEN",
+                    strategy_name=best_signal.strategy_name,
+                    magic_number=best_signal.magic_number,
                 )
                 self.state.record_trade(trade_record)
             else:
@@ -448,6 +525,7 @@ class TradingBot:
             f"Trades today: {self.state.get_trade_count()} | "
             f"Circuit breaker: {'ACTIVE' if self.state.is_circuit_breaker_active() else 'OFF'} ───"
         )
+
 
     def _get_ohlcv(self, symbol: str, timeframe: str):
         """

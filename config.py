@@ -56,6 +56,32 @@ class StrategyType(str, Enum):
     """Supported trading strategies."""
     SMC = "SMC"                      # 15m Institutional Swing Liquidity Sweep
     SMC_SCALP_5M = "SMC_SCALP_5M"    # 5m Order Block (OB) Scalp
+    ICT = "ICT"                      # ICT KillZone, Judas Swing, MSS & FVG/OTE Model
+
+
+class PairSettings(BaseModel):
+    """Independent settings for a single traded pair."""
+    symbol: str = Field(default="XAUUSD", description="Instrument symbol (e.g. XAUUSD, EURUSD)")
+    fixed_lot_size: float | None = Field(default=None, gt=0.0, description="Fixed lot size override. None uses risk % dynamic sizing.")
+    fixed_sl_pips: float | None = Field(default=None, gt=0.0, description="Fixed Stop Loss in pips override. None uses dynamic structural SL.")
+    enabled: bool = Field(default=True, description="Whether this pair is active for analysis and execution.")
+
+
+class ICTConfig(BaseModel):
+    """Parameters for Inner Circle Trader (ICT) methodology."""
+    london_kz_start_utc: int = Field(default=7, ge=0, le=23, description="London Kill Zone Start (07:00 UTC)")
+    london_kz_end_utc: int = Field(default=10, ge=0, le=23, description="London Kill Zone End (10:00 UTC)")
+    ny_am_kz_start_utc: int = Field(default=12, ge=0, le=23, description="New York AM Kill Zone Start (12:00 UTC)")
+    ny_am_kz_end_utc: int = Field(default=15, ge=0, le=23, description="New York AM Kill Zone End (15:00 UTC)")
+    silver_bullet_start_utc: int = Field(default=14, ge=0, le=23, description="Silver Bullet Hour Start (14:00 UTC)")
+    silver_bullet_end_utc: int = Field(default=15, ge=0, le=23, description="Silver Bullet Hour End (15:00 UTC)")
+    london_close_start_utc: int = Field(default=15, ge=0, le=23, description="London Close Kill Zone Start (15:00 UTC)")
+    london_close_end_utc: int = Field(default=17, ge=0, le=23, description="London Close Kill Zone End (17:00 UTC)")
+    enforce_killzones: bool = Field(default=False, description="Restrict ICT trading exclusively to Kill Zones.")
+    ote_fib_min: float = Field(default=0.618, description="Optimal Trade Entry minimum Fibonacci retracement.")
+    ote_fib_max: float = Field(default=0.786, description="Optimal Trade Entry maximum Fibonacci retracement.")
+    target_rr: float = Field(default=2.0, ge=1.0, description="Default Target Risk-to-Reward ratio for ICT setups.")
+
 
 
 # ─────────────────────────────────────────────
@@ -269,19 +295,38 @@ class TradingConfig(BaseModel):
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     timeframes: TimeframeConfig = Field(default_factory=TimeframeConfig)
+    ict: ICTConfig = Field(default_factory=ICTConfig)
+    
+    # Multi-strategy concurrent execution
+    enabled_strategies: List[str] = Field(
+        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT"],
+        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT).",
+    )
+    
+    # Dual Independent Pair Configurations
+    pair1: PairSettings = Field(
+        default_factory=lambda: PairSettings(symbol="XAUUSD", fixed_lot_size=0.05, fixed_sl_pips=25.0, enabled=True),
+        description="Pair 1 configuration with independent lot size and SL.",
+    )
+    pair2: PairSettings = Field(
+        default_factory=lambda: PairSettings(symbol="EURUSD", fixed_lot_size=0.10, fixed_sl_pips=15.0, enabled=True),
+        description="Pair 2 configuration with independent lot size and SL.",
+    )
+
+    # Legacy compatibility fields
     fixed_lot_size: float | None = Field(
         default=None,
         gt=0.0,
-        description="Optional fixed lot size. If set, overrides dynamic risk percentage sizing.",
+        description="Optional global fixed lot size fallback.",
     )
     fixed_sl_pips: float | None = Field(
         default=None,
         gt=0.0,
-        description="Optional fixed Stop Loss in pips. If set, overrides dynamic SMC structure stop loss.",
+        description="Optional global fixed Stop Loss in pips fallback.",
     )
     strategy_type: str = Field(
         default=StrategyType.SMC.value,
-        description="Trading strategy algorithm selection: SMC (15m Swing) or SMC_SCALP_5M (5m Scalp).",
+        description="Legacy single strategy selector for backward compatibility.",
     )
     scalp_session_start_utc: int = Field(
         default=7,
@@ -308,6 +353,7 @@ class TradingConfig(BaseModel):
         default_factory=lambda: ["XAUUSD", "EURUSD"],
         description="List of up to 2 active symbols to analyze concurrently.",
     )
+
 
     news_blackout_minutes: int = Field(
         default=30,

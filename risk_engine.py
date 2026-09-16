@@ -91,12 +91,13 @@ class RiskEngine:
         self,
         signal: TradeSignal,
         current_equity: float,
+        fixed_lot_size: float | None = None,
     ) -> AuthorizationResult:
         """
         Full authorization pipeline:
         1. Check circuit breakers.
         2. Look up instrument config.
-        3. Calculate lot size.
+        3. Calculate lot size (supports per-pair / per-trade fixed_lot_size override).
         4. Validate lot size > 0 and within bounds.
         5. Return AuthorizationResult.
         """
@@ -129,8 +130,9 @@ class RiskEngine:
                 account_equity=current_equity
             )
             
-        if self.config.fixed_lot_size is not None and self.config.fixed_lot_size > 0:
-            lot_size = max(instrument.min_lot, min(instrument.max_lot, self.config.fixed_lot_size))
+        target_lot = fixed_lot_size if fixed_lot_size is not None and fixed_lot_size > 0 else self.config.fixed_lot_size
+        if target_lot is not None and target_lot > 0:
+            lot_size = max(instrument.min_lot, min(instrument.max_lot, target_lot))
             lot_size = math.floor(lot_size / instrument.lot_step) * instrument.lot_step
             lot_size = round(lot_size, 2)
             logger.info(f"Using manual fixed lot size override: {lot_size}")
@@ -141,6 +143,7 @@ class RiskEngine:
                 sl_distance_price=sl_distance, 
                 instrument=instrument
             )
+
         
         if lot_size < instrument.min_lot:
             msg = 'Calculated lot size below minimum'

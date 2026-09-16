@@ -33,37 +33,33 @@ from main import TradingBot, parse_ltf_to_seconds
 # ─────────────────────────────────────────────
 #  Pydantic Schemas for Web API
 # ─────────────────────────────────────────────
+#  Pydantic Schemas for Web API
+# ─────────────────────────────────────────────
+
+class PairConfigItem(BaseModel):
+    symbol: str
+    fixed_lot_size: Optional[float] = None
+    fixed_sl_pips: Optional[float] = None
+    enabled: bool = True
+
 
 class BotConfigUpdate(BaseModel):
-    selected_symbols: List[str] = Field(
-        ...,
-        min_length=1,
-        max_length=2,
-        description="List of exactly 1 or 2 symbols to monitor simultaneously."
-    )
-    strategy_type: Optional[str] = Field(
-        default=None,
-        description="Trading strategy algorithm selection (e.g. SMC, EMA_CROSS)."
-    )
-    fixed_lot_size: Optional[float] = Field(
-        default=None,
-        gt=0.0,
-        description="Manual fixed lot size override. None uses risk % dynamic sizing."
-    )
-    fixed_sl_pips: Optional[float] = Field(
-        default=None,
-        gt=0.0,
-        description="Manual fixed Stop Loss in pips. None uses SMC dynamic structure stop loss."
-    )
-    ai_confirmation_enabled: Optional[bool] = Field(
-        default=True,
-        description="Enable/disable Gemini AI second-opinion confirmation gate."
-    )
+    pair1: Optional[PairConfigItem] = None
+    pair2: Optional[PairConfigItem] = None
+    enabled_strategies: Optional[List[str]] = None
+    selected_symbols: Optional[List[str]] = None
+    strategy_type: Optional[str] = None
+    fixed_lot_size: Optional[float] = None
+    fixed_sl_pips: Optional[float] = None
+    ai_confirmation_enabled: Optional[bool] = None
 
 
 class BotStateResponse(BaseModel):
     is_active: bool
     selected_symbols: List[str]
+    pair1: dict
+    pair2: dict
+    enabled_strategies: List[str]
     strategy_type: str
     fixed_lot_size: Optional[float]
     fixed_sl_pips: Optional[float]
@@ -82,7 +78,10 @@ class BotStateResponse(BaseModel):
     losing_trades: int = 0
     total_closed_trades: int = 0
     active_session: Optional[dict] = None
-    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M"]
+    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT"]
+    stats_by_strategy: dict = {}
+    stats_by_pair: dict = {}
+
 
 
 
@@ -183,9 +182,28 @@ async def get_bot_state():
     losing_trades = [t for t in closed_trades if t.realized_pnl < 0]
     accuracy = round((len(winning_trades) / len(closed_trades) * 100), 1) if closed_trades else 0.0
 
+    stats_by_strategy = bot_instance.state.get_stats_by_strategy()
+    stats_by_pair = bot_instance.state.get_stats_by_pair()
+
+    pair1_data = {
+        "symbol": bot_instance.config.pair1.symbol,
+        "fixed_lot_size": bot_instance.config.pair1.fixed_lot_size,
+        "fixed_sl_pips": bot_instance.config.pair1.fixed_sl_pips,
+        "enabled": bot_instance.config.pair1.enabled,
+    }
+    pair2_data = {
+        "symbol": bot_instance.config.pair2.symbol,
+        "fixed_lot_size": bot_instance.config.pair2.fixed_lot_size,
+        "fixed_sl_pips": bot_instance.config.pair2.fixed_sl_pips,
+        "enabled": bot_instance.config.pair2.enabled,
+    }
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols[:2],
+        pair1=pair1_data,
+        pair2=pair2_data,
+        enabled_strategies=bot_instance.config.enabled_strategies,
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
@@ -204,10 +222,10 @@ async def get_bot_state():
         losing_trades=len(losing_trades),
         total_closed_trades=len(closed_trades),
         active_session=active_session,
-        available_strategies=["SMC", "SMC_SCALP_5M"],
+        available_strategies=["SMC", "SMC_SCALP_5M", "ICT"],
+        stats_by_strategy=stats_by_strategy,
+        stats_by_pair=stats_by_pair,
     )
-
-
 
 
 @app.post("/api/activate")
@@ -222,13 +240,14 @@ async def activate_bot():
     bot_instance.is_active = True
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols[:2],
-        lot_size=bot_instance.config.fixed_lot_size,
+        lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'}",
         trigger_source="Web Dashboard",
     )
     bot_instance.log(
-        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring: {bot_instance.config.selected_symbols[:2]} | "
-        f"Strategy: {bot_instance.config.strategy_type} | "
-        f"Lot Size: {bot_instance.config.fixed_lot_size or 'Dynamic (0.5% risk)'}"
+        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring: "
+        f"Pair 1 ({bot_instance.config.pair1.symbol}, lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
+        f"Pair 2 ({bot_instance.config.pair2.symbol}, lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
+        f"Active Strategies: {bot_instance.config.enabled_strategies}"
     )
 
     # Immediately trigger a tick cycle
@@ -262,61 +281,67 @@ async def deactivate_bot():
 @app.post("/api/configure")
 async def update_configuration(payload: BotConfigUpdate):
     """
-    Update selected charts, strategy, and lot size.
-    STRICT RULE: Cannot change symbols or strategy if bot is currently ACTIVE.
+    Update selected charts (Pair 1 & Pair 2), strategies, and lot sizes.
+    STRICT RULE: Cannot change symbols or strategies if bot is currently ACTIVE.
     """
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
-    # Clean symbols: filter out 'NONE', empty strings, and duplicates
-    valid_symbols = []
-    for s in payload.selected_symbols:
-        s_clean = s.strip().upper() if s else ""
-        if s_clean and s_clean != "NONE" and s_clean not in valid_symbols:
-            valid_symbols.append(s_clean)
-
-    if not valid_symbols:
-        raise HTTPException(status_code=400, detail="At least 1 chart must be selected (cannot both be NONE).")
-
-    # Lock enforcement
-    if bot_instance.is_active:
-        current_set = set(bot_instance.config.selected_symbols[:2])
-        new_set = set(valid_symbols[:2])
-        if current_set != new_set:
-            bot_instance.log("⚠️ Configuration rejected: Cannot change market symbols while bot is ACTIVE.", level="WARNING")
+    # Handle Pair 1 & Pair 2 update
+    if payload.pair1 is not None:
+        p1_sym = payload.pair1.symbol.strip().upper()
+        if bot_instance.is_active and p1_sym != bot_instance.config.pair1.symbol:
             raise HTTPException(
                 status_code=400,
-                detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch charts."
+                detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch Pair 1."
             )
-        if payload.strategy_type is not None and payload.strategy_type != bot_instance.config.strategy_type:
-            bot_instance.log("⚠️ Configuration rejected: Cannot change strategy type while bot is ACTIVE.", level="WARNING")
+        bot_instance.config.pair1.symbol = p1_sym
+        bot_instance.config.pair1.fixed_lot_size = payload.pair1.fixed_lot_size
+        bot_instance.config.pair1.fixed_sl_pips = payload.pair1.fixed_sl_pips
+        bot_instance.config.pair1.enabled = payload.pair1.enabled
+
+    if payload.pair2 is not None:
+        p2_sym = payload.pair2.symbol.strip().upper()
+        if bot_instance.is_active and p2_sym != bot_instance.config.pair2.symbol:
             raise HTTPException(
                 status_code=400,
-                detail="Strategy type changes are LOCKED during activation! Deactivate the bot first to switch strategies."
+                detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch Pair 2."
             )
+        bot_instance.config.pair2.symbol = p2_sym
+        bot_instance.config.pair2.fixed_lot_size = payload.pair2.fixed_lot_size
+        bot_instance.config.pair2.fixed_sl_pips = payload.pair2.fixed_sl_pips
+        bot_instance.config.pair2.enabled = payload.pair2.enabled
 
-    # Validate symbols exist
-    available = {i.symbol for i in bot_instance.config.instruments}
-    for s in valid_symbols:
-        if s not in available:
-            raise HTTPException(status_code=400, detail=f"Symbol '{s}' is not supported.")
+    # Handle enabled strategies update
+    if payload.enabled_strategies is not None:
+        valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT")]
+        if not valid_strats:
+            raise HTTPException(status_code=400, detail="At least 1 strategy must be enabled.")
+        if bot_instance.is_active and set(valid_strats) != set(bot_instance.config.enabled_strategies):
+            raise HTTPException(
+                status_code=400,
+                detail="Strategy configuration is LOCKED during activation! Deactivate the bot first to toggle strategies."
+            )
+        bot_instance.config.enabled_strategies = valid_strats
 
-    # Update config
-    bot_instance.config.selected_symbols = valid_symbols[:2]
+    # Backward compatibility with selected_symbols
+    if payload.selected_symbols is not None and not payload.pair1 and not payload.pair2:
+        valid_symbols = [s.strip().upper() for s in payload.selected_symbols if s and s != "NONE"]
+        if valid_symbols:
+            if len(valid_symbols) >= 1:
+                bot_instance.config.pair1.symbol = valid_symbols[0]
+            if len(valid_symbols) >= 2:
+                bot_instance.config.pair2.symbol = valid_symbols[1]
+
+    bot_instance.config.selected_symbols = [bot_instance.config.pair1.symbol, bot_instance.config.pair2.symbol]
+
     if payload.strategy_type is not None:
         bot_instance.config.strategy_type = payload.strategy_type
-        if scheduler_instance:
-            try:
-                active_ltf = "5m" if payload.strategy_type == "SMC_SCALP_5M" else bot_instance.config.timeframes.ltf
-                new_interval = parse_ltf_to_seconds(active_ltf)
-                job = scheduler_instance.get_job("web_trading_tick")
-                if job:
-                    job.reschedule(trigger=IntervalTrigger(seconds=new_interval))
-                    logger.info(f"Rescheduled tick job for interval: {new_interval}s ({active_ltf})")
-            except Exception as e:
-                logger.warning(f"Could not reschedule tick interval: {e}")
-    bot_instance.config.fixed_lot_size = payload.fixed_lot_size
-    bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
+
+    if payload.fixed_lot_size is not None:
+        bot_instance.config.fixed_lot_size = payload.fixed_lot_size
+    if payload.fixed_sl_pips is not None:
+        bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
     if payload.ai_confirmation_enabled is not None:
         bot_instance.config.ai_confirmation_enabled = payload.ai_confirmation_enabled
 
@@ -324,22 +349,22 @@ async def update_configuration(payload: BotConfigUpdate):
     bot_instance.save_settings()
 
     bot_instance.log(
-        f"⚙️ Configuration updated: Symbols={bot_instance.config.selected_symbols} | "
-        f"Strategy={bot_instance.config.strategy_type} | "
-        f"Lot Size={payload.fixed_lot_size if payload.fixed_lot_size else 'Dynamic'} | "
-        f"Fixed SL={f'{payload.fixed_sl_pips} pips' if payload.fixed_sl_pips else 'Dynamic SMC'} | "
+        f"⚙️ Configuration updated: "
+        f"Pair 1={bot_instance.config.pair1.symbol} (lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
+        f"Pair 2={bot_instance.config.pair2.symbol} (lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
+        f"Strategies={bot_instance.config.enabled_strategies} | "
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'}"
     )
 
-
     return {
         "status": "success",
+        "pair1": bot_instance.config.pair1.model_dump(),
+        "pair2": bot_instance.config.pair2.model_dump(),
+        "enabled_strategies": bot_instance.config.enabled_strategies,
         "selected_symbols": bot_instance.config.selected_symbols,
-        "strategy_type": bot_instance.config.strategy_type,
-        "fixed_lot_size": bot_instance.config.fixed_lot_size,
-        "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
     }
+
 
 
 
