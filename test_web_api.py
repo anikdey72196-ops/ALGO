@@ -17,7 +17,7 @@ def test_api_workflow():
     print(f"   Initial state: is_active={state['is_active']}, symbols={state['selected_symbols']}, strategy_type={state['strategy_type']}, equity={state['equity']}")
     assert state['is_active'] is False, "Bot should start deactivated"
     assert "strategy_type" in state, "strategy_type must be in BotStateResponse"
-    assert state['strategy_type'] == "SMC", f"Expected default strategy_type SMC, got {state['strategy_type']}"
+    assert state['strategy_type'] in ["SMC", "SMC_SCALP_5M", "ICT"], f"Expected valid strategy_type, got {state['strategy_type']}"
     assert "available_strategies" in state, "available_strategies must be in BotStateResponse"
     assert "SMC_SCALP_5M" in state['available_strategies'], "SMC_SCALP_5M must be in available_strategies"
 

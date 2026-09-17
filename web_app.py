@@ -328,15 +328,40 @@ async def update_configuration(payload: BotConfigUpdate):
     if payload.selected_symbols is not None and not payload.pair1 and not payload.pair2:
         valid_symbols = [s.strip().upper() for s in payload.selected_symbols if s and s != "NONE"]
         if valid_symbols:
-            if len(valid_symbols) >= 1:
-                bot_instance.config.pair1.symbol = valid_symbols[0]
+            curr_symbols = [bot_instance.config.pair1.symbol, bot_instance.config.pair2.symbol]
+            new_p1 = valid_symbols[0] if len(valid_symbols) >= 1 else bot_instance.config.pair1.symbol
+            new_p2 = valid_symbols[1] if len(valid_symbols) >= 2 else ""
+            if bot_instance.is_active and (new_p1 != bot_instance.config.pair1.symbol or (len(valid_symbols) >= 2 and new_p2 != bot_instance.config.pair2.symbol)):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch symbols."
+                )
+            bot_instance.config.pair1.symbol = new_p1
+            bot_instance.config.pair1.enabled = True
             if len(valid_symbols) >= 2:
                 bot_instance.config.pair2.symbol = valid_symbols[1]
-
-    bot_instance.config.selected_symbols = [bot_instance.config.pair1.symbol, bot_instance.config.pair2.symbol]
+                bot_instance.config.pair2.enabled = True
+            else:
+                bot_instance.config.pair2.enabled = False
+            bot_instance.config.selected_symbols = valid_symbols
+        else:
+            bot_instance.config.selected_symbols = []
+    else:
+        active_syms = []
+        if bot_instance.config.pair1.enabled and bot_instance.config.pair1.symbol:
+            active_syms.append(bot_instance.config.pair1.symbol)
+        if bot_instance.config.pair2.enabled and bot_instance.config.pair2.symbol:
+            active_syms.append(bot_instance.config.pair2.symbol)
+        bot_instance.config.selected_symbols = active_syms
 
     if payload.strategy_type is not None:
-        bot_instance.config.strategy_type = payload.strategy_type
+        new_strat = payload.strategy_type.strip().upper()
+        if bot_instance.is_active and new_strat != bot_instance.config.strategy_type:
+            raise HTTPException(
+                status_code=400,
+                detail="Strategy type changes are LOCKED during activation! Deactivate the bot first to change strategy."
+            )
+        bot_instance.config.strategy_type = new_strat
 
     if payload.fixed_lot_size is not None:
         bot_instance.config.fixed_lot_size = payload.fixed_lot_size
@@ -362,6 +387,9 @@ async def update_configuration(payload: BotConfigUpdate):
         "pair2": bot_instance.config.pair2.model_dump(),
         "enabled_strategies": bot_instance.config.enabled_strategies,
         "selected_symbols": bot_instance.config.selected_symbols,
+        "strategy_type": bot_instance.config.strategy_type,
+        "fixed_lot_size": bot_instance.config.fixed_lot_size,
+        "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
     }
 

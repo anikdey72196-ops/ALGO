@@ -82,7 +82,7 @@ class BrokerAdapter(ABC):
 
 
 class MT5Adapter(BrokerAdapter):
-    """
+    r"""
     MetaTrader 5 execution adapter.
     
     Deployment Notes:
