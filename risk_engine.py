@@ -131,16 +131,16 @@ class RiskEngine:
                 account_equity=current_equity
             )
 
-        # ── Strict Rule 2: No concurrent trades using the exact same strategy ──
-        open_strat_trades = [t for t in self.state.get_open_positions() if t.strategy_name == signal.strategy_name]
-        if open_strat_trades:
-            msg = f"Strategy '{signal.strategy_name}' already has an active trade (ID #{open_strat_trades[0].id} on {open_strat_trades[0].symbol}). Concurrent strategy entry blocked."
-            logger.info(f"Trade rejected: {msg}")
-            return AuthorizationResult(
-                authorized=False,
-                rejection_reason=msg,
-                account_equity=current_equity
-            )
+        # ── Strict Rule 2: No concurrent trades using the exact same strategy (DEACTIVATED) ──
+        # open_strat_trades = [t for t in self.state.get_open_positions() if t.strategy_name == signal.strategy_name]
+        # if open_strat_trades:
+        #     msg = f"Strategy '{signal.strategy_name}' already has an active trade (ID #{open_strat_trades[0].id} on {open_strat_trades[0].symbol}). Concurrent strategy entry blocked."
+        #     logger.info(f"Trade rejected: {msg}")
+        #     return AuthorizationResult(
+        #         authorized=False,
+        #         rejection_reason=msg,
+        #         account_equity=current_equity
+        #     )
             
         sl_distance = signal.sl_distance if signal.sl_distance > 0 else abs(signal.entry_price - signal.stop_loss)
         if sl_distance <= 0:

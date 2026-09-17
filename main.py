@@ -1,32 +1,4 @@
-"""
-main.py — Async orchestrator for the automated trading bot.
 
-This is the entry point that wires all modules together and runs the trading
-loop on a schedule (every LTF bar close).
-
-Deployment to Cloud VPS:
-  1. Provision a Windows VPS (e.g., AWS EC2 Windows, Contabo, or Hetzner).
-     Linux VPS works for mock/backtest mode; MT5 requires Windows.
-  2. Install Python 3.11+:
-       winget install Python.Python.3.11
-  3. Clone or upload the project files to the VPS.
-  4. Install dependencies:
-       pip install -r requirements.txt
-       pip install MetaTrader5   # Windows only, for live trading
-  5. Configure broker credentials:
-       - Edit DEFAULT_CONFIG in config.py, or
-       - Set environment variables MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH.
-  6. Adjust config.py:
-       - Set use_mock_broker = False for live trading.
-       - Set account.equity to your starting balance.
-       - Adjust instruments, risk parameters, and timeframes.
-  7. Run the bot:
-       python main.py
-  8. For persistent operation, use a process manager:
-       pip install pywin32  # for Windows service, or
-       # Use Task Scheduler, or nssm to install as a Windows service.
-       # On Linux (mock mode): nohup python main.py &
-"""
 
 from __future__ import annotations
 
@@ -37,8 +9,11 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# pyrefly: ignore [missing-import]
 from loguru import logger
+# pyrefly: ignore [missing-import]
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+# pyrefly: ignore [missing-import]
 from apscheduler.triggers.interval import IntervalTrigger
 
 from config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction
@@ -430,15 +405,15 @@ class TradingBot:
                 logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
 
-            # ── Step 2b: Exclude strategies that already have an active open position ──
-            active_strat_names = {t.strategy_name for t in self.state.get_open_positions()}
-            eval_strats = [s for s in self.config.enabled_strategies if s not in active_strat_names]
+            # ── Step 2b: Exclude strategies that already have an active open position (DEACTIVATED) ──
+            # active_strat_names = {t.strategy_name for t in self.state.get_open_positions()}
+            # eval_strats = [s for s in self.config.enabled_strategies if s not in active_strat_names]
+            # if not eval_strats:
+            #     logger.info(f"  All enabled strategies ({active_strat_names}) already have an active open trade. Skipping Pair {pair_num} ({symbol}).")
+            #     continue
+            eval_strats = self.config.enabled_strategies
 
-            if not eval_strats:
-                logger.info(f"  All enabled strategies ({active_strat_names}) already have an active open trade. Skipping Pair {pair_num} ({symbol}).")
-                continue
-
-            # ── Step 2b: Generate signals across eligible strategies ──
+            # ── Step 2b: Generate signals across enabled strategies ──
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
