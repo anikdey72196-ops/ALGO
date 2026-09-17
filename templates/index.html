@@ -3,11 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Institutional Algorithmic Trading Control Station & TradingView</title>
+  <title>Institutional Algorithmic Trading Control Station</title>
   <!-- TailwindCSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- TradingView Widget Script -->
-  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -58,8 +56,8 @@
         <button id="tabBtnControl" onclick="switchTab('control')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm">
           Control Station
         </button>
-        <button id="tabBtnCharts" onclick="switchTab('charts')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
-          TradingView Live Charts
+        <button id="tabBtnAnalytics" onclick="switchTab('analytics')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center gap-1.5">
+          <span>📊 Performance Analytics</span>
         </button>
         <button id="tabBtnHistory" onclick="switchTab('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
           Trade History & PnL
@@ -372,48 +370,222 @@
     </div>
   </section>
 
-  <!-- TAB 2: TRADINGVIEW LIVE CHARTS (Dual Multi-Chart View) -->
-  <section id="viewCharts" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
-    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-gray-800 gap-2">
-        <div>
-          <h2 class="text-base font-bold text-white flex items-center gap-2">
-            <span>TradingView Dual Market Terminal</span>
-          </h2>
-          <p class="text-xs text-gray-400 mt-0.5">Live real-time candlesticks and structural order flow for your 2 active charts</p>
+  <!-- TAB 2: PERFORMANCE & METRICS ANALYTICS -->
+  <section id="viewAnalytics" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
+    <!-- Header Banner -->
+    <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>📊 Institutional Performance Analytics & Trade Statistics</span>
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Real-time statistics covering Win Rates, SL/TP ratios, Risk-to-Reward, and trade holding durations</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="fetchAnalytics()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 font-semibold">
+          🔄 Refresh Analytics
+        </button>
+      </div>
+    </div>
+
+    <!-- 6 Primary Metric Cards Requested by User -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      
+      <!-- 1. Total TP (Take Profit) -->
+      <div class="bg-cardbg border border-emerald-900/40 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>🎯 Total Take Profit (TP)</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 border border-emerald-700 text-emerald-300">WINS</span>
         </div>
-        <div class="text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800 px-3 py-1 rounded-lg">
-          Live Sync Active
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsTotalTP" class="text-3xl md:text-4xl font-black text-emerald-400">0</div>
+          <div class="text-xs text-gray-400">hits</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Total Realized Profit:</span>
+          <span id="analyticsTPAmount" class="font-bold text-emerald-400">+$0.00</span>
         </div>
       </div>
 
-      <!-- Dual Chart Split Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <!-- Chart 1 Widget -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
-          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
-            <span id="chart1Title" class="text-xs font-bold text-gray-200">Chart 1: XAUUSD (Gold)</span>
-            <span id="chart1TfBadge" class="text-[10px] text-gray-400 uppercase font-mono">15m Execution View</span>
+      <!-- 2. Total SL (Stop Loss) -->
+      <div class="bg-cardbg border border-rose-900/40 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>🛑 Total Stop Loss (SL)</span>
           </div>
-          <div id="tradingview_chart_1" class="w-full h-[450px]"></div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 border border-rose-700 text-rose-300">LOSSES</span>
         </div>
-
-        <!-- Chart 2 Widget -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden p-2">
-          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-800 mb-2">
-            <span id="chart2Title" class="text-xs font-bold text-gray-200">Chart 2: EURUSD</span>
-            <span id="chart2TfBadge" class="text-[10px] text-gray-400 uppercase font-mono">15m Execution View</span>
-          </div>
-          <div id="tradingview_chart_2" class="w-full h-[450px]"></div>
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsTotalSL" class="text-3xl md:text-4xl font-black text-rose-400">0</div>
+          <div class="text-xs text-gray-400">hits</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Total Stopped Out:</span>
+          <span id="analyticsSLAmount" class="font-bold text-rose-400">-$0.00</span>
         </div>
       </div>
+
+      <!-- 3. Winrate & Differential (Can be negative) -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📈 Win Rate & Differential</span>
+          </div>
+          <span id="analyticsDiffBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700">0 Net Diff</span>
+        </div>
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsWinRate" class="text-3xl md:text-4xl font-black text-white">0.0%</div>
+          <div id="analyticsWinLossSpread" class="text-xs font-bold text-gray-400">(0W / 0L)</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Net Balance (Wins − Losses):</span>
+          <span id="analyticsNetSpread" class="font-bold text-gray-300 font-mono">0</span>
+        </div>
+      </div>
+
+      <!-- 4. Risk:Reward (R:R) Ratio -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>⚖️ Risk : Reward (R:R)</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/80 border border-purple-800 text-purple-300">TARGET RATIO</span>
+        </div>
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsPlannedRR" class="text-3xl md:text-4xl font-black text-purple-300 font-mono">1:2.50</div>
+          <div class="text-xs text-gray-400">planned</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Realized R:R (Avg Win/Loss):</span>
+          <span id="analyticsRealizedRR" class="font-bold text-purple-300 font-mono">1:2.50</span>
+        </div>
+      </div>
+
+      <!-- 5. Total Trades Executed -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📦 Total Trades Executed</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 border border-amber-800 text-amber-300">LIFETIME</span>
+        </div>
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsTotalTrades" class="text-3xl md:text-4xl font-black text-white">0</div>
+          <div class="text-xs text-gray-400">total entries</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Position Status:</span>
+          <span class="font-bold text-gray-300"><span id="analyticsClosedTrades">0</span> Closed · <span id="analyticsOpenTrades">0</span> Open</span>
+        </div>
+      </div>
+
+      <!-- 6. Trade Holding Time -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-start">
+          <div class="text-xs font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>⏱️ Holding Time</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950/80 border border-blue-800 text-blue-300">DURATION</span>
+        </div>
+        <div class="flex items-baseline gap-3 mt-3">
+          <div id="analyticsAvgHolding" class="text-2xl md:text-3xl font-black text-blue-300 font-mono">0s</div>
+          <div class="text-xs text-gray-400">avg per trade</div>
+        </div>
+        <div class="mt-2 pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+          <span>Total Market Exposure:</span>
+          <span id="analyticsTotalHolding" class="font-bold text-blue-300 font-mono">0s</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Secondary Insights: Profit Factor, Net PnL, Best & Worst Trades -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-cardbg border border-gray-800 rounded-xl p-4">
+        <div class="text-[11px] font-medium text-gray-400 uppercase">Profit Factor</div>
+        <div id="analyticsProfitFactor" class="text-xl font-bold mt-1 text-emerald-400">0.00</div>
+        <div class="text-[10px] text-gray-500 mt-0.5">Gross Win / Gross Loss</div>
+      </div>
+      <div class="bg-cardbg border border-gray-800 rounded-xl p-4">
+        <div class="text-[11px] font-medium text-gray-400 uppercase">Net Realized PnL</div>
+        <div id="analyticsNetPnL" class="text-xl font-bold mt-1 text-emerald-400">$0.00</div>
+        <div class="text-[10px] text-gray-500 mt-0.5">Total closed profits</div>
+      </div>
+      <div class="bg-cardbg border border-gray-800 rounded-xl p-4">
+        <div class="text-[11px] font-medium text-gray-400 uppercase">Best Winning Trade</div>
+        <div id="analyticsBestTrade" class="text-xl font-bold mt-1 text-emerald-400">+$0.00</div>
+        <div class="text-[10px] text-gray-500 mt-0.5">Single largest gain</div>
+      </div>
+      <div class="bg-cardbg border border-gray-800 rounded-xl p-4">
+        <div class="text-[11px] font-medium text-gray-400 uppercase">Worst Drawdown Trade</div>
+        <div id="analyticsWorstTrade" class="text-xl font-bold mt-1 text-rose-400">-$0.00</div>
+        <div class="text-[10px] text-gray-500 mt-0.5">Single largest loss</div>
+      </div>
+    </div>
+
+    <!-- Breakdown Tables: Strategy & Pair Performance -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- Strategy Performance Table -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg space-y-4">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span>⚡ Performance by Strategy</span>
+          </h3>
+          <span class="text-[11px] text-gray-400">Institutional Models</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-gray-900 text-gray-400 font-semibold border-b border-gray-800">
+              <tr>
+                <th class="py-2.5 px-3">Strategy</th>
+                <th class="py-2.5 px-3 text-center">Trades</th>
+                <th class="py-2.5 px-3 text-center">TP / SL</th>
+                <th class="py-2.5 px-3 text-center">Win Rate</th>
+                <th class="py-2.5 px-3 text-right">Net PnL</th>
+              </tr>
+            </thead>
+            <tbody id="analyticsStrategyBody" class="divide-y divide-gray-800">
+              <tr><td colspan="5" class="py-4 text-center text-gray-500">No strategy trades recorded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pair Performance Table -->
+      <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg space-y-4">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span>🪙 Performance by Pair / Asset</span>
+          </h3>
+          <span class="text-[11px] text-gray-400">Traded Symbols</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-gray-900 text-gray-400 font-semibold border-b border-gray-800">
+              <tr>
+                <th class="py-2.5 px-3">Symbol</th>
+                <th class="py-2.5 px-3 text-center">Trades</th>
+                <th class="py-2.5 px-3 text-center">TP / SL</th>
+                <th class="py-2.5 px-3 text-center">Win Rate</th>
+                <th class="py-2.5 px-3 text-right">Net PnL</th>
+              </tr>
+            </thead>
+            <tbody id="analyticsPairBody" class="divide-y divide-gray-800">
+              <tr><td colspan="5" class="py-4 text-center text-gray-500">No pair trades recorded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </section>
 
   <!-- TAB 3: EXECUTED TRADES & NET PnL HISTORY -->
   <section id="viewHistory" class="max-w-7xl mx-auto mt-6 hidden space-y-6">
     <div class="bg-cardbg border border-gray-800 rounded-2xl p-6 shadow-xl">
-      <div class="flex justify-between items-center pb-4 border-b border-gray-800">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-gray-800 gap-3">
         <div>
           <h2 class="text-base font-bold text-white flex items-center gap-2">
             <span>Executed Trade Ledger & Realized PnL</span>
@@ -429,26 +601,29 @@
         </div>
       </div>
 
-      <!-- Trade History Table -->
+      <!-- Trade History Table with Strategy, R:R and Duration -->
       <div class="mt-4 overflow-x-auto">
         <table class="w-full text-left text-xs text-gray-300">
           <thead class="bg-gray-900/90 text-gray-400 uppercase font-semibold border-b border-gray-800">
             <tr>
-              <th class="py-3 px-4">ID</th>
-              <th class="py-3 px-4">Time (UTC)</th>
-              <th class="py-3 px-4">Symbol</th>
-              <th class="py-3 px-4">Side</th>
-              <th class="py-3 px-4">Entry</th>
-              <th class="py-3 px-4">Stop Loss</th>
-              <th class="py-3 px-4">Take Profit</th>
-              <th class="py-3 px-4">Lots</th>
-              <th class="py-3 px-4">Status</th>
-              <th class="py-3 px-4 text-right">Net PnL ($)</th>
+              <th class="py-3 px-3">ID</th>
+              <th class="py-3 px-3">Time (UTC)</th>
+              <th class="py-3 px-3">Symbol</th>
+              <th class="py-3 px-3">Strategy</th>
+              <th class="py-3 px-3">Side</th>
+              <th class="py-3 px-3">Entry</th>
+              <th class="py-3 px-3">Stop Loss</th>
+              <th class="py-3 px-3">Take Profit</th>
+              <th class="py-3 px-3 text-center">R:R</th>
+              <th class="py-3 px-3">Lots</th>
+              <th class="py-3 px-3 text-center">Holding Time</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3 text-right">Net PnL ($)</th>
             </tr>
           </thead>
           <tbody id="tradeHistoryBody" class="divide-y divide-gray-800">
             <tr>
-              <td colspan="10" class="py-6 text-center text-gray-500">Loading trade history records...</td>
+              <td colspan="13" class="py-6 text-center text-gray-500">Loading trade history records...</td>
             </tr>
           </tbody>
         </table>
@@ -615,22 +790,22 @@
 
     function switchTab(tabId) {
       document.getElementById('viewControl').classList.add('hidden');
-      document.getElementById('viewCharts').classList.add('hidden');
+      document.getElementById('viewAnalytics').classList.add('hidden');
       document.getElementById('viewHistory').classList.add('hidden');
       document.getElementById('viewSessions').classList.add('hidden');
 
       document.getElementById('tabBtnControl').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
-      document.getElementById('tabBtnCharts').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
+      document.getElementById('tabBtnAnalytics').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center gap-1.5";
       document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all";
       document.getElementById('tabBtnSessions').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center gap-1.5";
 
       if (tabId === 'control') {
         document.getElementById('viewControl').classList.remove('hidden');
         document.getElementById('tabBtnControl').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
-      } else if (tabId === 'charts') {
-        document.getElementById('viewCharts').classList.remove('hidden');
-        document.getElementById('tabBtnCharts').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
-        renderTradingViewWidgets();
+      } else if (tabId === 'analytics') {
+        document.getElementById('viewAnalytics').classList.remove('hidden');
+        document.getElementById('tabBtnAnalytics').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm flex items-center gap-1.5";
+        fetchAnalytics();
       } else if (tabId === 'history') {
         document.getElementById('viewHistory').classList.remove('hidden');
         document.getElementById('tabBtnHistory').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white transition-all shadow-sm";
@@ -642,64 +817,128 @@
       }
     }
 
-    function mapToTradingViewSymbol(symbol) {
-      if (symbol === "XAUUSD") return "OANDA:XAUUSD";
-      if (symbol === "EURUSD") return "FX:EURUSD";
-      if (symbol === "GBPUSD") return "FX:GBPUSD";
-      if (symbol === "BTCUSD") return "BINANCE:BTCUSDT";
-      if (symbol === "ETHUSD") return "BINANCE:ETHUSDT";
-      return symbol;
-    }
 
-    function renderTradingViewWidgets() {
-      const sym1 = currentSymbols[0] || "XAUUSD";
-      const sym2 = currentSymbols.length > 1 ? currentSymbols[1] : "NONE";
+    async function fetchAnalytics() {
+      try {
+        const res = await fetch('/api/analytics');
+        if (!res.ok) return;
+        const data = await res.json();
 
-      document.getElementById('chart1Title').innerText = `Chart 1: ${sym1}`;
-      document.getElementById('chart2Title').innerText = `Chart 2: ${sym2 === 'NONE' ? 'None (Disabled)' : sym2}`;
+        // 1. Total TP
+        document.getElementById('analyticsTotalTP').innerText = data.total_tp || 0;
+        document.getElementById('analyticsTPAmount').innerText = `+$${(data.total_tp_pnl || 0).toFixed(2)}`;
 
-      const tvSym1 = mapToTradingViewSymbol(sym1);
+        // 2. Total SL
+        document.getElementById('analyticsTotalSL').innerText = data.total_sl || 0;
+        document.getElementById('analyticsSLAmount').innerText = `-$${Math.abs(data.total_sl_pnl || 0).toFixed(2)}`;
 
-      // Render Widget 1
-      new TradingView.widget({
-        "autosize": true,
-        "symbol": tvSym1,
-        "interval": "15",
-        "timezone": "Etc/UTC",
-        "theme": "dark",
-        "style": "1",
-        "locale": "en",
-        "toolbar_bg": "#0b0f19",
-        "enable_publishing": false,
-        "allow_symbol_change": true,
-        "container_id": "tradingview_chart_1"
-      });
+        // 3. Win Rate & Differential (can be negative)
+        const winRateEl = document.getElementById('analyticsWinRate');
+        const diffBadge = document.getElementById('analyticsDiffBadge');
+        const netSpread = document.getElementById('analyticsNetSpread');
+        const winLossSpread = document.getElementById('analyticsWinLossSpread');
 
-      // Render Widget 2 or placeholder
-      const c2Container = document.getElementById('tradingview_chart_2');
-      if (sym2 === "NONE") {
-        c2Container.innerHTML = `
-          <div class="w-full h-full flex flex-col items-center justify-center text-gray-500 space-y-2 p-8">
-            <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-            <div class="text-xs font-semibold">Secondary Chart is set to None</div>
-            <p class="text-[11px] text-gray-600">The bot is currently focusing 100% of its resources on Chart 1 (${sym1}).</p>
-          </div>
-        `;
-      } else {
-        const tvSym2 = mapToTradingViewSymbol(sym2);
-        new TradingView.widget({
-          "autosize": true,
-          "symbol": tvSym2,
-          "interval": "15",
-          "timezone": "Etc/UTC",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#0b0f19",
-          "enable_publishing": false,
-          "allow_symbol_change": true,
-          "container_id": "tradingview_chart_2"
-        });
+        const winRate = data.win_rate || 0.0;
+        winRateEl.innerText = `${winRate.toFixed(1)}%`;
+        winRateEl.className = `text-3xl md:text-4xl font-black ${winRate >= 50 ? 'text-emerald-400' : (data.total_closed_trades > 0 ? 'text-rose-400' : 'text-white')}`;
+
+        winLossSpread.innerText = `(${data.total_tp || 0}W / ${data.total_sl || 0}L)`;
+
+        const diff = data.win_loss_diff !== undefined ? data.win_loss_diff : ((data.total_tp || 0) - (data.total_sl || 0));
+        const diffSign = diff > 0 ? '+' : '';
+        if (diff > 0) {
+          diffBadge.innerText = `+${diff} Net Wins`;
+          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 border border-emerald-700 text-emerald-300";
+          netSpread.innerText = `+${diff} (Positive Edge)`;
+          netSpread.className = "font-bold text-emerald-400 font-mono";
+        } else if (diff < 0) {
+          diffBadge.innerText = `${diff} Net Losses`;
+          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 border border-rose-700 text-rose-300";
+          netSpread.innerText = `${diff} (Negative Drawdown)`;
+          netSpread.className = "font-bold text-rose-400 font-mono";
+        } else {
+          diffBadge.innerText = "0 Neutral";
+          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700";
+          netSpread.innerText = "0 (Breakeven Balance)";
+          netSpread.className = "font-bold text-gray-400 font-mono";
+        }
+
+        // 4. Risk-to-Reward Ratio
+        document.getElementById('analyticsPlannedRR').innerText = data.formatted_avg_rr || `1:${(data.avg_planned_rr || 2.5).toFixed(2)}`;
+        document.getElementById('analyticsRealizedRR').innerText = data.formatted_realized_rr || `1:${(data.realized_rr || 2.0).toFixed(2)}`;
+
+        // 5. Total Trades Executed
+        document.getElementById('analyticsTotalTrades').innerText = data.total_trades || 0;
+        document.getElementById('analyticsClosedTrades').innerText = data.total_closed_trades || 0;
+        document.getElementById('analyticsOpenTrades').innerText = data.total_open_trades || 0;
+
+        // 6. Holding Time
+        document.getElementById('analyticsAvgHolding').innerText = data.formatted_avg_holding_time || '0s';
+        document.getElementById('analyticsTotalHolding').innerText = data.formatted_total_holding_time || '0s';
+
+        // Secondary Metrics
+        document.getElementById('analyticsProfitFactor').innerText = (data.profit_factor || 0).toFixed(2);
+        
+        const netPnLEl = document.getElementById('analyticsNetPnL');
+        const netPnL = data.total_pnl || 0.0;
+        netPnLEl.innerText = `${netPnL >= 0 ? '+' : ''}$${netPnL.toFixed(2)}`;
+        netPnLEl.className = `text-xl font-bold mt-1 ${netPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+        document.getElementById('analyticsBestTrade').innerText = `+$${(data.best_trade_pnl || 0).toFixed(2)}`;
+        document.getElementById('analyticsWorstTrade').innerText = `-$${Math.abs(data.worst_trade_pnl || 0).toFixed(2)}`;
+
+        // Strategy Breakdown Table
+        const stratBody = document.getElementById('analyticsStrategyBody');
+        const stratData = data.by_strategy || {};
+        const stratKeys = Object.keys(stratData);
+        if (stratKeys.length === 0) {
+          stratBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">No strategy trades recorded yet.</td></tr>`;
+        } else {
+          stratBody.innerHTML = stratKeys.map(k => {
+            const s = stratData[k];
+            const pnlColor = s.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+            const pnlSign = s.pnl >= 0 ? '+' : '';
+            return `
+              <tr class="hover:bg-gray-800/40 transition-colors">
+                <td class="py-2.5 px-3 font-bold text-white">${k}</td>
+                <td class="py-2.5 px-3 text-center font-mono">${s.total || s.total_trades || 0}</td>
+                <td class="py-2.5 px-3 text-center font-mono text-gray-300">
+                  <span class="text-emerald-400">${s.wins || 0}</span> / <span class="text-rose-400">${s.losses || 0}</span>
+                </td>
+                <td class="py-2.5 px-3 text-center font-mono ${(s.win_rate || 0) >= 50 ? 'text-emerald-400' : 'text-rose-400'}">${(s.win_rate || 0).toFixed(1)}%</td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold ${pnlColor}">${pnlSign}$${(s.pnl || 0).toFixed(2)}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        // Pair Breakdown Table
+        const pairBody = document.getElementById('analyticsPairBody');
+        const pairData = data.by_pair || {};
+        const pairKeys = Object.keys(pairData);
+        if (pairKeys.length === 0) {
+          pairBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">No pair trades recorded yet.</td></tr>`;
+        } else {
+          pairBody.innerHTML = pairKeys.map(k => {
+            const p = pairData[k];
+            const pnlColor = p.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+            const pnlSign = p.pnl >= 0 ? '+' : '';
+            return `
+              <tr class="hover:bg-gray-800/40 transition-colors">
+                <td class="py-2.5 px-3 font-bold text-white">${k}</td>
+                <td class="py-2.5 px-3 text-center font-mono">${p.total || p.total_trades || 0}</td>
+                <td class="py-2.5 px-3 text-center font-mono text-gray-300">
+                  <span class="text-emerald-400">${p.wins || 0}</span> / <span class="text-rose-400">${p.losses || 0}</span>
+                </td>
+                <td class="py-2.5 px-3 text-center font-mono ${(p.win_rate || 0) >= 50 ? 'text-emerald-400' : 'text-rose-400'}">${(p.win_rate || 0).toFixed(1)}%</td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold ${pnlColor}">${pnlSign}$${(p.pnl || 0).toFixed(2)}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+      } catch (err) {
+        console.error("Failed to fetch analytics:", err);
       }
     }
 
@@ -715,25 +954,25 @@
         const histWinRate = document.getElementById('historyWinRate');
         const histWinLoss = document.getElementById('historyWinLoss');
 
-        const pnlPrefix = data.total_pnl >= 0 ? '+' : '';
-        netPnlEl.innerText = `${pnlPrefix}$${data.total_pnl.toFixed(2)}`;
-        netPnlEl.className = `font-bold text-sm ml-1 ${data.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+        const pnlPrefix = (data.total_pnl || 0) >= 0 ? '+' : '';
+        netPnlEl.innerText = `${pnlPrefix}$${(data.total_pnl || 0).toFixed(2)}`;
+        netPnlEl.className = `font-bold text-sm ml-1 ${(data.total_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
 
         if (histWinRate) {
-          if (data.total_closed_trades > 0) {
-            histWinRate.innerText = `${data.accuracy.toFixed(1)}%`;
-            histWinRate.className = `font-bold text-sm ml-1 ${data.accuracy >= 50 ? 'text-emerald-400' : 'text-red-400'}`;
+          if ((data.total_closed_trades || 0) > 0) {
+            histWinRate.innerText = `${(data.accuracy || data.win_rate || 0).toFixed(1)}%`;
+            histWinRate.className = `font-bold text-sm ml-1 ${(data.accuracy || data.win_rate || 0) >= 50 ? 'text-emerald-400' : 'text-red-400'}`;
           } else {
             histWinRate.innerText = `---%`;
             histWinRate.className = `font-bold text-sm ml-1 text-gray-400`;
           }
         }
         if (histWinLoss) {
-          histWinLoss.innerText = `(${data.winning_trades || 0}W / ${data.losing_trades || 0}L)`;
+          histWinLoss.innerText = `(${data.winning_trades || data.total_tp || 0}W / ${data.losing_trades || data.total_sl || 0}L)`;
         }
 
         if (!data.trades || data.trades.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-gray-500">No executed trades recorded yet.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="13" class="py-8 text-center text-gray-500">No executed trades recorded yet.</td></tr>`;
           return;
         }
 
@@ -743,23 +982,29 @@
           const pnlColor = isWin ? 'text-emerald-400 font-bold' : (isLoss ? 'text-red-400 font-bold' : 'text-gray-400');
           const sideColor = t.direction === 'BUY' ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800' : 'text-rose-400 bg-rose-950/60 border-rose-800';
           const pnlSign = t.realized_pnl >= 0 ? '+' : '';
+          const strat = t.strategy_name || "SMC";
+          const holding = t.holding_time_formatted || "---";
+          const plannedRR = t.planned_rr ? `1:${t.planned_rr.toFixed(2)}` : "1:2.50";
 
           return `
             <tr class="hover:bg-gray-800/50 transition-colors">
-              <td class="py-3 px-4 font-mono text-gray-400">#${t.id}</td>
-              <td class="py-3 px-4 font-mono text-[11px] text-gray-400">${t.timestamp}</td>
-              <td class="py-3 px-4 font-bold text-white">${t.symbol}</td>
-              <td class="py-3 px-4">
+              <td class="py-3 px-3 font-mono text-gray-400">#${t.id}</td>
+              <td class="py-3 px-3 font-mono text-[11px] text-gray-400">${t.timestamp}</td>
+              <td class="py-3 px-3 font-bold text-white">${t.symbol}</td>
+              <td class="py-3 px-3 font-mono text-[11px] text-purple-300 font-semibold">${strat}</td>
+              <td class="py-3 px-3">
                 <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${sideColor}">${t.direction}</span>
               </td>
-              <td class="py-3 px-4 font-mono">${t.entry_price}</td>
-              <td class="py-3 px-4 font-mono text-rose-400">${t.stop_loss}</td>
-              <td class="py-3 px-4 font-mono text-emerald-400">${t.take_profit}</td>
-              <td class="py-3 px-4 font-mono">${t.lot_size}</td>
-              <td class="py-3 px-4">
+              <td class="py-3 px-3 font-mono">${t.entry_price}</td>
+              <td class="py-3 px-3 font-mono text-rose-400">${t.stop_loss}</td>
+              <td class="py-3 px-3 font-mono text-emerald-400">${t.take_profit}</td>
+              <td class="py-3 px-3 font-mono text-center text-purple-300 font-semibold">${plannedRR}</td>
+              <td class="py-3 px-3 font-mono">${t.lot_size}</td>
+              <td class="py-3 px-3 font-mono text-center text-blue-300">${holding}</td>
+              <td class="py-3 px-3">
                 <span class="text-[11px] font-medium text-gray-300">${t.status}</span>
               </td>
-              <td class="py-3 px-4 text-right font-mono ${pnlColor}">${pnlSign}$${t.realized_pnl.toFixed(2)}</td>
+              <td class="py-3 px-3 text-right font-mono ${pnlColor}">${pnlSign}$${t.realized_pnl.toFixed(2)}</td>
             </tr>
           `;
         }).join('');
@@ -1255,15 +1500,23 @@
 
     // Initial load & periodic polling
     fetchState();
+    fetchAnalytics();
     fetchActivationHistory();
     setInterval(fetchState, 2500);
     setInterval(() => {
-      // Periodic history refresh if sessions tab is active
+      const analyticsTab = document.getElementById('viewAnalytics');
+      if (analyticsTab && !analyticsTab.classList.contains('hidden')) {
+        fetchAnalytics();
+      }
+      const historyTab = document.getElementById('viewHistory');
+      if (historyTab && !historyTab.classList.contains('hidden')) {
+        fetchTradeHistory();
+      }
       const sessionTab = document.getElementById('viewSessions');
       if (sessionTab && !sessionTab.classList.contains('hidden')) {
         fetchActivationHistory();
       }
-    }, 5000);
+    }, 4000);
 
     // Auto-save event listeners for immediate responsiveness
     const stratSMC_el = document.getElementById('stratSMC');

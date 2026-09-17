@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import asyncio
+from datetime import datetime, timezone
 from typing import List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -28,6 +29,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_instrument
 from main import TradingBot, parse_ltf_to_seconds
+from state import format_duration
 
 
 # ─────────────────────────────────────────────
@@ -79,6 +81,7 @@ class BotStateResponse(BaseModel):
     available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT"]
     stats_by_strategy: dict = {}
     stats_by_pair: dict = {}
+    performance_metrics: dict = {}
 
 
 
@@ -196,6 +199,8 @@ async def get_bot_state():
         "enabled": bot_instance.config.pair2.enabled,
     }
 
+    metrics = bot_instance.state.get_performance_metrics()
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols[:2],
@@ -223,6 +228,7 @@ async def get_bot_state():
         available_strategies=["SMC", "SMC_SCALP_5M", "ICT"],
         stats_by_strategy=stats_by_strategy,
         stats_by_pair=stats_by_pair,
+        performance_metrics=metrics,
     )
 
 
@@ -409,43 +415,81 @@ async def manual_trigger_tick():
 
 @app.get("/api/trades")
 async def get_trade_history():
-    """Return historical executed trades, entry/exit prices, status, and net PnL."""
+    """Return historical executed trades, entry/exit prices, status, holding times, and performance metrics."""
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
     
     records = bot_instance.state.get_all_trades(limit=100)
     trades_data = []
-    total_realized_pnl = 0.0
+    now_dt = datetime.now(timezone.utc)
 
     for r in records:
-        total_realized_pnl += r.realized_pnl
+        dur_sec = r.duration_seconds
+        if (dur_sec <= 0.0 or dur_sec is None) and r.timestamp:
+            try:
+                t_dt = r.timestamp if r.timestamp.tzinfo else r.timestamp.replace(tzinfo=timezone.utc)
+                if r.status != 'OPEN' and r.closed_at:
+                    c_dt = r.closed_at if r.closed_at.tzinfo else r.closed_at.replace(tzinfo=timezone.utc)
+                    dur_sec = max(0.0, (c_dt - t_dt).total_seconds())
+                else:
+                    dur_sec = max(0.0, (now_dt - t_dt).total_seconds())
+            except Exception:
+                dur_sec = 0.0
+
+        # Calculate Planned R:R
+        sl_dist = abs(r.entry_price - r.stop_loss)
+        tp_dist = abs(r.take_profit - r.entry_price)
+        planned_rr = round(tp_dist / sl_dist, 2) if sl_dist > 0.00001 else 2.0
+
         trades_data.append({
             "id": r.id,
             "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "closed_at": r.closed_at.strftime("%Y-%m-%d %H:%M:%S UTC") if r.closed_at else None,
             "symbol": r.symbol,
             "direction": r.direction.value if hasattr(r.direction, 'value') else str(r.direction),
+            "strategy_name": r.strategy_name,
             "entry_price": round(r.entry_price, 5),
             "stop_loss": round(r.stop_loss, 5),
             "take_profit": round(r.take_profit, 5),
+            "planned_rr": planned_rr,
             "lot_size": round(r.lot_size, 2),
             "realized_pnl": round(r.realized_pnl, 2),
             "status": r.status,
+            "duration_seconds": round(dur_sec, 1),
+            "holding_time_formatted": bot_instance.state.__class__.__module__ and format_duration(dur_sec),
         })
 
-    closed = [t for t in trades_data if t["status"] != "OPEN"]
-    wins = [t for t in closed if t["realized_pnl"] > 0]
-    losses = [t for t in closed if t["realized_pnl"] < 0]
-    accuracy = round((len(wins) / len(closed) * 100), 1) if closed else 0.0
+    metrics = bot_instance.state.get_performance_metrics()
 
     return {
         "trades": trades_data,
-        "total_trades": len(trades_data),
-        "total_pnl": round(total_realized_pnl, 2),
-        "accuracy": accuracy,
-        "winning_trades": len(wins),
-        "losing_trades": len(losses),
-        "total_closed_trades": len(closed),
+        "metrics": metrics,
+        "total_trades": metrics.get("total_trades", len(trades_data)),
+        "total_closed_trades": metrics.get("total_closed_trades", 0),
+        "total_open_trades": metrics.get("total_open_trades", 0),
+        "total_tp": metrics.get("total_tp", 0),
+        "total_sl": metrics.get("total_sl", 0),
+        "total_pnl": metrics.get("total_pnl", 0.0),
+        "accuracy": metrics.get("accuracy", 0.0),
+        "win_rate": metrics.get("win_rate", 0.0),
+        "win_loss_diff": metrics.get("win_loss_diff", 0),
+        "winning_trades": metrics.get("winning_trades", 0),
+        "losing_trades": metrics.get("losing_trades", 0),
+        "formatted_avg_rr": metrics.get("formatted_avg_rr", "1:2.50"),
+        "formatted_realized_rr": metrics.get("formatted_realized_rr", "1:2.50"),
+        "formatted_avg_holding_time": metrics.get("formatted_avg_holding_time", "---"),
+        "formatted_total_holding_time": metrics.get("formatted_total_holding_time", "---"),
+        "profit_factor": metrics.get("profit_factor", 0.0),
     }
+
+
+@app.get("/api/performance_metrics")
+@app.get("/api/analytics")
+async def get_analytics_metrics():
+    """Return comprehensive performance metrics, SL/TP stats, win rates, RR ratios, and holding times."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    return bot_instance.state.get_performance_metrics()
 
 
 @app.post("/api/trades/clear")

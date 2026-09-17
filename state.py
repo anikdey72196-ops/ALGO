@@ -23,6 +23,8 @@ class TradeRecord:
     status: str  # 'OPEN', 'CLOSED_TP', 'CLOSED_SL', 'CLOSED_MANUAL'
     strategy_name: str = "SMC"
     magic_number: int = 123456
+    closed_at: datetime | None = None
+    duration_seconds: float = 0.0
 
 
 @dataclass
@@ -111,6 +113,14 @@ class StateManager:
                 self.conn.execute("ALTER TABLE trade_log ADD COLUMN magic_number INTEGER DEFAULT 123456")
             except sqlite3.OperationalError:
                 pass
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN closed_at TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN duration_seconds REAL DEFAULT 0.0")
+            except sqlite3.OperationalError:
+                pass
 
         logger.info(f"Database schema initialized at {self.db_path}")
     
@@ -189,7 +199,7 @@ class StateManager:
 
     
     def update_trade_pnl(self, trade_id: int, pnl: float, status: str) -> None:
-        """Update a trade's realized PnL and status."""
+        """Update a trade's realized PnL and status, recording close timestamp and duration."""
         with self.conn:
             # Get existing pnl to calculate diff for daily_state update
             cursor = self.conn.execute('SELECT timestamp, realized_pnl FROM trade_log WHERE id = ?', (trade_id,))
@@ -202,11 +212,18 @@ class StateManager:
             trade_timestamp = datetime.fromisoformat(row['timestamp'])
             date_str = trade_timestamp.date().isoformat()
             
+            now_dt = datetime.now(timezone.utc)
+            if trade_timestamp.tzinfo is None:
+                trade_dt = trade_timestamp.replace(tzinfo=timezone.utc)
+            else:
+                trade_dt = trade_timestamp
+            duration_sec = max(0.0, (now_dt - trade_dt).total_seconds())
+
             self.conn.execute('''
                 UPDATE trade_log
-                SET realized_pnl = ?, status = ?
+                SET realized_pnl = ?, status = ?, closed_at = ?, duration_seconds = ?
                 WHERE id = ?
-            ''', (pnl, status, trade_id))
+            ''', (pnl, status, now_dt.isoformat(), duration_sec, trade_id))
             
             # Update daily_state
             pnl_diff = pnl - old_pnl
@@ -217,7 +234,7 @@ class StateManager:
                     WHERE date = ?
                 ''', (pnl_diff, date_str))
                 
-        logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}")
+        logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}, duration={format_duration(duration_sec)}")
         self._sync_trades_csv()
 
     def _sync_trades_csv(self) -> None:
@@ -334,7 +351,7 @@ class StateManager:
         cursor = self.conn.execute('''
             SELECT id, timestamp, symbol, direction, entry_price, 
                    stop_loss, take_profit, lot_size, realized_pnl, status,
-                   strategy_name, magic_number
+                   strategy_name, magic_number, closed_at, duration_seconds
             FROM trade_log
             WHERE status = 'OPEN'
         ''')
@@ -360,6 +377,8 @@ class StateManager:
                 status=row['status'],
                 strategy_name=row['strategy_name'] if 'strategy_name' in row.keys() and row['strategy_name'] else "SMC",
                 magic_number=row['magic_number'] if 'magic_number' in row.keys() and row['magic_number'] else 123456,
+                closed_at=datetime.fromisoformat(row['closed_at']) if 'closed_at' in row.keys() and row['closed_at'] else None,
+                duration_seconds=float(row['duration_seconds'] or 0.0) if 'duration_seconds' in row.keys() and row['duration_seconds'] else 0.0,
             )
             open_trades.append(trade)
             
@@ -370,7 +389,7 @@ class StateManager:
         cursor = self.conn.execute('''
             SELECT id, timestamp, symbol, direction, entry_price, 
                    stop_loss, take_profit, lot_size, realized_pnl, status,
-                   strategy_name, magic_number
+                   strategy_name, magic_number, closed_at, duration_seconds
             FROM trade_log
             ORDER BY id DESC
             LIMIT ?
@@ -397,6 +416,8 @@ class StateManager:
                 status=row['status'],
                 strategy_name=row['strategy_name'] if 'strategy_name' in row.keys() and row['strategy_name'] else "SMC",
                 magic_number=row['magic_number'] if 'magic_number' in row.keys() and row['magic_number'] else 123456,
+                closed_at=datetime.fromisoformat(row['closed_at']) if 'closed_at' in row.keys() and row['closed_at'] else None,
+                duration_seconds=float(row['duration_seconds'] or 0.0) if 'duration_seconds' in row.keys() and row['duration_seconds'] else 0.0,
             )
             trades.append(trade)
             
@@ -503,29 +524,117 @@ class StateManager:
         return stats
 
     def get_performance_metrics(self) -> dict:
-        """Aggregate performance metrics across all trades."""
+        """
+        Comprehensive analytics for the dashboard:
+        - total_trades, total_open, total_closed
+        - total_tp, total_sl, tp_amount, sl_amount
+        - win_rate (pct), win_loss_diff (can be negative)
+        - avg_planned_rr, realized_rr
+        - avg_holding_time, total_holding_time
+        - profit_factor, best_trade, worst_trade
+        - strategy_breakdown, pair_breakdown
+        """
         cursor = self.conn.execute('''
-            SELECT COUNT(*) as total_closed,
-                   SUM(CASE WHEN status = 'CLOSED_TP' OR realized_pnl > 0 THEN 1 ELSE 0 END) as wins,
-                   SUM(CASE WHEN status = 'CLOSED_SL' OR realized_pnl < 0 THEN 1 ELSE 0 END) as losses,
-                   SUM(realized_pnl) as total_pnl
+            SELECT id, timestamp, entry_price, stop_loss, take_profit,
+                   realized_pnl, status, duration_seconds, closed_at
             FROM trade_log
-            WHERE status != 'OPEN'
         ''')
-        row = cursor.fetchone()
+        rows = cursor.fetchall()
         
-        total = int(row['total_closed'] or 0)
-        wins = int(row['wins'] or 0)
-        losses = int(row['losses'] or 0)
-        pnl = float(row['total_pnl'] or 0.0)
-        win_rate = round((wins / total * 100.0), 1) if total > 0 else 0.0
+        total_trades = len(rows)
+        closed_rows = [r for r in rows if r['status'] != 'OPEN']
+        open_rows = [r for r in rows if r['status'] == 'OPEN']
+        
+        total_closed = len(closed_rows)
+        total_open = len(open_rows)
+        
+        tp_rows = [r for r in closed_rows if r['status'] == 'CLOSED_TP' or (r['realized_pnl'] and r['realized_pnl'] > 0)]
+        sl_rows = [r for r in closed_rows if r['status'] == 'CLOSED_SL' or (r['realized_pnl'] and r['realized_pnl'] < 0)]
+        
+        total_tp = len(tp_rows)
+        total_sl = len(sl_rows)
+        
+        total_tp_pnl = sum(float(r['realized_pnl'] or 0.0) for r in tp_rows)
+        total_sl_pnl = sum(float(r['realized_pnl'] or 0.0) for r in sl_rows)
+        total_pnl = sum(float(r['realized_pnl'] or 0.0) for r in closed_rows)
+        
+        win_rate = round((total_tp / total_closed * 100.0), 1) if total_closed > 0 else 0.0
+        win_loss_diff = total_tp - total_sl  # Can be positive or negative
+        
+        # Risk-to-reward calculation
+        rr_list = []
+        for r in rows:
+            entry = float(r['entry_price'] or 0.0)
+            sl = float(r['stop_loss'] or 0.0)
+            tp = float(r['take_profit'] or 0.0)
+            sl_dist = abs(entry - sl)
+            tp_dist = abs(tp - entry)
+            if sl_dist > 0.000001:
+                rr_list.append(tp_dist / sl_dist)
+                
+        avg_planned_rr = round(sum(rr_list) / len(rr_list), 2) if rr_list else 2.50
+        
+        avg_win_pnl = total_tp_pnl / total_tp if total_tp > 0 else 0.0
+        avg_loss_pnl = abs(total_sl_pnl / total_sl) if total_sl > 0 else 0.0
+        realized_rr = round(avg_win_pnl / avg_loss_pnl, 2) if avg_loss_pnl > 0.0001 else avg_planned_rr
+        
+        # Holding duration
+        durations = []
+        now_dt = datetime.now(timezone.utc)
+        for r in closed_rows:
+            dur = float(r['duration_seconds'] or 0.0)
+            if dur <= 0.0 and r['timestamp']:
+                try:
+                    t_dt = datetime.fromisoformat(r['timestamp'])
+                    if t_dt.tzinfo is None:
+                        t_dt = t_dt.replace(tzinfo=timezone.utc)
+                    if r['closed_at']:
+                        c_dt = datetime.fromisoformat(r['closed_at'])
+                        if c_dt.tzinfo is None:
+                            c_dt = c_dt.replace(tzinfo=timezone.utc)
+                        dur = max(0.0, (c_dt - t_dt).total_seconds())
+                    else:
+                        dur = max(0.0, (now_dt - t_dt).total_seconds())
+                except Exception:
+                    dur = 0.0
+            if dur > 0.0:
+                durations.append(dur)
+                
+        total_holding_sec = sum(durations)
+        avg_holding_sec = total_holding_sec / len(durations) if durations else 0.0
+        
+        profit_factor = round(abs(total_tp_pnl) / max(0.01, abs(total_sl_pnl)), 2) if abs(total_sl_pnl) > 0 else (round(total_tp_pnl, 2) if total_tp_pnl > 0 else 0.0)
+        
+        all_pnls = [float(r['realized_pnl'] or 0.0) for r in closed_rows]
+        best_trade = round(max(all_pnls), 2) if all_pnls else 0.0
+        worst_trade = round(min(all_pnls), 2) if all_pnls else 0.0
         
         return {
-            "total_closed_trades": total,
-            "winning_trades": wins,
-            "losing_trades": losses,
+            "total_trades": total_trades,
+            "total_closed_trades": total_closed,
+            "total_open_trades": total_open,
+            "total_tp": total_tp,
+            "total_sl": total_sl,
+            "winning_trades": total_tp,
+            "losing_trades": total_sl,
+            "total_tp_pnl": round(total_tp_pnl, 2),
+            "total_sl_pnl": round(total_sl_pnl, 2),
+            "total_pnl": round(total_pnl, 2),
+            "win_rate": win_rate,
             "accuracy": win_rate,
-            "total_pnl": round(pnl, 2),
+            "win_loss_diff": win_loss_diff,
+            "win_loss_ratio": round(total_tp / max(1, total_sl), 2),
+            "avg_planned_rr": avg_planned_rr,
+            "formatted_avg_rr": f"1:{avg_planned_rr:.2f}",
+            "realized_rr": realized_rr,
+            "formatted_realized_rr": f"1:{realized_rr:.2f}",
+            "avg_holding_seconds": round(avg_holding_sec, 1),
+            "formatted_avg_holding_time": format_duration(avg_holding_sec),
+            "total_holding_seconds": round(total_holding_sec, 1),
+            "formatted_total_holding_time": format_duration(total_holding_sec),
+            "profit_factor": profit_factor,
+            "best_trade_pnl": best_trade,
+            "worst_trade_pnl": worst_trade,
             "by_strategy": self.get_stats_by_strategy(),
             "by_pair": self.get_stats_by_pair(),
         }
