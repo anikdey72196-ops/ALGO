@@ -430,7 +430,15 @@ class TradingBot:
                 logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
 
-            # ── Step 2b: Generate signals across all enabled strategies simultaneously ──
+            # ── Step 2b: Exclude strategies that already have an active open position ──
+            active_strat_names = {t.strategy_name for t in self.state.get_open_positions()}
+            eval_strats = [s for s in self.config.enabled_strategies if s not in active_strat_names]
+
+            if not eval_strats:
+                logger.info(f"  All enabled strategies ({active_strat_names}) already have an active open trade. Skipping Pair {pair_num} ({symbol}).")
+                continue
+
+            # ── Step 2b: Generate signals across eligible strategies ──
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
@@ -438,7 +446,7 @@ class TradingBot:
                 instrument=instrument,
                 current_spread=current_spread,
                 fixed_sl_pips=pair_sl,
-                enabled_strategies=self.config.enabled_strategies,
+                enabled_strategies=eval_strats,
             )
 
             if not signals:

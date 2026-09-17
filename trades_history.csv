@@ -1,1 +1,3 @@
 id,timestamp,symbol,direction,entry_price,stop_loss,take_profit,lot_size,realized_pnl,status,strategy_name,magic_number
+58509995648,2026-09-17T13:06:24.318323+00:00,EURUSD,SELL,1.149,1.1505,1.14675,0.02,0.0,OPEN,SMC Scalp (5m),125456
+58509970188,2026-09-17T13:05:24.314918+00:00,EURUSD,SELL,1.14903,1.15053,1.14678,0.02,0.0,OPEN,SMC Scalp (5m),125456
