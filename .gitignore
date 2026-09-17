@@ -1,6 +1,5 @@
 .env 
 .env.example
-run_dashboard.py
 logs/
 __pycache__/
 *.pyc
