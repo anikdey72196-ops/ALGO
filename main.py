@@ -386,6 +386,10 @@ class TradingBot:
                 instrument = get_instrument(self.config, symbol)
             except ValueError:
                 logger.warning(f"  Symbol '{symbol}' not in configured instruments. Skipping.")
+            # ── Check if symbol already has an active open position ──
+            open_pos = [t for t in self.state.get_open_positions() if t.symbol == symbol]
+            if open_pos:
+                self.log(f"  ⏸️ Existing position #{open_pos[0].id} ({open_pos[0].strategy_name}) is already OPEN for {symbol}. Skipping new entry.")
                 continue
 
             htf_tf = "1H"

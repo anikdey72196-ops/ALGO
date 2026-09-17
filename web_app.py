@@ -18,7 +18,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -30,8 +30,6 @@ from config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_instrume
 from main import TradingBot, parse_ltf_to_seconds
 
 
-# ─────────────────────────────────────────────
-#  Pydantic Schemas for Web API
 # ─────────────────────────────────────────────
 #  Pydantic Schemas for Web API
 # ─────────────────────────────────────────────
@@ -448,6 +446,49 @@ async def get_trade_history():
         "losing_trades": len(losses),
         "total_closed_trades": len(closed),
     }
+
+
+@app.post("/api/trades/clear")
+async def clear_trades():
+    """Clear closed trade ledger history."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    bot_instance.state.clear_trade_history()
+    bot_instance.log("🧹 Trade ledger cleared.")
+    return {"status": "success", "message": "Trade history cleared."}
+
+
+@app.get("/api/trades/export_csv")
+@app.get("/api/trades/download_csv")
+async def export_trades_csv():
+    """Download trade ledger as a CSV file."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    bot_instance.state._sync_trades_csv()
+    csv_file = Path(bot_instance.state.csv_path)
+    if not csv_file.exists():
+        raise HTTPException(status_code=404, detail="Trades CSV not found")
+    return FileResponse(
+        path=str(csv_file),
+        filename="trades_history.csv",
+        media_type="text/csv"
+    )
+
+
+@app.get("/api/sessions/export_csv")
+async def export_sessions_csv():
+    """Download bot sessions history as a CSV file."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    bot_instance.state._sync_sessions_csv()
+    csv_file = Path(bot_instance.state.sessions_csv_path)
+    if not csv_file.exists():
+        raise HTTPException(status_code=404, detail="Sessions CSV not found")
+    return FileResponse(
+        path=str(csv_file),
+        filename="sessions_history.csv",
+        media_type="text/csv"
+    )
 
 
 @app.get("/api/activation_history")

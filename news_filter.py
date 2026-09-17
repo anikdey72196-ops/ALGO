@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
+# pyrefly: ignore [missing-import]
 from loguru import logger
 from config import Impact, InstrumentConfig
 

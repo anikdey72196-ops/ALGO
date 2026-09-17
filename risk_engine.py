@@ -1,6 +1,7 @@
 from __future__ import annotations
 import math
 from dataclasses import dataclass
+# pyrefly: ignore [missing-import]
 from loguru import logger
 from config import AccountConfig, RiskConfig, InstrumentConfig, TradingConfig, get_instrument
 from state import StateManager
@@ -116,6 +117,28 @@ class RiskEngine:
             return AuthorizationResult(
                 authorized=False, 
                 rejection_reason=str(e), 
+                account_equity=current_equity
+            )
+
+        # ── Strict Rule 1: No duplicate trade if a position is already open for this symbol ──
+        open_symbol_trades = [t for t in self.state.get_open_positions() if t.symbol == signal.symbol]
+        if open_symbol_trades:
+            msg = f"Position already open for {signal.symbol} (ID #{open_symbol_trades[0].id} | {open_symbol_trades[0].strategy_name}). Duplicate entry blocked."
+            logger.info(f"Trade rejected: {msg}")
+            return AuthorizationResult(
+                authorized=False,
+                rejection_reason=msg,
+                account_equity=current_equity
+            )
+
+        # ── Strict Rule 2: No concurrent trades using the exact same strategy ──
+        open_strat_trades = [t for t in self.state.get_open_positions() if t.strategy_name == signal.strategy_name]
+        if open_strat_trades:
+            msg = f"Strategy '{signal.strategy_name}' already has an active trade (ID #{open_strat_trades[0].id} on {open_strat_trades[0].symbol}). Concurrent strategy entry blocked."
+            logger.info(f"Trade rejected: {msg}")
+            return AuthorizationResult(
+                authorized=False,
+                rejection_reason=msg,
                 account_equity=current_equity
             )
             

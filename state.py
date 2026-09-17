@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sqlite3
+import csv
 from datetime import datetime, date, timezone
 from dataclasses import dataclass, field
 from typing import Optional
@@ -39,17 +40,26 @@ class BotSessionRecord:
 
 
 class StateManager:
-    """Persistent state backed by SQLite."""
+    """Persistent state backed by SQLite and automatic CSV file export."""
     
-    def __init__(self, db_path: str = 'trading_state.db'):
-        """Initialize DB connection and create tables if not exist."""
+    def __init__(
+        self,
+        db_path: str = 'trading_state.db',
+        csv_path: str = 'trades_history.csv',
+        sessions_csv_path: str = 'sessions_history.csv',
+    ):
+        """Initialize DB connection, create tables, and sync CSV files."""
         self.db_path = db_path
+        self.csv_path = csv_path
+        self.sessions_csv_path = sessions_csv_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._init_schema()
         self._ensure_daily_row(datetime.now(timezone.utc).date())
         self.cleanup_interrupted_sessions()
+        self._sync_trades_csv()
+        self._sync_sessions_csv()
     
     def _init_schema(self) -> None:
         """Create tables: daily_state, trade_log, bot_sessions with migrations."""
@@ -174,6 +184,7 @@ class StateManager:
             ''', (trade.realized_pnl, date_str))
             
         logger.info(f"Recorded trade {trade_id} ({trade.strategy_name}) for {trade.symbol} at {trade.entry_price}")
+        self._sync_trades_csv()
         return trade_id
 
     
@@ -207,6 +218,65 @@ class StateManager:
                 ''', (pnl_diff, date_str))
                 
         logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}")
+        self._sync_trades_csv()
+
+    def _sync_trades_csv(self) -> None:
+        """Export current trade_log table into trades_history.csv."""
+        try:
+            trades = self.get_all_trades(limit=5000)
+            fieldnames = [
+                "id", "timestamp", "symbol", "direction", "entry_price",
+                "stop_loss", "take_profit", "lot_size", "realized_pnl",
+                "status", "strategy_name", "magic_number"
+            ]
+            with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for t in trades:
+                    writer.writerow({
+                        "id": t.id,
+                        "timestamp": t.timestamp.isoformat(),
+                        "symbol": t.symbol,
+                        "direction": t.direction.value if hasattr(t.direction, 'value') else str(t.direction),
+                        "entry_price": t.entry_price,
+                        "stop_loss": t.stop_loss,
+                        "take_profit": t.take_profit,
+                        "lot_size": t.lot_size,
+                        "realized_pnl": t.realized_pnl,
+                        "status": t.status,
+                        "strategy_name": t.strategy_name,
+                        "magic_number": t.magic_number,
+                    })
+        except Exception as e:
+            logger.error(f"Failed to sync trades CSV: {e}")
+
+    def _sync_sessions_csv(self) -> None:
+        """Export current bot_sessions table into sessions_history.csv."""
+        try:
+            sessions = self.get_activation_history(limit=5000)
+            fieldnames = [
+                "id", "activation_time", "deactivation_time", "formatted_duration",
+                "duration_seconds", "symbols", "lot_size", "trigger_source",
+                "deactivation_reason", "status"
+            ]
+            with open(self.sessions_csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for s in sessions:
+                    writer.writerow({
+                        "id": s.get("id"),
+                        "activation_time": s.get("activation_time"),
+                        "deactivation_time": s.get("deactivation_time"),
+                        "formatted_duration": s.get("formatted_duration"),
+                        "duration_seconds": s.get("duration_seconds"),
+                        "symbols": s.get("symbols"),
+                        "lot_size": s.get("lot_size"),
+                        "trigger_source": s.get("trigger_source"),
+                        "deactivation_reason": s.get("deactivation_reason"),
+                        "status": s.get("status"),
+                    })
+        except Exception as e:
+            logger.error(f"Failed to sync sessions CSV: {e}")
     
     def get_daily_pnl(self, today: date | None = None) -> float:
         """Sum of realized PnL for today (UTC)."""
@@ -518,6 +588,7 @@ class StateManager:
             session_id = cursor.lastrowid
             
         logger.info(f"[ACTIVATED] Recorded bot activation session #{session_id} for {symbols_str} (Trigger: {trigger_source})")
+        self._sync_sessions_csv()
         return session_id
 
     def record_deactivation(
@@ -566,6 +637,7 @@ class StateManager:
             ''', (now_iso, duration_sec, reason, active_id))
             
         logger.info(f"[DEACTIVATED] Recorded bot deactivation for session #{active_id}. Duration: {format_duration(duration_sec)} ({reason})")
+        self._sync_sessions_csv()
         return active_id
 
     def get_active_session(self) -> dict | None:
@@ -687,6 +759,15 @@ class StateManager:
         with self.conn:
             self.conn.execute("DELETE FROM bot_sessions WHERE status != 'ACTIVE'")
         logger.info("Cleared non-active bot session history.")
+        self._sync_sessions_csv()
+
+    def clear_trade_history(self) -> None:
+        """Clear historical trade records (keeps OPEN positions)."""
+        with self.conn:
+            self.conn.execute("DELETE FROM trade_log WHERE status != 'OPEN'")
+            self.conn.execute("UPDATE daily_state SET trade_count = 0, realized_pnl = 0.0")
+        logger.info("Cleared closed trade records and reset daily counters.")
+        self._sync_trades_csv()
 
     def close(self) -> None:
         """Close DB connection."""
