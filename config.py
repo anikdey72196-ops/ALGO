@@ -168,6 +168,12 @@ class RiskConfig(BaseModel):
         le=20,
         description="Maximum number of trades per UTC day.",
     )
+    max_open_positions: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Maximum concurrent open positions allowed across all pairs/strategies.",
+    )
     min_tp_spread_multiple: float = Field(
         default=6.0,
         ge=1.0,

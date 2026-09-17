@@ -336,6 +336,17 @@ class TradingBot:
         self._check_day_rollover()
         self._sync_open_positions()
 
+        # Step 1b: Max concurrent open positions guard (e.g. max 2 open trades)
+        open_trades = self.state.get_open_positions()
+        max_open = getattr(self.config.risk, 'max_open_positions', 2)
+        if len(open_trades) >= max_open:
+            self.log(
+                f"⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                f"Skipping new trade execution until an existing position closes.",
+                level="INFO"
+            )
+            return
+
         # Build independent pair targets
         active_pairs = []
         if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol:
@@ -486,7 +497,7 @@ class TradingBot:
                 stop_loss=best_signal.stop_loss,
                 take_profit=best_signal.take_profit,
                 magic=best_signal.magic_number,
-                comment=f"{best_signal.strategy_id}|{best_signal.ltf_confirmation.value}|RR{best_signal.rr_ratio:.1f}",
+                comment=f"{best_signal.strategy_name[:6]}_{best_signal.direction.value}_{best_signal.ltf_confirmation.value[:8]}",
             )
 
             order_result = self.broker.send_bracket_order(bracket)
@@ -615,8 +626,8 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     if not bot.startup():
         return
 
-    interval_seconds = parse_ltf_to_seconds(bot.config.timeframes.ltf)
-    logger.info(f"Scheduling tick every {interval_seconds}s ({bot.config.timeframes.ltf})")
+    interval_seconds = 60  # Fast 1-minute scan loop
+    logger.info(f"Scheduling tick every {interval_seconds}s (1-minute continuous scan)")
 
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(

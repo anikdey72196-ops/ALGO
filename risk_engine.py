@@ -69,14 +69,13 @@ class RiskEngine:
         """
         if self.state.is_circuit_breaker_active():
             return True, 'Circuit breaker active: daily loss limit reached'
-            
-        # --- Daily trade limit temporarily disabled for extensive retesting ---
-        # count = self.state.get_trade_count()
-        # max_trades = self.config.risk.max_daily_trades
-        # if count >= max_trades:
-        #     return True, f'Daily trade limit reached ({count}/{max_trades})'
 
-            
+        # Check maximum concurrent open positions
+        open_positions = self.state.get_open_positions()
+        max_open = getattr(self.config.risk, 'max_open_positions', 2)
+        if len(open_positions) >= max_open:
+            return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
+
         pnl = self.state.get_daily_pnl()
         limit = equity * self.config.account.max_daily_drawdown_pct
         if pnl < 0 and abs(pnl) >= limit:

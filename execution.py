@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import re
 import time as _time
 import random
 from abc import ABC, abstractmethod
@@ -206,35 +207,68 @@ class MT5Adapter(BrokerAdapter):
         broker_symbol = self.resolve_symbol(order.symbol)
         mt5.symbol_select(broker_symbol, True)
 
-        order_type = mt5.ORDER_TYPE_BUY if order.direction == Direction.BUY else mt5.ORDER_TYPE_SELL
-        
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": broker_symbol,
-            "volume": order.lot_size,
-            "type": order_type,
-            "price": order.entry_price,
-            "sl": order.stop_loss,
-            "tp": order.take_profit,
-            "deviation": 20,
-            "magic": order.magic,
-            "comment": order.comment,
+        sym_info = mt5.symbol_info(broker_symbol)
+        digits = sym_info.digits if sym_info else 5
 
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
-        }
-        
+        # Determine broker-supported filling mode dynamically
+        filling_modes = []
+        if sym_info is not None:
+            mode = sym_info.filling_mode
+            if mode & 1:  # SYMBOL_FILLING_FOK
+                filling_modes.append(mt5.ORDER_FILLING_FOK)
+            if mode & 2:  # SYMBOL_FILLING_IOC
+                filling_modes.append(mt5.ORDER_FILLING_IOC)
+            filling_modes.append(mt5.ORDER_FILLING_RETURN)
+        if not filling_modes:
+            filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
+
+        order_type = mt5.ORDER_TYPE_BUY if order.direction == Direction.BUY else mt5.ORDER_TYPE_SELL
+
         last_retcode = None
+        last_error_msg = "Order failed"
+
         for attempt in range(self.max_retries):
+            # Fetch fresh tick price immediately before sending
+            tick = mt5.symbol_info_tick(broker_symbol)
+            if tick is not None:
+                current_price = tick.ask if order.direction == Direction.BUY else tick.bid
+            else:
+                current_price = order.entry_price
+
+            # Select filling mode for this attempt (try primary first, then fallbacks)
+            current_filling = filling_modes[attempt % len(filling_modes)]
+
+            # Sanitize comment for broker/MT5 compliance (alphanumeric only, max 31 chars)
+            clean_comment = ""
+            if order.comment:
+                clean_comment = re.sub(r'[^a-zA-Z0-9_\- ]', '', str(order.comment))[:31]
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": broker_symbol,
+                "volume": float(order.lot_size),
+                "type": order_type,
+                "price": round(current_price, digits),
+                "sl": round(order.stop_loss, digits) if order.stop_loss else 0.0,
+                "tp": round(order.take_profit, digits) if order.take_profit else 0.0,
+                "deviation": 20,
+                "magic": order.magic,
+                "comment": clean_comment,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": current_filling,
+            }
+
             result = mt5.order_send(request)
             if result is None:
                 err = mt5.last_error()
-                logger.error(f"MT5 order_send failed on attempt {attempt+1}. Error: {err}")
+                logger.error(f"MT5 order_send returned None on attempt {attempt+1}. Error: {err}")
                 last_retcode = err[0] if isinstance(err, tuple) else None
+                last_error_msg = str(err)
             else:
                 last_retcode = result.retcode
+                last_error_msg = f"Retcode {result.retcode} ({result.comment})"
                 if result.retcode == mt5.TRADE_RETCODE_DONE:
-                    logger.info(f"Order executed successfully! Order ID: {result.order} for {broker_symbol}")
+                    logger.info(f"✅ Order executed successfully! Order #{result.order} for {broker_symbol} @ {result.price}")
                     return OrderResult(
                         success=True,
                         order_id=result.order,
@@ -242,15 +276,15 @@ class MT5Adapter(BrokerAdapter):
                         retries_used=attempt
                     )
                 else:
-                    logger.warning(f"Order failed on attempt {attempt+1} with retcode: {result.retcode}")
-            
+                    logger.warning(f"Order rejected on attempt {attempt+1} (filling_mode={current_filling}): {result.comment} (retcode: {result.retcode})")
+
             _time.sleep(self.retry_delay)
-            
+
         return OrderResult(
-            success=False, 
-            retries_used=self.max_retries, 
-            error_code=last_retcode, 
-            error_message="Order exhausted max retries"
+            success=False,
+            retries_used=self.max_retries,
+            error_code=last_retcode,
+            error_message=last_error_msg,
         )
 
     def get_current_price(self, symbol: str) -> PriceQuote | None:

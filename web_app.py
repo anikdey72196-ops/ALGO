@@ -103,9 +103,9 @@ async def lifespan(app: FastAPI):
 
     config = bot_instance.config
 
-    # Start background scheduler
+    # Start background scheduler — fast 60-second (1-minute) interval for high responsiveness
     scheduler_instance = AsyncIOScheduler(timezone="UTC")
-    interval = parse_ltf_to_seconds(config.timeframes.ltf)
+    interval = 60
     
     # Tick job runs every interval, but bot.tick() checks `if not self.is_active: return`
     scheduler_instance.add_job(
@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
         misfire_grace_time=30,
     )
     scheduler_instance.start()
-    logger.info(f"Background tick scheduler active (interval: {interval}s). Bot starts DEACTIVATED.")
+    logger.info(f"Background tick scheduler active (fast 60s scan interval). Bot starts DEACTIVATED.")
 
     yield
 
