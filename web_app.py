@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from loguru import logger
+import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -82,6 +83,7 @@ class BotStateResponse(BaseModel):
     stats_by_strategy: dict = {}
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
+    ml_trap_detector: dict = {}
 
 
 
@@ -94,12 +96,13 @@ class BotStateResponse(BaseModel):
 bot_instance: TradingBot = TradingBot(DEFAULT_CONFIG)
 bot_instance.startup()
 scheduler_instance: AsyncIOScheduler | None = None
+labeler_task_instance: asyncio.Task | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle manager to initialize background tick scheduler."""
-    global bot_instance, scheduler_instance
+    """Lifecycle manager to initialize background tick scheduler and ML labeler."""
+    global bot_instance, scheduler_instance, labeler_task_instance
     logger.info("Initializing Web Control Server...")
 
     config = bot_instance.config
@@ -120,9 +123,21 @@ async def lifespan(app: FastAPI):
     scheduler_instance.start()
     logger.info(f"Background tick scheduler active (fast 60s scan interval). Bot starts DEACTIVATED.")
 
+    # Schedule ML Trap Detector background labeler task
+    labeler_task_instance = asyncio.create_task(
+        bot_instance.trap_svc.run_labeler(
+            history_provider=lambda sym, tf, n: bot_instance._prepare_df_for_trap_detector(
+                bot_instance._get_ohlcv(sym, tf, count=max(n, 300)) or pd.DataFrame()
+            )
+        )
+    )
+    logger.info("ML Trap Detector background labeler task active.")
+
     yield
 
     # Shutdown
+    if labeler_task_instance:
+        labeler_task_instance.cancel()
     if scheduler_instance:
         scheduler_instance.shutdown(wait=False)
     if bot_instance:
@@ -198,6 +213,25 @@ async def get_bot_state():
         "enabled": bot_instance.config.pair2.enabled,
     }
 
+    # ML Trap Detector status & statistics
+    trap_stats = {}
+    if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+        try:
+            store_stats = bot_instance.trap_svc.store.stats()
+            trap_stats = {
+                "model_version": bot_instance.trap_svc.model.version,
+                "n_samples": bot_instance.trap_svc.model.n_samples,
+                "shadow_until": bot_instance.trap_svc.cfg.shadow_until_samples,
+                "mode": "shadow" if bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples else "gated",
+                "threshold": bot_instance.trap_svc.cfg.p_genuine_threshold,
+                "total_events": store_stats.get("total", 0),
+                "labeled_events": store_stats.get("labeled", 0),
+                "traps_caught": store_stats.get("traps", 0),
+                "genuine_setups": store_stats.get("genuine", 0),
+            }
+        except Exception as e:
+            trap_stats = {"error": str(e)}
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols[:2],
@@ -226,6 +260,7 @@ async def get_bot_state():
         stats_by_strategy=stats_by_strategy,
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
+        ml_trap_detector=trap_stats,
     )
 
 

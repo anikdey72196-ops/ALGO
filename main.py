@@ -10,6 +10,8 @@ import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+import pandas as pd
+
 # pyrefly: ignore [missing-import]
 from loguru import logger
 # pyrefly: ignore [missing-import]
@@ -24,6 +26,7 @@ from strategy import StrategyEngine, TradeSignal
 from conflict_resolver import ConflictResolver
 from risk_engine import RiskEngine
 from ai_analyst import AIAnalyst, AIDecision
+from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
 from execution import (
 
     BrokerAdapter, MockBrokerAdapter, MT5Adapter,
@@ -111,6 +114,15 @@ class TradingBot:
         self.risk_engine = RiskEngine(self.config, self.state)
         self.ai_analyst = AIAnalyst(self.config)
         self.broker = create_broker(self.config)
+
+        # ML Trap Detector — veto gate for FVG / Sweep setups
+        trap_cfg = TrapDetectorConfig(
+            db_path=self.config.db_path,
+            model_path="ml/artifacts/trap_detector.joblib",
+            p_genuine_threshold=0.55,
+            shadow_until_samples=200,
+        )
+        self.trap_svc = TrapDetectorService(trap_cfg)
 
 
         # Price data cache (in production, fetch from broker or data provider)
@@ -247,6 +259,7 @@ class TradingBot:
         if self.is_active:
             self.state.record_deactivation("Server Shutdown")
             self.is_active = False
+        self.trap_svc.close()
         self.broker.disconnect()
         self.state.close()
         logger.info("Shutdown complete.")
@@ -479,6 +492,37 @@ class TradingBot:
                 f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
             )
 
+            # ── Step 2c-1.5: ML Trap Detector Gate (FVG / Sweep veto) ──
+            trap_kind = self._signal_to_trap_kind(best_signal)
+            if trap_kind is not None and ltf_data is not None:
+                try:
+                    trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
+                    ml_df = self._prepare_df_for_trap_detector(ltf_data)
+                    trap_ev = self.trap_svc.observe_event(
+                        symbol=symbol,
+                        timeframe=ltf_tf,
+                        kind=trap_kind,
+                        direction=trap_dir,
+                        entry=best_signal.entry_price,
+                        stop=best_signal.stop_loss,
+                        target=best_signal.take_profit,
+                        df=ml_df,
+                        bar_index=len(ml_df) - 1,
+                    )
+                    if not trap_ev.allowed:
+                        self.log(
+                            f"  🪤 TRAP GATE VETO | p_genuine={trap_ev.p_genuine:.3f} "
+                            f"| {trap_kind.value} | model={trap_ev.model_version}",
+                            level="WARNING",
+                        )
+                        continue
+                    self.log(
+                        f"  🔬 Trap Gate: p_genuine={trap_ev.p_genuine:.3f} "
+                        f"| {trap_kind.value} | mode={'shadow' if trap_ev.model_version == 'cold' else 'gated'}"
+                    )
+                except Exception as e:
+                    self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
+
             # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
             ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
 
@@ -552,15 +596,15 @@ class TradingBot:
         )
 
 
-    def _get_ohlcv(self, symbol: str, timeframe: str):
+    def _get_ohlcv(self, symbol: str, timeframe: str, count: int = 300):
         """
         Fetch OHLCV data for a symbol/timeframe.
         In mock mode: loads synthetic demo data from mock_data.py.
         In live real-market mode: fetches streaming candlesticks from MetaTrader 5.
         """
-        # Check cache
+        # Check cache only for default 300-bar fetch
         cache_key = f"{symbol}_{timeframe}"
-        if cache_key in self._htf_cache:
+        if count == 300 and cache_key in self._htf_cache:
             return self._htf_cache[cache_key]
 
         # In mock mode, generate data on first call
@@ -570,7 +614,8 @@ class TradingBot:
                 datasets = get_demo_datasets()
                 if symbol in datasets and timeframe in datasets[symbol]:
                     df = datasets[symbol][timeframe]
-                    self._htf_cache[cache_key] = df
+                    if count == 300:
+                        self._htf_cache[cache_key] = df
                     return df
             except ImportError:
                 logger.warning("mock_data module not available.")
@@ -601,7 +646,7 @@ class TradingBot:
                 broker_symbol = self.broker.resolve_symbol(symbol)
 
             mt5.symbol_select(broker_symbol, True)
-            rates = mt5.copy_rates_from_pos(broker_symbol, tf_map[timeframe], 0, 300)
+            rates = mt5.copy_rates_from_pos(broker_symbol, tf_map[timeframe], 0, count)
             if rates is None or len(rates) == 0:
                 err = mt5.last_error()
                 logger.warning(f"MT5 returned no rates for {broker_symbol} ({timeframe}). Error: {err}")
@@ -610,10 +655,49 @@ class TradingBot:
             df = pd.DataFrame(rates)
             df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
             df['volume'] = df['tick_volume']
+            if count == 300:
+                self._htf_cache[cache_key] = df
             return df
         except Exception as e:
             logger.error(f"Error fetching live MT5 candles for {symbol} ({timeframe}): {e}")
             return None
+
+    def _prepare_df_for_trap_detector(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure DataFrame has a DatetimeIndex for the ML trap detector without mutating original."""
+        if df is None or df.empty:
+            return pd.DataFrame() if df is None else df
+        if isinstance(df.index, pd.DatetimeIndex):
+            return df
+        if 'time' in df.columns:
+            df_copy = df.copy(deep=False)
+            return df_copy.set_index(pd.to_datetime(df_copy['time'], utc=True))
+        return df
+
+    # ── Trap Detector helpers ──
+
+    _TRAP_KIND_MAP: dict[str, EventKind] = {
+        "FVG_MITIGATION":    EventKind.FVG_BULL,   # direction resolved at call site
+        "OB_PLUS_FVG":       EventKind.FVG_BULL,
+        "ICT_KILLZONE_FVG":  EventKind.FVG_BULL,
+        "LIQUIDITY_SWEEP":   EventKind.SWEEP_BSL,  # direction resolved at call site
+    }
+
+    def _signal_to_trap_kind(self, sig: TradeSignal) -> EventKind | None:
+        """Map a TradeSignal's LTF confirmation to a TrapDetector EventKind.
+
+        Returns None for confirmation types that don't correspond to an FVG or
+        sweep pattern (OB-only, scalps, etc.) — those pass through unfiltered.
+        """
+        base = self._TRAP_KIND_MAP.get(sig.ltf_confirmation.value)
+        if base is None:
+            return None
+        # Resolve directional variant
+        if base in (EventKind.FVG_BULL, EventKind.FVG_BEAR):
+            return EventKind.FVG_BULL if sig.direction == Direction.BUY else EventKind.FVG_BEAR
+        # Sweeps: BSL taken → potential short; SSL taken → potential long
+        if sig.direction == Direction.BUY:
+            return EventKind.SWEEP_SSL
+        return EventKind.SWEEP_BSL
 
     def set_data(self, symbol: str, timeframe: str, df) -> None:
         """Manually inject OHLCV data (useful for backtesting)."""
@@ -659,6 +743,15 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     # Run one tick immediately on startup
     bot.tick()
 
+    # Schedule the ML Trap Detector labeler as a background task
+    labeler_task = asyncio.create_task(
+        bot.trap_svc.run_labeler(
+            history_provider=lambda sym, tf, n: bot._prepare_df_for_trap_detector(
+                bot._get_ohlcv(sym, tf, count=max(n, 300)) or pd.DataFrame()
+            )
+        )
+    )
+
     scheduler.start()
     logger.info("Scheduler started. Press Ctrl+C to stop.")
 
@@ -675,6 +768,7 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     try:
         await stop_event.wait()
     finally:
+        labeler_task.cancel()
         scheduler.shutdown(wait=False)
         bot.shutdown()
 
