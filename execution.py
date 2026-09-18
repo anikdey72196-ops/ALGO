@@ -81,6 +81,10 @@ class BrokerAdapter(ABC):
     def get_open_positions(self, symbol: str | None = None) -> list[dict]:
         """Get open positions, optionally filtered by symbol."""
 
+    def ensure_connected(self) -> bool:
+        """Ensure connection to the broker is active."""
+        return True
+
 
 class MT5Adapter(BrokerAdapter):
     r"""
@@ -104,11 +108,37 @@ class MT5Adapter(BrokerAdapter):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self._symbol_cache: dict[str, str] = {}
-    
+        self._last_connect_attempt: float = 0.0
+        self._reconnect_cooldown: float = 5.0
+
+    def is_connected(self) -> bool:
+        """Check if MT5 terminal is running and a trading account is active."""
+        if mt5 is None:
+            return False
+        try:
+            term = mt5.terminal_info()
+            if term is None:
+                return False
+            acc = mt5.account_info()
+            return acc is not None and getattr(acc, 'login', 0) > 0
+        except Exception:
+            return False
+
+    def ensure_connected(self) -> bool:
+        """Automatically reconnect if MT5 terminal or account is not currently connected."""
+        if self.is_connected():
+            return True
+        now = _time.time()
+        if now - self._last_connect_attempt < self._reconnect_cooldown:
+            return False
+        self._last_connect_attempt = now
+        return self.connect()
+
     def resolve_symbol(self, symbol: str) -> str:
         """Find the broker's exact symbol name, matching prefixes/suffixes (e.g. XAUUSDm, XAUUSD.a, GOLD)."""
         if mt5 is None:
             return symbol
+        self.ensure_connected()
         if symbol in self._symbol_cache:
             return self._symbol_cache[symbol]
 
@@ -191,9 +221,10 @@ class MT5Adapter(BrokerAdapter):
                 f"✅ Connected to MetaTrader 5 | Account #{acc.login} ({acc.server}) | "
                 f"Balance: ${acc.balance:,.2f} | Equity: ${acc.equity:,.2f} | Leverage: 1:{acc.leverage}"
             )
+            return True
         else:
             logger.warning("Connected to MT5, but no account is active. Please log in inside the MT5 terminal.")
-        return True
+            return False
 
     def disconnect(self) -> None:
         if mt5:
@@ -203,6 +234,8 @@ class MT5Adapter(BrokerAdapter):
     def send_bracket_order(self, order: BracketOrder) -> OrderResult:
         if mt5 is None:
             return OrderResult(success=False, error_message="MT5 not installed")
+        if not self.ensure_connected():
+            return OrderResult(success=False, error_message="MT5 terminal not connected or not logged in")
 
         broker_symbol = self.resolve_symbol(order.symbol)
         mt5.symbol_select(broker_symbol, True)
@@ -290,6 +323,7 @@ class MT5Adapter(BrokerAdapter):
     def get_current_price(self, symbol: str) -> PriceQuote | None:
         if mt5 is None:
             return None
+        self.ensure_connected()
         broker_symbol = self.resolve_symbol(symbol)
         mt5.symbol_select(broker_symbol, True)
         tick = mt5.symbol_info_tick(broker_symbol)
@@ -306,6 +340,7 @@ class MT5Adapter(BrokerAdapter):
     def get_account_equity(self) -> float:
         if mt5 is None:
             return 0.0
+        self.ensure_connected()
         acc_info = mt5.account_info()
         if acc_info is None:
             return 0.0
@@ -315,6 +350,7 @@ class MT5Adapter(BrokerAdapter):
         """Return dict of account details (login, server, balance, equity, leverage)."""
         if mt5 is None:
             return None
+        self.ensure_connected()
         acc = mt5.account_info()
         if acc is None:
             return None
@@ -334,6 +370,7 @@ class MT5Adapter(BrokerAdapter):
     def get_open_positions(self, symbol: str | None = None) -> list[dict]:
         if mt5 is None:
             return []
+        self.ensure_connected()
         kwargs = {}
         if symbol:
             kwargs['symbol'] = self.resolve_symbol(symbol)
@@ -349,6 +386,7 @@ class MT5Adapter(BrokerAdapter):
         """
         if mt5 is None:
             return None
+        self.ensure_connected()
 
         # 1. Fast direct lookup by position ID (native MT5 filter)
         deals = mt5.history_deals_get(position=order_id)

@@ -593,6 +593,9 @@ class TradingBot:
                 logger.warning(f"Unsupported timeframe '{timeframe}' for MT5.")
                 return None
 
+            if hasattr(self.broker, 'ensure_connected'):
+                self.broker.ensure_connected()
+
             broker_symbol = symbol
             if hasattr(self.broker, 'resolve_symbol'):
                 broker_symbol = self.broker.resolve_symbol(symbol)

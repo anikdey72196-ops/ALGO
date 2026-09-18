@@ -1,3 +1,4 @@
 id,timestamp,closed_at,symbol,direction,entry_price,stop_loss,take_profit,lot_size,realized_pnl,status,duration_seconds,strategy_name,magic_number
+58525580696,2026-09-18T10:28:22.469226+00:00,,XAUUSD,BUY,4380.61,4375.31,4387.81,0.01,0.0,OPEN,0.0,SMC Scalp (5m),125456
 58509995648,2026-09-17T13:06:24.318323+00:00,,EURUSD,SELL,1.149,1.1505,1.14675,0.02,0.0,OPEN,0.0,SMC Scalp (5m),125456
 58509970188,2026-09-17T13:05:24.314918+00:00,,EURUSD,SELL,1.14903,1.15053,1.14678,0.02,0.0,OPEN,0.0,SMC Scalp (5m),125456
