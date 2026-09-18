@@ -1,5 +1,6 @@
 id,activation_time,deactivation_time,formatted_duration,duration_seconds,symbols,lot_size,trigger_source,deactivation_reason,status
-58,2026-09-18T15:34:21.138075+00:00,,0s,0.0,"XAUUSD, EURUSD",P1:0.01 | P2:0.02,Web Dashboard,Active Now,ACTIVE
+59,2026-09-18T16:57:57.237783+00:00,,0s,0.0,"XAUUSD, EURUSD",P1:0.01 | P2:0.03,Web Dashboard,Active Now,ACTIVE
+58,2026-09-18T15:34:21.138075+00:00,2026-09-18T16:11:51.219907+00:00,37m 30s,2250.1,"XAUUSD, EURUSD",P1:0.01 | P2:0.02,Web Dashboard,Interrupted / Server Restarted,INTERRUPTED
 57,2026-09-18T14:55:57.048617+00:00,2026-09-18T14:55:58.632527+00:00,2s,1.6,"XAUUSD, EURUSD",P1:0.05 | P2:0.02,Web Dashboard,Manual User Stop,COMPLETED
 56,2026-09-18T14:54:51.819186+00:00,2026-09-18T14:54:52.701055+00:00,1s,0.9,"XAUUSD, BTCUSD",P1:0.05 | P2:0.02,Web Dashboard,Manual User Stop,COMPLETED
 55,2026-09-18T14:46:40.985395+00:00,2026-09-18T14:46:41.508571+00:00,1s,0.5,"XAUUSD, BTCUSD",P1:0.05 | P2:0.02,Web Dashboard,Manual User Stop,COMPLETED
