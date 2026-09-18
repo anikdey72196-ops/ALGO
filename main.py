@@ -96,7 +96,7 @@ def create_broker(config: TradingConfig) -> BrokerAdapter:
 class TradingBot:
     """Main trading bot orchestrator."""
 
-    def __init__(self, config: TradingConfig | None = None):
+    def __init__(self, config: TradingConfig | None = None, load_saved_settings: bool = True):
         self.config = config or DEFAULT_CONFIG
         self._last_utc_day: int | None = None
         self.is_active: bool = False
@@ -130,7 +130,8 @@ class TradingBot:
         self._ltf_cache: dict[str, object] = {}
 
         # Load persisted settings if present
-        self.load_settings()
+        if load_saved_settings:
+            self.load_settings()
 
     def load_settings(self) -> None:
         """Load persisted user settings from bot_settings.json."""
@@ -171,12 +172,15 @@ class TradingBot:
                     self.config.fixed_lot_size = saved["fixed_lot_size"]
                 if "fixed_sl_pips" in saved:
                     self.config.fixed_sl_pips = saved["fixed_sl_pips"]
+                if "max_open_positions" in saved and isinstance(saved["max_open_positions"], int):
+                    self.config.risk.max_open_positions = saved["max_open_positions"]
                 if "ai_confirmation_enabled" in saved:
                     self.config.ai_confirmation_enabled = bool(saved["ai_confirmation_enabled"])
 
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
                     f"Strategies={self.config.enabled_strategies} | "
+                    f"MaxOpen={self.config.risk.max_open_positions} | "
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips})"
                 )
@@ -205,6 +209,7 @@ class TradingBot:
                 "strategy_type": self.config.strategy_type,
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
+                "max_open_positions": self.config.risk.max_open_positions,
                 "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
@@ -386,11 +391,24 @@ class TradingBot:
             pair_lot = pair_info["fixed_lot_size"]
             pair_sl = pair_info["fixed_sl_pips"]
 
+            # Dynamic check: Re-fetch open positions so that if Pair 1 executed a trade,
+            # Pair 2 immediately sees the updated open count within the exact same scan cycle!
+            open_trades = self.state.get_open_positions()
+            max_open = getattr(self.config.risk, 'max_open_positions', 6)
+            if len(open_trades) >= max_open:
+                self.log(
+                    f"  ⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                    f"Skipping Pair {pair_num} ({symbol}).",
+                    level="INFO"
+                )
+                continue
+
             try:
                 instrument = get_instrument(self.config, symbol)
             except ValueError:
                 logger.warning(f"  Symbol '{symbol}' not in configured instruments. Skipping.")
                 continue
+
             # ── Check open positions for this symbol (max 3 for XAUUSD, max 3 for EURUSD) ──
             open_symbol_trades = [t for t in open_trades if t.symbol == symbol]
             max_per_symbol = getattr(self.config.risk, 'max_open_per_symbol', 3)
@@ -486,111 +504,146 @@ class TradingBot:
                 self.log(f"  No signal survived quality gates for Pair {pair_num} ({symbol}).")
                 continue
 
-            best_signal = filter_result.accepted_signal
-            self.log(
-                f"  ✅ [{best_signal.strategy_name}] SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
-                f"| Entry={best_signal.entry_price:.5f} "
-                f"| SL={best_signal.stop_loss:.5f} "
-                f"| TP={best_signal.take_profit:.5f} "
-                f"| R:R={best_signal.rr_ratio:.2f} "
-                f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
-            )
+            # Candidate signals: supports multiple distinct strategy signals if both pass gates
+            candidate_signals = list(getattr(filter_result, 'accepted_signals', None) or [])
+            if not candidate_signals and filter_result.accepted_signal:
+                candidate_signals = [filter_result.accepted_signal]
 
-            # ── Step 2c-1.5: ML Trap Detector Gate (FVG / Sweep veto) ──
-            trap_kind = self._signal_to_trap_kind(best_signal)
-            if trap_kind is not None and ltf_data is not None:
-                try:
-                    trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
-                    ml_df = self._prepare_df_for_trap_detector(ltf_data)
-                    trap_ev = self.trap_svc.observe_event(
-                        symbol=symbol,
-                        timeframe=ltf_tf,
-                        kind=trap_kind,
-                        direction=trap_dir,
-                        entry=best_signal.entry_price,
-                        stop=best_signal.stop_loss,
-                        target=best_signal.take_profit,
-                        df=ml_df,
-                        bar_index=len(ml_df) - 1,
-                    )
-                    if not trap_ev.allowed:
-                        self.log(
-                            f"  🪤 TRAP GATE VETO | p_genuine={trap_ev.p_genuine:.3f} "
-                            f"| {trap_kind.value} | model={trap_ev.model_version}",
-                            level="WARNING",
-                        )
-                        continue
+            for best_signal in candidate_signals:
+                # Dynamic re-check of limits before each execution
+                open_trades = self.state.get_open_positions()
+                if len(open_trades) >= max_open:
                     self.log(
-                        f"  🔬 Trap Gate: p_genuine={trap_ev.p_genuine:.3f} "
-                        f"| {trap_kind.value} | mode={'shadow' if trap_ev.model_version == 'cold' else 'gated'}"
+                        f"  ⏸️ Global max open positions reached ({len(open_trades)}/{max_open}). "
+                        f"Rejecting/queuing extra signal [{best_signal.strategy_name}] on {symbol}.",
+                        level="INFO"
                     )
-                except Exception as e:
-                    self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
+                    break
 
-            # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
-            ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
+                open_symbol_trades = [t for t in open_trades if t.symbol == symbol]
+                if len(open_symbol_trades) >= max_per_symbol:
+                    self.log(
+                        f"  ⏸️ Max per-pair open positions reached for {symbol} ({len(open_symbol_trades)}/{max_per_symbol}). "
+                        f"Rejecting/queuing signal [{best_signal.strategy_name}]."
+                    )
+                    break
 
-            if not ai_verdict.confirmed:
-                self.log(f"  🤖 AI GATE REJECTED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}", level="WARNING")
-                continue
+                # Ensure strategy does not already have an open trade on this symbol
+                cur_active_strats = {
+                    normalize_strategy_key(t.strategy_name, t.magic_number)
+                    for t in open_symbol_trades
+                }
+                sig_strat_key = normalize_strategy_key(getattr(best_signal, 'strategy_id', None) or best_signal.strategy_name, getattr(best_signal, 'magic_number', None))
+                if sig_strat_key in cur_active_strats:
+                    self.log(
+                        f"  ⏸️ Duplicate trade forbidden: strategy '{best_signal.strategy_name}' already active on {symbol}. Skipping."
+                    )
+                    continue
 
-            self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
-
-            # ── Step 2c-3: Risk authorization (Pair-specific sizing override) ──
-            equity = self.broker.get_account_equity()
-            auth = self.risk_engine.authorize_trade(best_signal, equity, fixed_lot_size=pair_lot)
-
-            if not auth.authorized:
-                self.log(f"  🛑 RISK REJECTED: {auth.rejection_reason}", level="WARNING")
-                continue
-
-            self.log(
-                f"  💰 AUTHORIZED: {auth.lot_size} lots "
-                f"| Risk: ${auth.risk_amount:.2f} "
-                f"| Equity: ${auth.account_equity:.2f}"
-            )
-
-            # ── Step 2d: Execute bracket order with strategy Magic Number ──
-            bracket = BracketOrder(
-                symbol=symbol,
-                direction=best_signal.direction,
-                lot_size=auth.lot_size,
-                entry_price=quote.ask if best_signal.direction == Direction.BUY else quote.bid,
-                stop_loss=best_signal.stop_loss,
-                take_profit=best_signal.take_profit,
-                magic=best_signal.magic_number,
-                comment=f"{best_signal.strategy_name[:6]}_{best_signal.direction.value}_{best_signal.ltf_confirmation.value[:8]}",
-            )
-
-            order_result = self.broker.send_bracket_order(bracket)
-
-            if order_result.success:
                 self.log(
-                    f"  ✅ ORDER FILLED: ID={order_result.order_id} "
-                    f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
+                    f"  ✅ [{best_signal.strategy_name}] SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
+                    f"| Entry={best_signal.entry_price:.5f} "
+                    f"| SL={best_signal.stop_loss:.5f} "
+                    f"| TP={best_signal.take_profit:.5f} "
+                    f"| R:R={best_signal.rr_ratio:.2f} "
+                    f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
                 )
-                # Record in state with strategy attribution
-                trade_record = TradeRecord(
-                    id=order_result.order_id,
-                    timestamp=now_utc,
+
+                # ── Step 2c-1.5: ML Trap Detector Gate (FVG / Sweep veto) ──
+                trap_kind = self._signal_to_trap_kind(best_signal)
+                if trap_kind is not None and ltf_data is not None:
+                    try:
+                        trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
+                        ml_df = self._prepare_df_for_trap_detector(ltf_data)
+                        trap_ev = self.trap_svc.observe_event(
+                            symbol=symbol,
+                            timeframe=ltf_tf,
+                            kind=trap_kind,
+                            direction=trap_dir,
+                            entry=best_signal.entry_price,
+                            stop=best_signal.stop_loss,
+                            target=best_signal.take_profit,
+                            df=ml_df,
+                            bar_index=len(ml_df) - 1,
+                        )
+                        if not trap_ev.allowed:
+                            self.log(
+                                f"  🪤 TRAP GATE VETO | p_genuine={trap_ev.p_genuine:.3f} "
+                                f"| {trap_kind.value} | model={trap_ev.model_version}",
+                                level="WARNING",
+                            )
+                            continue
+                        self.log(
+                            f"  🔬 Trap Gate: p_genuine={trap_ev.p_genuine:.3f} "
+                            f"| {trap_kind.value} | mode={'shadow' if trap_ev.model_version == 'cold' else 'gated'}"
+                        )
+                    except Exception as e:
+                        self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
+
+                # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
+                ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
+
+                if not ai_verdict.confirmed:
+                    self.log(f"  🤖 AI GATE REJECTED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}", level="WARNING")
+                    continue
+
+                self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
+
+                # ── Step 2c-3: Risk authorization (Pair-specific sizing override) ──
+                equity = self.broker.get_account_equity()
+                auth = self.risk_engine.authorize_trade(best_signal, equity, fixed_lot_size=pair_lot)
+
+                if not auth.authorized:
+                    self.log(f"  🛑 RISK REJECTED: {auth.rejection_reason}", level="WARNING")
+                    continue
+
+                self.log(
+                    f"  💰 AUTHORIZED: {auth.lot_size} lots "
+                    f"| Risk: ${auth.risk_amount:.2f} "
+                    f"| Equity: ${auth.account_equity:.2f}"
+                )
+
+                # ── Step 2d: Execute bracket order with strategy Magic Number ──
+                bracket = BracketOrder(
                     symbol=symbol,
                     direction=best_signal.direction,
-                    entry_price=order_result.fill_price or bracket.entry_price,
-                    stop_loss=bracket.stop_loss,
-                    take_profit=bracket.take_profit,
-                    lot_size=bracket.lot_size,
-                    realized_pnl=0.0,
-                    status="OPEN",
-                    strategy_name=best_signal.strategy_name,
-                    magic_number=best_signal.magic_number,
+                    lot_size=auth.lot_size,
+                    entry_price=quote.ask if best_signal.direction == Direction.BUY else quote.bid,
+                    stop_loss=best_signal.stop_loss,
+                    take_profit=best_signal.take_profit,
+                    magic=best_signal.magic_number,
+                    comment=f"{best_signal.strategy_name[:6]}_{best_signal.direction.value}_{best_signal.ltf_confirmation.value[:8]}",
                 )
-                self.state.record_trade(trade_record)
-            else:
-                self.log(
-                    f"  ❌ ORDER FAILED: {order_result.error_message} "
-                    f"(code={order_result.error_code}, retries={order_result.retries_used})",
-                    level="ERROR"
-                )
+
+                order_result = self.broker.send_bracket_order(bracket)
+
+                if order_result.success:
+                    self.log(
+                        f"  ✅ ORDER FILLED: ID={order_result.order_id} "
+                        f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
+                    )
+                    # Record in state with strategy attribution
+                    trade_record = TradeRecord(
+                        id=order_result.order_id,
+                        timestamp=now_utc,
+                        symbol=symbol,
+                        direction=best_signal.direction,
+                        entry_price=order_result.fill_price or bracket.entry_price,
+                        stop_loss=bracket.stop_loss,
+                        take_profit=bracket.take_profit,
+                        lot_size=bracket.lot_size,
+                        realized_pnl=0.0,
+                        status="OPEN",
+                        strategy_name=best_signal.strategy_name,
+                        magic_number=best_signal.magic_number,
+                    )
+                    self.state.record_trade(trade_record)
+                else:
+                    self.log(
+                        f"  ❌ ORDER FAILED: {order_result.error_message} "
+                        f"(code={order_result.error_code}, retries={order_result.retries_used})",
+                        level="ERROR"
+                    )
 
         self.log(
             f"─── TICK COMPLETE | "

@@ -53,6 +53,7 @@ class BotConfigUpdate(BaseModel):
     fixed_lot_size: Optional[float] = None
     fixed_sl_pips: Optional[float] = None
     ai_confirmation_enabled: Optional[bool] = None
+    max_open_positions: Optional[int] = None
 
 
 class BotStateResponse(BaseModel):
@@ -64,6 +65,7 @@ class BotStateResponse(BaseModel):
     strategy_type: str
     fixed_lot_size: Optional[float]
     fixed_sl_pips: Optional[float]
+    max_open_positions: int = 6
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
     equity: float
@@ -241,6 +243,7 @@ async def get_bot_state():
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
+        max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 6),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         equity=round(equity, 2),
@@ -326,11 +329,27 @@ async def update_configuration(payload: BotConfigUpdate):
     # Handle Pair 1 & Pair 2 update
     if payload.pair1 is not None:
         p1_sym = payload.pair1.symbol.strip().upper()
-        if bot_instance.is_active and p1_sym != bot_instance.config.pair1.symbol:
-            raise HTTPException(
-                status_code=400,
-                detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch Pair 1."
-            )
+        if bot_instance.is_active:
+            if p1_sym != bot_instance.config.pair1.symbol:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 1."
+                )
+            if payload.pair1.fixed_lot_size != bot_instance.config.pair1.fixed_lot_size:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 1 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+                )
+            if payload.pair1.fixed_sl_pips != bot_instance.config.pair1.fixed_sl_pips:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 1 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+                )
+            if payload.pair1.enabled != bot_instance.config.pair1.enabled:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 1 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+                )
         bot_instance.config.pair1.symbol = p1_sym
         bot_instance.config.pair1.fixed_lot_size = payload.pair1.fixed_lot_size
         bot_instance.config.pair1.fixed_sl_pips = payload.pair1.fixed_sl_pips
@@ -338,11 +357,27 @@ async def update_configuration(payload: BotConfigUpdate):
 
     if payload.pair2 is not None:
         p2_sym = payload.pair2.symbol.strip().upper()
-        if bot_instance.is_active and p2_sym != bot_instance.config.pair2.symbol:
-            raise HTTPException(
-                status_code=400,
-                detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch Pair 2."
-            )
+        if bot_instance.is_active:
+            if p2_sym != bot_instance.config.pair2.symbol:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 2."
+                )
+            if payload.pair2.fixed_lot_size != bot_instance.config.pair2.fixed_lot_size:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 2 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+                )
+            if payload.pair2.fixed_sl_pips != bot_instance.config.pair2.fixed_sl_pips:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 2 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+                )
+            if payload.pair2.enabled != bot_instance.config.pair2.enabled:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 2 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+                )
         bot_instance.config.pair2.symbol = p2_sym
         bot_instance.config.pair2.fixed_lot_size = payload.pair2.fixed_lot_size
         bot_instance.config.pair2.fixed_sl_pips = payload.pair2.fixed_sl_pips
@@ -400,10 +435,35 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.strategy_type = new_strat
 
     if payload.fixed_lot_size is not None:
+        if bot_instance.is_active and payload.fixed_lot_size != bot_instance.config.fixed_lot_size:
+            raise HTTPException(
+                status_code=400,
+                detail="Lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+            )
         bot_instance.config.fixed_lot_size = payload.fixed_lot_size
+
     if payload.fixed_sl_pips is not None:
+        if bot_instance.is_active and payload.fixed_sl_pips != bot_instance.config.fixed_sl_pips:
+            raise HTTPException(
+                status_code=400,
+                detail="Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+            )
         bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
+
+    if payload.max_open_positions is not None:
+        if bot_instance.is_active and payload.max_open_positions != bot_instance.config.risk.max_open_positions:
+            raise HTTPException(
+                status_code=400,
+                detail="Max open positions limit is LOCKED during activation! Deactivate the bot first to modify trade limits."
+            )
+        bot_instance.config.risk.max_open_positions = payload.max_open_positions
+
     if payload.ai_confirmation_enabled is not None:
+        if bot_instance.is_active and payload.ai_confirmation_enabled != bot_instance.config.ai_confirmation_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="AI Confirmation setting is LOCKED during activation! Deactivate the bot first to toggle AI gate."
+            )
         bot_instance.config.ai_confirmation_enabled = payload.ai_confirmation_enabled
 
     # Persist updated configuration to bot_settings.json
@@ -414,6 +474,7 @@ async def update_configuration(payload: BotConfigUpdate):
         f"Pair 1={bot_instance.config.pair1.symbol} (lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
         f"Pair 2={bot_instance.config.pair2.symbol} (lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
         f"Strategies={bot_instance.config.enabled_strategies} | "
+        f"Max Open Positions={bot_instance.config.risk.max_open_positions} | "
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'}"
     )
 
@@ -426,6 +487,7 @@ async def update_configuration(payload: BotConfigUpdate):
         "strategy_type": bot_instance.config.strategy_type,
         "fixed_lot_size": bot_instance.config.fixed_lot_size,
         "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
+        "max_open_positions": bot_instance.config.risk.max_open_positions,
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
     }
 

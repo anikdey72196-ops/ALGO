@@ -217,11 +217,15 @@ class StateManager:
                 logger.warning(f"Trade {trade_id} not found for PnL update.")
                 return
             
-            old_pnl = row['realized_pnl']
+            old_pnl = float(row['realized_pnl'] or 0.0)
             trade_timestamp = datetime.fromisoformat(row['timestamp'])
-            date_str = trade_timestamp.date().isoformat()
+            trade_date_str = trade_timestamp.date().isoformat()
             
             now_dt = datetime.now(timezone.utc)
+            close_date = now_dt.date()
+            close_date_str = close_date.isoformat()
+            self._ensure_daily_row(close_date)
+
             if trade_timestamp.tzinfo is None:
                 trade_dt = trade_timestamp.replace(tzinfo=timezone.utc)
             else:
@@ -234,14 +238,28 @@ class StateManager:
                 WHERE id = ?
             ''', (pnl, status, now_dt.isoformat(), duration_sec, trade_id))
             
-            # Update daily_state
-            pnl_diff = pnl - old_pnl
-            if pnl_diff != 0:
+            # Credit realized PnL to the actual close date (today)
+            if trade_date_str == close_date_str:
+                pnl_diff = pnl - old_pnl
+                if pnl_diff != 0:
+                    self.conn.execute('''
+                        UPDATE daily_state
+                        SET realized_pnl = realized_pnl + ?
+                        WHERE date = ?
+                    ''', (pnl_diff, close_date_str))
+            else:
+                # Multi-day trade: remove old open-date pnl if any, and record realized pnl on close date
+                if old_pnl != 0:
+                    self.conn.execute('''
+                        UPDATE daily_state
+                        SET realized_pnl = realized_pnl - ?
+                        WHERE date = ?
+                    ''', (old_pnl, trade_date_str))
                 self.conn.execute('''
                     UPDATE daily_state
                     SET realized_pnl = realized_pnl + ?
                     WHERE date = ?
-                ''', (pnl_diff, date_str))
+                ''', (pnl, close_date_str))
                 
         logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}, duration={format_duration(duration_sec)}")
         self._sync_trades_csv()

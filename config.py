@@ -289,7 +289,7 @@ class TradingConfig(BaseModel):
             ),
             InstrumentConfig(
                 symbol="EURUSD",
-                point_value=10.0,
+                point_value=1.0,      # 100,000 EUR × 0.00001 point = $1.00 per lot per point ($10/pip)
                 pip_size=0.0001,
                 avg_spread_points=1.2,
                 digits=5,
@@ -299,7 +299,7 @@ class TradingConfig(BaseModel):
             ),
             InstrumentConfig(
                 symbol="GBPUSD",
-                point_value=10.0,
+                point_value=1.0,      # 100,000 GBP × 0.00001 point = $1.00 per lot per point ($10/pip)
                 pip_size=0.0001,
                 avg_spread_points=1.5,
                 digits=5,

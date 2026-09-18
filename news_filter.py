@@ -89,14 +89,16 @@ class NewsFilter:
     def _get_instrument_currencies(self, symbol: str) -> tuple[str, str]:
         """
         Extract base and quote currencies from a symbol string.
-        E.g. 'EURUSD' -> ('EUR', 'USD')
-        Assumes 6-char FX pair format.
+        E.g. 'EURUSD' -> ('EUR', 'USD'), 'GOLD' -> ('XAU', 'USD')
         """
-        if len(symbol) < 6:
+        s = symbol.upper().strip()
+        if "GOLD" in s or s.startswith("XAU"):
+            return ("XAU", "USD")
+        if len(s) < 6:
             logger.warning(f"Symbol '{symbol}' is less than 6 characters. Cannot extract currencies.")
             return ('', '')
-        base = symbol[:3]
-        quote = symbol[3:6]
+        base = s[:3]
+        quote = s[3:6]
         return (base, quote)
     
     def check_news_blackout(self, symbol: str, current_time: datetime | None = None) -> NewsFilterResult:

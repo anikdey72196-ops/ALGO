@@ -52,12 +52,62 @@ def test_api_workflow():
     res = client.post("/api/configure", json={
         "selected_symbols": ["XAUUSD", "BTCUSD"],
         "strategy_type": "SMC",
-        "fixed_lot_size": 0.05
+        "fixed_lot_size": 0.10
     })
     print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")
     assert res.status_code == 400, "Should reject strategy change while active!"
     assert "Strategy type changes are LOCKED" in res.json().get("detail", ""), "Detail should state strategy changes are locked"
     print("   [PASSED] Strategy lock enforcement verified.")
+
+    print("\n4c. Testing STRICT LOCK: attempting to change fixed_lot_size while ACTIVE (must fail with 400)...")
+    res = client.post("/api/configure", json={
+        "fixed_lot_size": 0.25
+    })
+    print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")
+    assert res.status_code == 400, "Should reject lot size change while active!"
+    assert "Lot size is LOCKED" in res.json().get("detail", "")
+    print("   [PASSED] Global lot size lock enforcement verified.")
+
+    print("\n4d. Testing STRICT LOCK: attempting to change fixed_sl_pips while ACTIVE (must fail with 400)...")
+    res = client.post("/api/configure", json={
+        "fixed_sl_pips": 50.0
+    })
+    print(f"   Response status: {res.status_code}, error detail: {res.json().get('detail')}")
+    assert res.status_code == 400, "Should reject SL change while active!"
+    assert "Stop Loss (SL) is LOCKED" in res.json().get("detail", "")
+    print("   [PASSED] Global SL lock enforcement verified.")
+
+    print("\n4e. Testing STRICT LOCK: attempting to change Pair 1 & Pair 2 lot size / SL while ACTIVE (must fail with 400)...")
+    res = client.post("/api/configure", json={
+        "pair1": {
+            "symbol": "XAUUSD",
+            "fixed_lot_size": 0.50,
+            "fixed_sl_pips": 30.0,
+            "enabled": True
+        }
+    })
+    assert res.status_code == 400, "Should reject Pair 1 lot change while active!"
+    assert "Pair 1 lot size is LOCKED" in res.json().get("detail", "")
+
+    res = client.post("/api/configure", json={
+        "pair2": {
+            "symbol": "BTCUSD",
+            "fixed_lot_size": 0.02,
+            "fixed_sl_pips": 99.0,
+            "enabled": True
+        }
+    })
+    assert res.status_code == 400, "Should reject Pair 2 SL change while active!"
+    assert "Pair 2 Stop Loss (SL) is LOCKED" in res.json().get("detail", "")
+    print("   [PASSED] Per-pair lot and SL lock enforcement verified.")
+
+    print("\n4f. Testing STRICT LOCK: attempting to change max_open_positions while ACTIVE (must fail with 400)...")
+    res = client.post("/api/configure", json={
+        "max_open_positions": 3
+    })
+    assert res.status_code == 400, "Should reject max open positions limit change while active!"
+    assert "Max open positions limit is LOCKED" in res.json().get("detail", "")
+    print("   [PASSED] Max open positions lock enforcement verified.")
 
     print("\n5. Testing POST /api/trigger_tick (while active)...")
     res = client.post("/api/trigger_tick")

@@ -77,12 +77,12 @@ class RiskEngine:
         if len(open_positions) >= max_open:
             return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
 
-        # Check maximum daily trades executed (disabled if None or <= 0)
-        max_trades = getattr(self.config.risk, 'max_daily_trades', None)
-        if max_trades is not None and max_trades > 0:
-            daily_trades = self.state.get_trade_count()
-            if daily_trades >= max_trades:
-                return True, f"Max daily trades limit reached ({daily_trades}/{max_trades} today)"
+        # Daily trade limit check disabled per user request (unlimited trades allowed)
+        # max_trades = getattr(self.config.risk, 'max_daily_trades', None)
+        # if max_trades is not None and max_trades > 0:
+        #     daily_trades = self.state.get_trade_count()
+        #     if daily_trades >= max_trades:
+        #         return True, f"Max daily trades limit reached ({daily_trades}/{max_trades} today)"
 
         pnl = self.state.get_daily_pnl()
         limit = equity * self.config.account.max_daily_drawdown_pct

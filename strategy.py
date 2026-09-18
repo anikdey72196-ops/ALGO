@@ -765,7 +765,8 @@ class SMCScalp5MEngine:
                     break
 
             if ob_idx == -1:
-                ob_idx = int(df.iloc[search_start:bos_bar_idx]['low'].astype(float).idxmin())
+                search_slice = df.iloc[search_start:bos_bar_idx]
+                ob_idx = search_start + int(np.argmin(search_slice['low'].to_numpy(dtype=float)))
 
             ob_candle = df.iloc[ob_idx]
             ob_high = float(ob_candle['high'])
@@ -855,7 +856,8 @@ class SMCScalp5MEngine:
                     break
 
             if ob_idx == -1:
-                ob_idx = int(df.iloc[search_start:bos_bar_idx]['high'].astype(float).idxmax())
+                search_slice = df.iloc[search_start:bos_bar_idx]
+                ob_idx = search_start + int(np.argmax(search_slice['high'].to_numpy(dtype=float)))
 
             ob_candle = df.iloc[ob_idx]
             ob_high = float(ob_candle['high'])

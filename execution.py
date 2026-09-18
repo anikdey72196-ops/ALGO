@@ -408,12 +408,22 @@ class MT5Adapter(BrokerAdapter):
         if not pos_deals:
             return None
 
-        closing_deals = [d for d in pos_deals if d.entry == 1]  # DEAL_ENTRY_OUT
+        closing_deals = [d for d in pos_deals if d.entry in (1, 2)]  # DEAL_ENTRY_OUT or DEAL_ENTRY_INOUT
         if closing_deals:
             cd = closing_deals[-1]
             total_profit = sum(d.profit + d.commission + d.swap for d in pos_deals)
             comment = (cd.comment or "").lower()
-            status = "CLOSED_TP" if "tp" in comment else ("CLOSED_SL" if "sl" in comment else "CLOSED_MANUAL")
+            reason = getattr(cd, 'reason', None)
+            
+            # Check comment first, then MT5 reason code: 5=DEAL_REASON_TP, 4=DEAL_REASON_SL, 6=DEAL_REASON_SO
+            if "tp" in comment or reason == 5:
+                status = "CLOSED_TP"
+            elif "sl" in comment or reason in (4, 6):
+                status = "CLOSED_SL"
+            elif total_profit > 0:
+                status = "CLOSED_TP"
+            else:
+                status = "CLOSED_MANUAL"
             return total_profit, status
         return None
 
@@ -488,7 +498,17 @@ class MockBrokerAdapter(BrokerAdapter):
         if pos['direction'] == Direction.SELL:
             diff = -diff
             
-        pnl = diff * pos['lot_size'] * point_value
+        sym = str(pos.get('symbol', '')).upper()
+        if sym in ('EURUSD', 'GBPUSD'):
+            contract_size = 100_000.0
+        elif 'XAU' in sym or 'GOLD' in sym:
+            contract_size = 100.0
+        elif 'BTC' in sym or 'ETH' in sym:
+            contract_size = 1.0
+        else:
+            contract_size = 100_000.0 if point_value == 10.0 else 100.0
+
+        pnl = diff * pos['lot_size'] * contract_size
         self._equity += pnl
         logger.info(f"Mock position closed: Order ID {order_id} @ {close_price:.5f}, Realized PnL: {pnl:.2f}")
         return pnl
