@@ -332,6 +332,10 @@ class TradingBot:
     def _execute_tick(self) -> None:
         now_utc = datetime.now(timezone.utc)
 
+        # Clear per-tick candle cache so fresh streaming candles are fetched every tick
+        self._htf_cache.clear()
+        self._ltf_cache.clear()
+
         # Step 1: Day rollover & position sync
         self._check_day_rollover()
         self._sync_open_positions()

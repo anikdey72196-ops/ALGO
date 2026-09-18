@@ -188,11 +188,9 @@ class RiskConfig(BaseModel):
         ge=1.0,
         description="Minimum risk-to-reward ratio to accept a trade.",
     )
-    max_daily_trades: int = Field(
-        default=12,
-        ge=1,
-        le=50,
-        description="Maximum number of trades per UTC day.",
+    max_daily_trades: int | None = Field(
+        default=None,
+        description="Maximum number of trades per UTC day (None = unlimited).",
     )
     max_open_positions: int = Field(
         default=6,

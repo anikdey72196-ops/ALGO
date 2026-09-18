@@ -290,8 +290,18 @@ class HTFAnalyzer:
         elif structure_bias == MarketBias.BEARISH and is_below_ema:
             bias = MarketBias.BEARISH
             trend_clarity_score = 30.0
-        elif structure_bias != MarketBias.NEUTRAL or is_above_ema or is_below_ema:
-            trend_clarity_score = 15.0
+        elif structure_bias == MarketBias.NEUTRAL and is_below_ema:
+            # Macro downtrend: established below 200 EMA with consolidating swings
+            bias = MarketBias.BEARISH
+            trend_clarity_score = 20.0
+        elif structure_bias == MarketBias.NEUTRAL and is_above_ema:
+            # Macro uptrend: established above 200 EMA with consolidating swings
+            bias = MarketBias.BULLISH
+            trend_clarity_score = 20.0
+        else:
+            # Structure actively opposes 200 EMA (counter-trend) -> true neutral
+            bias = MarketBias.NEUTRAL
+            trend_clarity_score = 10.0
 
         atr_series = compute_atr(df, 14)
         current_atr = float(atr_series.iloc[-1]) if not atr_series.empty else 0.0
@@ -1417,6 +1427,11 @@ class SMCSwingStrategy(BaseStrategy):
         if sl_dist < min_buffer:
             sl_dist = min_buffer
             sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        # If raw opposing liquidity target does not satisfy swing minimum 2.5R, project institutional 3.0R target
+        if tp_dist < sl_dist * 2.5:
+            tp = entry + (sl_dist * 3.0) if direction == Direction.BUY else entry - (sl_dist * 3.0)
+            tp_dist = abs(entry - tp)
 
         rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
 
