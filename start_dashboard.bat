@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 cd /d "%~dp0"
 title ALGO Trading Command Center
 
@@ -7,89 +7,77 @@ echo ======================================================
 echo   Starting ALGO Command Center...
 echo ======================================================
 
-:: 1. Check Virtual Environment in project directory
+:: 1. Check Virtual Environments
 if exist ".venv\Scripts\python.exe" (
-    echo Using project virtual environment (.venv)...
-    ".venv\Scripts\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=.venv\Scripts\python.exe"
+    goto :run
 )
 if exist "venv\Scripts\python.exe" (
-    echo Using project virtual environment (venv)...
-    "venv\Scripts\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=venv\Scripts\python.exe"
+    goto :run
 )
 
-:: 2. Try 'py' launcher with 3.12 or latest 3.x
+:: 2. Try py launcher
 where py >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     py -3.12 -c "import sys" >nul 2>&1
-    if !ERRORLEVEL! EQU 0 (
-        echo Using Python launcher (py -3.12)...
-        py -3.12 run_dashboard.py
-        goto :done
+    if not errorlevel 1 (
+        set "PY_EXE=py -3.12"
+        goto :run
     )
     py -3 -c "import sys" >nul 2>&1
-    if !ERRORLEVEL! EQU 0 (
-        echo Using Python launcher (py -3)...
-        py -3 run_dashboard.py
-        goto :done
+    if not errorlevel 1 (
+        set "PY_EXE=py -3"
+        goto :run
     )
-    echo Using Python launcher (py)...
-    py run_dashboard.py
-    goto :done
+    set "PY_EXE=py"
+    goto :run
 )
 
-:: 3. Try standard 'python' command
+:: 3. Try python on PATH
 where python >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo Using system 'python'...
-    python run_dashboard.py
-    goto :done
+    set "PY_EXE=python"
+    goto :run
 )
 
-:: 4. Try common Python installation paths
+:: 4. Try standard installation locations
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-    echo Using Python from %LOCALAPPDATA%\Programs\Python\Python312...
-    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    goto :run
 )
-
 if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
-    echo Using Python from %LOCALAPPDATA%\Programs\Python\Python311...
-    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    goto :run
 )
-
 if exist "C:\Python312\python.exe" (
-    echo Using Python from C:\Python312...
-    "C:\Python312\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=C:\Python312\python.exe"
+    goto :run
 )
-
 if exist "C:\Python311\python.exe" (
-    echo Using Python from C:\Python311...
-    "C:\Python311\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=C:\Python311\python.exe"
+    goto :run
 )
-
 if exist "C:\Program Files\Python312\python.exe" (
-    echo Using Python from C:\Program Files\Python312...
-    "C:\Program Files\Python312\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=C:\Program Files\Python312\python.exe"
+    goto :run
 )
-
 if exist "C:\Program Files\Python311\python.exe" (
-    echo Using Python from C:\Program Files\Python311...
-    "C:\Program Files\Python311\python.exe" run_dashboard.py
-    goto :done
+    set "PY_EXE=C:\Program Files\Python311\python.exe"
+    goto :run
 )
 
 echo.
 echo [ERROR] Python was not found on this system.
 echo Please ensure Python 3.11 or 3.12 is installed and added to PATH.
 echo.
+pause
+exit /b 1
 
-:done
+:run
+echo Using interpreter: %PY_EXE%
+%PY_EXE% run_dashboard.py
+
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo An error occurred. Press any key to close...
