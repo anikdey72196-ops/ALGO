@@ -349,15 +349,27 @@ class MT5Adapter(BrokerAdapter):
         """
         if mt5 is None:
             return None
-        now = datetime.now(timezone.utc)
-        deals = mt5.history_deals_get(now - timedelta(days=7), now)
+
+        # 1. Fast direct lookup by position ID (native MT5 filter)
+        deals = mt5.history_deals_get(position=order_id)
+        if not deals:
+            # Fallback to ticket lookup
+            deals = mt5.history_deals_get(ticket=order_id)
+        if not deals:
+            # Fallback to 7-day window with epoch timestamps
+            now_ts = int(_time.time())
+            from_ts = now_ts - (7 * 86400)
+            deals = mt5.history_deals_get(from_ts, now_ts)
+            if deals:
+                deals = [d for d in deals if d.position_id == order_id or d.order == order_id]
+
         if not deals:
             return None
-        
-        pos_deals = [d for d in deals if d.position_id == order_id]
+
+        pos_deals = [d for d in deals if d.position_id == order_id or d.order == order_id]
         if not pos_deals:
             return None
-            
+
         closing_deals = [d for d in pos_deals if d.entry == 1]  # DEAL_ENTRY_OUT
         if closing_deals:
             cd = closing_deals[-1]

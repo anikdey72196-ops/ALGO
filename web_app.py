@@ -176,15 +176,14 @@ async def get_bot_state():
     if hasattr(bot_instance.broker, "get_account_info"):
         broker_info = bot_instance.broker.get_account_info()
 
-    # Calculate win accuracy across all historical closed trades
-    all_trades = bot_instance.state.get_all_trades(limit=500)
-    closed_trades = [t for t in all_trades if t.status != "OPEN"]
-    winning_trades = [t for t in closed_trades if t.realized_pnl > 0]
-    losing_trades = [t for t in closed_trades if t.realized_pnl < 0]
-    accuracy = round((len(winning_trades) / len(closed_trades) * 100), 1) if closed_trades else 0.0
-
-    stats_by_strategy = bot_instance.state.get_stats_by_strategy()
-    stats_by_pair = bot_instance.state.get_stats_by_pair()
+    # Compute performance metrics in a single database pass
+    metrics = bot_instance.state.get_performance_metrics()
+    accuracy = metrics.get("accuracy", 0.0)
+    winning_trades = metrics.get("winning_trades", 0)
+    losing_trades = metrics.get("losing_trades", 0)
+    total_closed = metrics.get("total_closed_trades", 0)
+    stats_by_strategy = metrics.get("by_strategy", {})
+    stats_by_pair = metrics.get("by_pair", {})
 
     pair1_data = {
         "symbol": bot_instance.config.pair1.symbol,
@@ -198,8 +197,6 @@ async def get_bot_state():
         "fixed_sl_pips": bot_instance.config.pair2.fixed_sl_pips,
         "enabled": bot_instance.config.pair2.enabled,
     }
-
-    metrics = bot_instance.state.get_performance_metrics()
 
     return BotStateResponse(
         is_active=bot_instance.is_active,
@@ -221,9 +218,9 @@ async def get_bot_state():
         mock_mode=bot_instance.config.use_mock_broker,
         broker_info=broker_info,
         accuracy=accuracy,
-        winning_trades=len(winning_trades),
-        losing_trades=len(losing_trades),
-        total_closed_trades=len(closed_trades),
+        winning_trades=winning_trades,
+        losing_trades=losing_trades,
+        total_closed_trades=total_closed,
         active_session=active_session,
         available_strategies=["SMC", "SMC_SCALP_5M", "ICT"],
         stats_by_strategy=stats_by_strategy,

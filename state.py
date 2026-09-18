@@ -1,6 +1,7 @@
 from __future__ import annotations
 import sqlite3
 import csv
+import threading
 from datetime import datetime, date, timezone
 from dataclasses import dataclass, field
 from typing import Optional
@@ -54,9 +55,11 @@ class StateManager:
         self.db_path = db_path
         self.csv_path = csv_path
         self.sessions_csv_path = sessions_csv_path
+        self._lock = threading.RLock()
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout = 5000")
         self._init_schema()
         self._ensure_daily_row(datetime.now(timezone.utc).date())
         self.cleanup_interrupted_sessions()
@@ -65,7 +68,7 @@ class StateManager:
     
     def _init_schema(self) -> None:
         """Create tables: daily_state, trade_log, bot_sessions with migrations."""
-        with self.conn:
+        with self._lock, self.conn:
             self.conn.execute('''
                 CREATE TABLE IF NOT EXISTS daily_state (
                     date TEXT PRIMARY KEY,
@@ -122,12 +125,18 @@ class StateManager:
             except sqlite3.OperationalError:
                 pass
 
+            # Performance Indexes
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_status ON trade_log (status)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_symbol ON trade_log (symbol)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log (timestamp)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_sessions_status ON bot_sessions (status)")
+
         logger.info(f"Database schema initialized at {self.db_path}")
     
     def _ensure_daily_row(self, today: date) -> None:
         """Insert a row for today if not already present."""
         date_str = today.isoformat()
-        with self.conn:
+        with self._lock, self.conn:
             self.conn.execute('''
                 INSERT OR IGNORE INTO daily_state (date, realized_pnl, trade_count, circuit_breaker_active)
                 VALUES (?, 0.0, 0, 0)
@@ -139,7 +148,7 @@ class StateManager:
         date_str = trade.timestamp.date().isoformat()
         self._ensure_daily_row(trade.timestamp.date())
         
-        with self.conn:
+        with self._lock, self.conn:
             if trade.id is not None:
                 cursor = self.conn.execute('''
                     INSERT INTO trade_log (
@@ -200,7 +209,7 @@ class StateManager:
     
     def update_trade_pnl(self, trade_id: int, pnl: float, status: str) -> None:
         """Update a trade's realized PnL and status, recording close timestamp and duration."""
-        with self.conn:
+        with self._lock, self.conn:
             # Get existing pnl to calculate diff for daily_state update
             cursor = self.conn.execute('SELECT timestamp, realized_pnl FROM trade_log WHERE id = ?', (trade_id,))
             row = cursor.fetchone()
@@ -242,9 +251,9 @@ class StateManager:
         try:
             trades = self.get_all_trades(limit=5000)
             fieldnames = [
-                "id", "timestamp", "symbol", "direction", "entry_price",
+                "id", "timestamp", "closed_at", "symbol", "direction", "entry_price",
                 "stop_loss", "take_profit", "lot_size", "realized_pnl",
-                "status", "strategy_name", "magic_number"
+                "status", "duration_seconds", "strategy_name", "magic_number"
             ]
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -253,6 +262,7 @@ class StateManager:
                     writer.writerow({
                         "id": t.id,
                         "timestamp": t.timestamp.isoformat(),
+                        "closed_at": t.closed_at.isoformat() if t.closed_at else "",
                         "symbol": t.symbol,
                         "direction": t.direction.value if hasattr(t.direction, 'value') else str(t.direction),
                         "entry_price": t.entry_price,
@@ -261,6 +271,7 @@ class StateManager:
                         "lot_size": t.lot_size,
                         "realized_pnl": t.realized_pnl,
                         "status": t.status,
+                        "duration_seconds": t.duration_seconds,
                         "strategy_name": t.strategy_name,
                         "magic_number": t.magic_number,
                     })
@@ -301,8 +312,9 @@ class StateManager:
             today = datetime.now(timezone.utc).date()
         date_str = today.isoformat()
         
-        cursor = self.conn.execute('SELECT realized_pnl FROM daily_state WHERE date = ?', (date_str,))
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.execute('SELECT realized_pnl FROM daily_state WHERE date = ?', (date_str,))
+            row = cursor.fetchone()
         return float(row['realized_pnl']) if row else 0.0
     
     def get_trade_count(self, today: date | None = None) -> int:
@@ -311,8 +323,9 @@ class StateManager:
             today = datetime.now(timezone.utc).date()
         date_str = today.isoformat()
         
-        cursor = self.conn.execute('SELECT trade_count FROM daily_state WHERE date = ?', (date_str,))
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.execute('SELECT trade_count FROM daily_state WHERE date = ?', (date_str,))
+            row = cursor.fetchone()
         return int(row['trade_count']) if row else 0
     
     def is_circuit_breaker_active(self, today: date | None = None) -> bool:
@@ -321,8 +334,9 @@ class StateManager:
             today = datetime.now(timezone.utc).date()
         date_str = today.isoformat()
         
-        cursor = self.conn.execute('SELECT circuit_breaker_active FROM daily_state WHERE date = ?', (date_str,))
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.execute('SELECT circuit_breaker_active FROM daily_state WHERE date = ?', (date_str,))
+            row = cursor.fetchone()
         return bool(row['circuit_breaker_active']) if row else False
     
     def activate_circuit_breaker(self, today: date | None = None) -> None:
@@ -332,7 +346,7 @@ class StateManager:
         date_str = today.isoformat()
         self._ensure_daily_row(today)
         
-        with self.conn:
+        with self._lock, self.conn:
             self.conn.execute('''
                 UPDATE daily_state
                 SET circuit_breaker_active = 1
@@ -348,16 +362,18 @@ class StateManager:
     
     def get_open_positions(self) -> list[TradeRecord]:
         """Return all trades with status='OPEN'."""
-        cursor = self.conn.execute('''
-            SELECT id, timestamp, symbol, direction, entry_price, 
-                   stop_loss, take_profit, lot_size, realized_pnl, status,
-                   strategy_name, magic_number, closed_at, duration_seconds
-            FROM trade_log
-            WHERE status = 'OPEN'
-        ''')
+        with self._lock:
+            cursor = self.conn.execute('''
+                SELECT id, timestamp, symbol, direction, entry_price, 
+                       stop_loss, take_profit, lot_size, realized_pnl, status,
+                       strategy_name, magic_number, closed_at, duration_seconds
+                FROM trade_log
+                WHERE status = 'OPEN'
+            ''')
+            rows = cursor.fetchall()
         
         open_trades = []
-        for row in cursor.fetchall():
+        for row in rows:
             dir_str = row['direction']
             try:
                 direction = Direction[dir_str]
@@ -386,17 +402,19 @@ class StateManager:
     
     def get_all_trades(self, limit: int = 100) -> list[TradeRecord]:
         """Return all historical trades ordered by id DESC."""
-        cursor = self.conn.execute('''
-            SELECT id, timestamp, symbol, direction, entry_price, 
-                   stop_loss, take_profit, lot_size, realized_pnl, status,
-                   strategy_name, magic_number, closed_at, duration_seconds
-            FROM trade_log
-            ORDER BY id DESC
-            LIMIT ?
-        ''', (limit,))
+        with self._lock:
+            cursor = self.conn.execute('''
+                SELECT id, timestamp, symbol, direction, entry_price, 
+                       stop_loss, take_profit, lot_size, realized_pnl, status,
+                       strategy_name, magic_number, closed_at, duration_seconds
+                FROM trade_log
+                ORDER BY id DESC
+                LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
         
         trades = []
-        for row in cursor.fetchall():
+        for row in rows:
             dir_str = row['direction']
             try:
                 direction = Direction[dir_str]
@@ -428,12 +446,13 @@ class StateManager:
         Calculate win rate, trade counts, and PnL grouped by strategy.
         Returns: { strategy_name: { 'total': int, 'wins': int, 'losses': int, 'win_rate': float, 'pnl': float } }
         """
-        cursor = self.conn.execute('''
-            SELECT strategy_name, status, realized_pnl
-            FROM trade_log
-            WHERE status != 'OPEN'
-        ''')
-        rows = cursor.fetchall()
+        with self._lock:
+            cursor = self.conn.execute('''
+                SELECT strategy_name, status, realized_pnl
+                FROM trade_log
+                WHERE status != 'OPEN'
+            ''')
+            rows = cursor.fetchall()
         
         stats: dict[str, dict] = {}
         for row in rows:
@@ -478,12 +497,13 @@ class StateManager:
         Calculate win rate, trade counts, and PnL grouped by pair / symbol.
         Returns: { symbol: { 'total': int, 'wins': int, 'losses': int, 'win_rate': float, 'pnl': float } }
         """
-        cursor = self.conn.execute('''
-            SELECT symbol, status, realized_pnl
-            FROM trade_log
-            WHERE status != 'OPEN'
-        ''')
-        rows = cursor.fetchall()
+        with self._lock:
+            cursor = self.conn.execute('''
+                SELECT symbol, status, realized_pnl
+                FROM trade_log
+                WHERE status != 'OPEN'
+            ''')
+            rows = cursor.fetchall()
         
         stats: dict[str, dict] = {}
         for row in rows:
@@ -534,33 +554,82 @@ class StateManager:
         - profit_factor, best_trade, worst_trade
         - strategy_breakdown, pair_breakdown
         """
-        cursor = self.conn.execute('''
-            SELECT id, timestamp, entry_price, stop_loss, take_profit,
-                   realized_pnl, status, duration_seconds, closed_at
-            FROM trade_log
-        ''')
-        rows = cursor.fetchall()
-        
+        with self._lock:
+            cursor = self.conn.execute('''
+                SELECT id, timestamp, symbol, strategy_name, entry_price, stop_loss, take_profit,
+                       realized_pnl, status, duration_seconds, closed_at
+                FROM trade_log
+            ''')
+            rows = cursor.fetchall()
+
         total_trades = len(rows)
         closed_rows = [r for r in rows if r['status'] != 'OPEN']
         open_rows = [r for r in rows if r['status'] == 'OPEN']
-        
+
         total_closed = len(closed_rows)
         total_open = len(open_rows)
-        
+
         tp_rows = [r for r in closed_rows if r['status'] == 'CLOSED_TP' or (r['realized_pnl'] and r['realized_pnl'] > 0)]
         sl_rows = [r for r in closed_rows if r['status'] == 'CLOSED_SL' or (r['realized_pnl'] and r['realized_pnl'] < 0)]
-        
+
         total_tp = len(tp_rows)
         total_sl = len(sl_rows)
-        
+
         total_tp_pnl = sum(float(r['realized_pnl'] or 0.0) for r in tp_rows)
         total_sl_pnl = sum(float(r['realized_pnl'] or 0.0) for r in sl_rows)
         total_pnl = sum(float(r['realized_pnl'] or 0.0) for r in closed_rows)
-        
+
         win_rate = round((total_tp / total_closed * 100.0), 1) if total_closed > 0 else 0.0
         win_loss_diff = total_tp - total_sl  # Can be positive or negative
-        
+
+        # Single-pass calculation of by_strategy and by_pair from closed_rows
+        by_strat: dict[str, dict] = {}
+        by_pair: dict[str, dict] = {}
+        for r in closed_rows:
+            strat = r['strategy_name'] if ('strategy_name' in r.keys() and r['strategy_name']) else "SMC"
+            sym = r['symbol'] if ('symbol' in r.keys() and r['symbol']) else "UNKNOWN"
+            pnl = float(r['realized_pnl'] or 0.0)
+            is_win = (r['status'] == 'CLOSED_TP' or pnl > 0)
+            is_loss = (r['status'] == 'CLOSED_SL' or pnl < 0)
+
+            if strat not in by_strat:
+                by_strat[strat] = {"strategy_name": strat, "total": 0, "total_trades": 0, "wins": 0, "winning_trades": 0, "losses": 0, "losing_trades": 0, "win_rate": 0.0, "pnl": 0.0, "total_pnl": 0.0}
+            by_strat[strat]["total"] += 1
+            by_strat[strat]["total_trades"] += 1
+            by_strat[strat]["pnl"] += pnl
+            by_strat[strat]["total_pnl"] += pnl
+            if is_win:
+                by_strat[strat]["wins"] += 1
+                by_strat[strat]["winning_trades"] += 1
+            elif is_loss:
+                by_strat[strat]["losses"] += 1
+                by_strat[strat]["losing_trades"] += 1
+
+            if sym not in by_pair:
+                by_pair[sym] = {"symbol": sym, "total": 0, "total_trades": 0, "wins": 0, "winning_trades": 0, "losses": 0, "losing_trades": 0, "win_rate": 0.0, "pnl": 0.0, "total_pnl": 0.0}
+            by_pair[sym]["total"] += 1
+            by_pair[sym]["total_trades"] += 1
+            by_pair[sym]["pnl"] += pnl
+            by_pair[sym]["total_pnl"] += pnl
+            if is_win:
+                by_pair[sym]["wins"] += 1
+                by_pair[sym]["winning_trades"] += 1
+            elif is_loss:
+                by_pair[sym]["losses"] += 1
+                by_pair[sym]["losing_trades"] += 1
+
+        for d in by_strat.values():
+            if d["total"] > 0:
+                d["win_rate"] = round((d["wins"] / d["total"]) * 100.0, 1)
+                d["pnl"] = round(d["pnl"], 2)
+                d["total_pnl"] = round(d["total_pnl"], 2)
+
+        for d in by_pair.values():
+            if d["total"] > 0:
+                d["win_rate"] = round((d["wins"] / d["total"]) * 100.0, 1)
+                d["pnl"] = round(d["pnl"], 2)
+                d["total_pnl"] = round(d["total_pnl"], 2)
+
         # Risk-to-reward calculation
         rr_list = []
         for r in rows:
@@ -571,13 +640,13 @@ class StateManager:
             tp_dist = abs(tp - entry)
             if sl_dist > 0.000001:
                 rr_list.append(tp_dist / sl_dist)
-                
+
         avg_planned_rr = round(sum(rr_list) / len(rr_list), 2) if rr_list else 2.50
-        
+
         avg_win_pnl = total_tp_pnl / total_tp if total_tp > 0 else 0.0
         avg_loss_pnl = abs(total_sl_pnl / total_sl) if total_sl > 0 else 0.0
         realized_rr = round(avg_win_pnl / avg_loss_pnl, 2) if avg_loss_pnl > 0.0001 else avg_planned_rr
-        
+
         # Holding duration
         durations = []
         now_dt = datetime.now(timezone.utc)
@@ -599,16 +668,16 @@ class StateManager:
                     dur = 0.0
             if dur > 0.0:
                 durations.append(dur)
-                
+
         total_holding_sec = sum(durations)
         avg_holding_sec = total_holding_sec / len(durations) if durations else 0.0
-        
+
         profit_factor = round(abs(total_tp_pnl) / max(0.01, abs(total_sl_pnl)), 2) if abs(total_sl_pnl) > 0 else (round(total_tp_pnl, 2) if total_tp_pnl > 0 else 0.0)
-        
+
         all_pnls = [float(r['realized_pnl'] or 0.0) for r in closed_rows]
         best_trade = round(max(all_pnls), 2) if all_pnls else 0.0
         worst_trade = round(min(all_pnls), 2) if all_pnls else 0.0
-        
+
         return {
             "total_trades": total_trades,
             "total_closed_trades": total_closed,
@@ -635,8 +704,8 @@ class StateManager:
             "profit_factor": profit_factor,
             "best_trade_pnl": best_trade,
             "worst_trade_pnl": worst_trade,
-            "by_strategy": self.get_stats_by_strategy(),
-            "by_pair": self.get_stats_by_pair(),
+            "by_strategy": by_strat,
+            "by_pair": by_pair,
         }
 
 
@@ -644,7 +713,7 @@ class StateManager:
         """Mark any lingering 'ACTIVE' sessions as 'INTERRUPTED'."""
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
-        with self.conn:
+        with self._lock, self.conn:
             cursor = self.conn.execute("SELECT id, activation_time FROM bot_sessions WHERE status = 'ACTIVE'")
             rows = cursor.fetchall()
             for r in rows:
@@ -688,7 +757,7 @@ class StateManager:
             
         lot_size_str = str(lot_size) if lot_size is not None else "Dynamic"
         
-        with self.conn:
+        with self._lock, self.conn:
             cursor = self.conn.execute('''
                 INSERT INTO bot_sessions (
                     activation_time, symbols, lot_size, trigger_source, status
@@ -712,7 +781,7 @@ class StateManager:
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
         
-        with self.conn:
+        with self._lock, self.conn:
             if session_id is not None:
                 cursor = self.conn.execute(
                     "SELECT id, activation_time FROM bot_sessions WHERE id = ? AND status = 'ACTIVE'",
@@ -751,10 +820,11 @@ class StateManager:
 
     def get_active_session(self) -> dict | None:
         """Return the currently active session if one exists, with live running duration."""
-        cursor = self.conn.execute(
-            "SELECT * FROM bot_sessions WHERE status = 'ACTIVE' ORDER BY id DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self.conn.execute(
+                "SELECT * FROM bot_sessions WHERE status = 'ACTIVE' ORDER BY id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
         if not row:
             return None
             
@@ -784,12 +854,14 @@ class StateManager:
 
     def get_activation_history(self, limit: int = 100) -> list[dict]:
         """Return historical bot activation / deactivation sessions ordered by id DESC."""
-        cursor = self.conn.execute(
-            "SELECT * FROM bot_sessions ORDER BY id DESC LIMIT ?", (limit,)
-        )
+        with self._lock:
+            cursor = self.conn.execute(
+                "SELECT * FROM bot_sessions ORDER BY id DESC LIMIT ?", (limit,)
+            )
+            rows = cursor.fetchall()
         now = datetime.now(timezone.utc)
         records = []
-        for row in cursor.fetchall():
+        for row in rows:
             try:
                 act_dt = datetime.fromisoformat(row["activation_time"])
                 if act_dt.tzinfo is None:
@@ -865,14 +937,14 @@ class StateManager:
 
     def clear_activation_history(self) -> None:
         """Clear all completed/interrupted session history records (keeps active session if one exists)."""
-        with self.conn:
+        with self._lock, self.conn:
             self.conn.execute("DELETE FROM bot_sessions WHERE status != 'ACTIVE'")
         logger.info("Cleared non-active bot session history.")
         self._sync_sessions_csv()
 
     def clear_trade_history(self) -> None:
         """Clear historical trade records (keeps OPEN positions)."""
-        with self.conn:
+        with self._lock, self.conn:
             self.conn.execute("DELETE FROM trade_log WHERE status != 'OPEN'")
             self.conn.execute("UPDATE daily_state SET trade_count = 0, realized_pnl = 0.0")
         logger.info("Cleared closed trade records and reset daily counters.")
@@ -880,7 +952,8 @@ class StateManager:
 
     def close(self) -> None:
         """Close DB connection."""
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
         logger.info("Database connection closed")
 
 

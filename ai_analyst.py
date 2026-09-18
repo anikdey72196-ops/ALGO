@@ -173,11 +173,23 @@ Decision Rules:
                 reason="AI Rejected: Setup opposes macro institutional order flow.",
             )
 
-        # 2. SMC Confirmation Type (+30-35 pts)
+        # 2. SMC / ICT Confirmation Type (+20-35 pts)
         conf_name = signal.ltf_confirmation.value
         if "OB_SCALP_5M" in conf_name:
             score += 35.0
             reasons.append("5M Break of Structure & Order Block retest scalp")
+        elif "ICT_SILVER_BULLET" in conf_name:
+            score += 35.0
+            reasons.append("ICT Silver Bullet institutional liquidity sweep & FVG model")
+        elif "ICT_KILLZONE_FVG" in conf_name:
+            score += 35.0
+            reasons.append("ICT Kill Zone high-volume Fair Value Gap retest")
+        elif "ICT_JUDAS_SWING" in conf_name:
+            score += 35.0
+            reasons.append("ICT Judas Swing liquidity purge reversal")
+        elif "ICT_OTE_RETEST" in conf_name:
+            score += 30.0
+            reasons.append("ICT Optimal Trade Entry (OTE) Fib confluence retest")
         elif "OB_PLUS_FVG" in conf_name:
             score += 35.0
             reasons.append("Order Block + Fair Value Gap confluence retest")
@@ -190,6 +202,9 @@ Decision Rules:
         elif "LIQUIDITY_SWEEP" in conf_name:
             score += 20.0
             reasons.append("Liquidity sweep confirmed")
+        elif "PULLBACK" in conf_name or "STRUCTURAL_BREAK" in conf_name:
+            score += 20.0
+            reasons.append("Structural trend continuation")
 
         # 3. Risk-Reward Asymmetry (+20 pts)
         if "OB_SCALP_5M" in conf_name:
@@ -199,6 +214,13 @@ Decision Rules:
             elif signal.rr_ratio >= 1.4:
                 score += 15.0
                 reasons.append(f"Acceptable 5M Scalp R:R ({signal.rr_ratio:.2f}:1)")
+        elif "ICT" in conf_name:
+            if signal.rr_ratio >= 2.0:
+                score += 20.0
+                reasons.append(f"Optimal ICT Model R:R ({signal.rr_ratio:.2f}:1)")
+            elif signal.rr_ratio >= 1.5:
+                score += 15.0
+                reasons.append(f"Acceptable ICT Model R:R ({signal.rr_ratio:.2f}:1)")
         else:
             if signal.rr_ratio >= 3.0:
                 score += 20.0

@@ -125,33 +125,40 @@ class TradeSignal:
 
 def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Compute Average True Range (ATR)."""
-    high = df['high']
-    low = df['low']
-    close_prev = df['close'].shift(1)
+    high = df['high'].values
+    low = df['low'].values
+    close = df['close'].values
+
+    close_prev = np.empty_like(close)
+    close_prev[0] = close[0]
+    close_prev[1:] = close[:-1]
 
     tr1 = high - low
-    tr2 = (high - close_prev).abs()
-    tr3 = (low - close_prev).abs()
+    tr2 = np.abs(high - close_prev)
+    tr3 = np.abs(low - close_prev)
 
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(window=period, min_periods=1).mean()
+    tr = np.maximum(tr1, np.maximum(tr2, tr3))
+    return pd.Series(tr, index=df.index).rolling(window=period, min_periods=1).mean()
 
 
 def find_swing_points_logic(highs: pd.Series, lows: pd.Series, lookback: int) -> list[SwingPoint]:
-    """Identify swing highs and swing lows using N-bar pivot logic."""
+    """Identify swing highs and swing lows using N-bar pivot logic (NumPy optimized)."""
     swings = []
     n = len(highs)
     if n < 2 * lookback + 1:
         return swings
 
-    for i in range(lookback, n - lookback):
-        window_highs = highs.iloc[i - lookback : i + lookback + 1]
-        if highs.iloc[i] == window_highs.max():
-            swings.append(SwingPoint(index=i, price=float(highs.iloc[i]), is_high=True))
+    h_arr = highs.values
+    l_arr = lows.values
 
-        window_lows = lows.iloc[i - lookback : i + lookback + 1]
-        if lows.iloc[i] == window_lows.min():
-            swings.append(SwingPoint(index=i, price=float(lows.iloc[i]), is_high=False))
+    for i in range(lookback, n - lookback):
+        window_highs = h_arr[i - lookback : i + lookback + 1]
+        if h_arr[i] == window_highs.max():
+            swings.append(SwingPoint(index=i, price=float(h_arr[i]), is_high=True))
+
+        window_lows = l_arr[i - lookback : i + lookback + 1]
+        if l_arr[i] == window_lows.min():
+            swings.append(SwingPoint(index=i, price=float(l_arr[i]), is_high=False))
 
     swings.sort(key=lambda sp: sp.index)
     return swings
@@ -1319,6 +1326,7 @@ class BaseStrategy(ABC):
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
     ) -> list[TradeSignal]:
         """Evaluate market data and return candidate TradeSignals."""
         pass
@@ -1376,8 +1384,10 @@ class SMCSwingStrategy(BaseStrategy):
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
     ) -> list[TradeSignal]:
-        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis is None:
+            htf_analysis = self.htf_analyzer.analyze(htf_data)
         if htf_analysis.bias == MarketBias.NEUTRAL:
             return []
 
@@ -1489,8 +1499,10 @@ class SMCScalp5MStrategy(BaseStrategy):
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
     ) -> list[TradeSignal]:
-        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis is None:
+            htf_analysis = self.htf_analyzer.analyze(htf_data)
         if htf_analysis.bias == MarketBias.NEUTRAL:
             return []
 
@@ -1593,8 +1605,10 @@ class ICTStrategy(BaseStrategy):
         instrument: InstrumentConfig,
         current_spread: float,
         fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
     ) -> list[TradeSignal]:
-        htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis is None:
+            htf_analysis = self.htf_analyzer.analyze(htf_data)
         if htf_analysis.bias == MarketBias.NEUTRAL:
             return []
 
@@ -1672,10 +1686,14 @@ class ICTStrategy(BaseStrategy):
 class StrategyEngine:
     """Orchestrates HTF macro structure and executes registered strategies."""
 
-    def __init__(self, config: TradingConfig | TimeframeConfig, instrument: InstrumentConfig | None = None, ict_config: ICTConfig | None = None):
+    def __init__(self, config: TradingConfig | TimeframeConfig | None = None, instrument: InstrumentConfig | None = None, ict_config: ICTConfig | None = None):
+        if config is None:
+            from config import DEFAULT_CONFIG
+            config = DEFAULT_CONFIG
+
         if hasattr(config, 'timeframes'):
             self.tf_config = config.timeframes
-            self.ict_config = ict_config or config.ict
+            self.ict_config = ict_config or getattr(config, 'ict', ICTConfig())
             self.trading_config = config
         else:
             self.tf_config = config
@@ -1719,6 +1737,7 @@ class StrategyEngine:
         bars_5m: pd.DataFrame | None = None,
         current_spread_points: float | None = None,
         account_balance: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
     ) -> list[TradeSignal]:
         """Runs all enabled strategies concurrently and returns aggregate signals."""
         inst = instrument or self.instrument
@@ -1732,6 +1751,9 @@ class StrategyEngine:
 
         if htf is None or ltf is None:
             return []
+
+        # Precompute HTF analysis once if not provided, and share across strategies
+        shared_htf_analysis = htf_analysis if htf_analysis is not None else self.htf_analyzer.analyze(htf)
 
         for strat_id in targets:
             strat = self.strategies.get(strat_id)
@@ -1747,6 +1769,7 @@ class StrategyEngine:
                     instrument=inst,
                     current_spread=spread,
                     fixed_sl_pips=fixed_sl_pips,
+                    htf_analysis=shared_htf_analysis,
                 )
                 all_signals.extend(sigs)
             except Exception as e:

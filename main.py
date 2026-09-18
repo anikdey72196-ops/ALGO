@@ -6,6 +6,7 @@ import os
 import sys
 import signal
 import asyncio
+import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -97,6 +98,7 @@ class TradingBot:
         self._last_utc_day: int | None = None
         self.is_active: bool = False
         self.recent_logs: list[str] = []
+        self._tick_lock = threading.Lock()
 
         # Initialize components
         self.state = StateManager(db_path=self.config.db_path)
@@ -305,6 +307,16 @@ class TradingBot:
             logger.debug("TradingBot is DEACTIVATED (Idle). Skipping tick.")
             return
 
+        if not self._tick_lock.acquire(blocking=False):
+            self.log("Tick already in progress. Skipping duplicate run.", level="DEBUG")
+            return
+
+        try:
+            self._execute_tick()
+        finally:
+            self._tick_lock.release()
+
+    def _execute_tick(self) -> None:
         now_utc = datetime.now(timezone.utc)
 
         # Step 1: Day rollover & position sync
@@ -361,6 +373,7 @@ class TradingBot:
                 instrument = get_instrument(self.config, symbol)
             except ValueError:
                 logger.warning(f"  Symbol '{symbol}' not in configured instruments. Skipping.")
+                continue
             # ── Check if symbol already has an active open position ──
             open_pos = [t for t in self.state.get_open_positions() if t.symbol == symbol]
             if open_pos:
@@ -414,6 +427,7 @@ class TradingBot:
             eval_strats = self.config.enabled_strategies
 
             # ── Step 2b: Generate signals across enabled strategies ──
+            htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
@@ -422,6 +436,7 @@ class TradingBot:
                 current_spread=current_spread,
                 fixed_sl_pips=pair_sl,
                 enabled_strategies=eval_strats,
+                htf_analysis=htf_analysis,
             )
 
             if not signals:
@@ -452,7 +467,6 @@ class TradingBot:
             )
 
             # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
-            htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
             ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
 
             if not ai_verdict.confirmed:
