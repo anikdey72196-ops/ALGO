@@ -59,6 +59,32 @@ class StrategyType(str, Enum):
     ICT = "ICT"                      # ICT KillZone, Judas Swing, MSS & FVG/OTE Model
 
 
+def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> str:
+    """
+    Map various strategy name formats or magic numbers to canonical StrategyType IDs:
+    - 'SMC'
+    - 'SMC_SCALP_5M'
+    - 'ICT'
+    """
+    if magic == 124456:
+        return "SMC"
+    elif magic == 125456:
+        return "SMC_SCALP_5M"
+    elif magic == 126456:
+        return "ICT"
+
+    if not strat_name:
+        return "SMC"
+    s = str(strat_name).upper().strip()
+    if "SCALP" in s or "5M" in s:
+        return "SMC_SCALP_5M"
+    elif "ICT" in s:
+        return "ICT"
+    elif "SWING" in s or "SMC" in s:
+        return "SMC"
+    return s
+
+
 class PairSettings(BaseModel):
     """Independent settings for a single traded pair."""
     symbol: str = Field(default="XAUUSD", description="Instrument symbol (e.g. XAUUSD, EURUSD)")
@@ -163,16 +189,22 @@ class RiskConfig(BaseModel):
         description="Minimum risk-to-reward ratio to accept a trade.",
     )
     max_daily_trades: int = Field(
-        default=2,
+        default=12,
         ge=1,
-        le=20,
+        le=50,
         description="Maximum number of trades per UTC day.",
     )
     max_open_positions: int = Field(
-        default=2,
+        default=6,
+        ge=1,
+        le=20,
+        description="Maximum concurrent open positions allowed across all pairs/strategies.",
+    )
+    max_open_per_symbol: int = Field(
+        default=3,
         ge=1,
         le=10,
-        description="Maximum concurrent open positions allowed across all pairs/strategies.",
+        description="Maximum concurrent open positions allowed per symbol (1 per strategy).",
     )
     min_tp_spread_multiple: float = Field(
         default=6.0,

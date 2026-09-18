@@ -3,7 +3,7 @@ import math
 from dataclasses import dataclass
 # pyrefly: ignore [missing-import]
 from loguru import logger
-from config import AccountConfig, RiskConfig, InstrumentConfig, TradingConfig, get_instrument
+from config import AccountConfig, RiskConfig, InstrumentConfig, TradingConfig, get_instrument, normalize_strategy_key
 from state import StateManager
 from strategy import TradeSignal
 
@@ -71,15 +71,15 @@ class RiskEngine:
         if self.state.is_circuit_breaker_active():
             return True, 'Circuit breaker active: daily loss limit reached'
 
-        # Check maximum concurrent open positions
+        # Check maximum concurrent open positions (default 6)
         open_positions = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 2)
+        max_open = getattr(self.config.risk, 'max_open_positions', 6)
         if len(open_positions) >= max_open:
             return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
 
-        # Check maximum daily trades executed
+        # Check maximum daily trades executed (default 12)
         daily_trades = self.state.get_trade_count()
-        max_trades = getattr(self.config.risk, 'max_daily_trades', 2)
+        max_trades = getattr(self.config.risk, 'max_daily_trades', 12)
         if daily_trades >= max_trades:
             return True, f"Max daily trades limit reached ({daily_trades}/{max_trades} today)"
 
@@ -126,10 +126,12 @@ class RiskEngine:
                 account_equity=current_equity
             )
 
-        # ── Strict Rule 1: No duplicate trade if a position is already open for this symbol ──
-        open_symbol_trades = [t for t in self.state.get_open_positions() if t.symbol == signal.symbol]
-        if open_symbol_trades:
-            msg = f"Position already open for {signal.symbol} (ID #{open_symbol_trades[0].id} | {open_symbol_trades[0].strategy_name}). Duplicate entry blocked."
+        # ── Strict Rule 1: Max concurrent open positions per symbol (e.g. max 3 for XAUUSD, max 3 for EURUSD) ──
+        open_positions = self.state.get_open_positions()
+        open_symbol_trades = [t for t in open_positions if t.symbol == signal.symbol]
+        max_per_symbol = getattr(self.config.risk, 'max_open_per_symbol', 3)
+        if len(open_symbol_trades) >= max_per_symbol:
+            msg = f"Max open positions for {signal.symbol} reached ({len(open_symbol_trades)}/{max_per_symbol} open). Duplicate entry blocked."
             logger.info(f"Trade rejected: {msg}")
             return AuthorizationResult(
                 authorized=False,
@@ -137,16 +139,18 @@ class RiskEngine:
                 account_equity=current_equity
             )
 
-        # ── Strict Rule 2: No concurrent trades using the exact same strategy (DEACTIVATED) ──
-        # open_strat_trades = [t for t in self.state.get_open_positions() if t.strategy_name == signal.strategy_name]
-        # if open_strat_trades:
-        #     msg = f"Strategy '{signal.strategy_name}' already has an active trade (ID #{open_strat_trades[0].id} on {open_strat_trades[0].symbol}). Concurrent strategy entry blocked."
-        #     logger.info(f"Trade rejected: {msg}")
-        #     return AuthorizationResult(
-        #         authorized=False,
-        #         rejection_reason=msg,
-        #         account_equity=current_equity
-        #     )
+        # ── Strict Rule 2: Every strategy can execute at most 1 trade at a time per symbol ──
+        sig_strat = normalize_strategy_key(getattr(signal, 'strategy_id', None) or signal.strategy_name, getattr(signal, 'magic_number', None))
+        for t in open_symbol_trades:
+            t_strat = normalize_strategy_key(getattr(t, 'strategy_name', None), getattr(t, 'magic_number', None))
+            if t_strat == sig_strat:
+                msg = f"Strategy '{signal.strategy_name}' ({sig_strat}) already has an active trade for {signal.symbol} (ID #{t.id}). Concurrent strategy entry blocked."
+                logger.info(f"Trade rejected: {msg}")
+                return AuthorizationResult(
+                    authorized=False,
+                    rejection_reason=msg,
+                    account_equity=current_equity
+                )
             
         sl_distance = signal.sl_distance if signal.sl_distance > 0 else abs(signal.entry_price - signal.stop_loss)
         if sl_distance <= 0:

@@ -17,7 +17,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # pyrefly: ignore [missing-import]
 from apscheduler.triggers.interval import IntervalTrigger
 
-from config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction
+from config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction, normalize_strategy_key
 from state import StateManager, TradeRecord
 from news_filter import NewsFilter
 from strategy import StrategyEngine, TradeSignal
@@ -323,9 +323,9 @@ class TradingBot:
         self._check_day_rollover()
         self._sync_open_positions()
 
-        # Step 1b: Max concurrent open positions guard (e.g. max 2 open trades)
+        # Step 1b: Max concurrent open positions guard (e.g. max 6 open trades)
         open_trades = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 2)
+        max_open = getattr(self.config.risk, 'max_open_positions', 6)
         if len(open_trades) >= max_open:
             self.log(
                 f"⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
@@ -374,10 +374,14 @@ class TradingBot:
             except ValueError:
                 logger.warning(f"  Symbol '{symbol}' not in configured instruments. Skipping.")
                 continue
-            # ── Check if symbol already has an active open position ──
-            open_pos = [t for t in self.state.get_open_positions() if t.symbol == symbol]
-            if open_pos:
-                self.log(f"  ⏸️ Existing position #{open_pos[0].id} ({open_pos[0].strategy_name}) is already OPEN for {symbol}. Skipping new entry.")
+            # ── Check open positions for this symbol (max 3 for XAUUSD, max 3 for EURUSD) ──
+            open_symbol_trades = [t for t in open_trades if t.symbol == symbol]
+            max_per_symbol = getattr(self.config.risk, 'max_open_per_symbol', 3)
+            if len(open_symbol_trades) >= max_per_symbol:
+                self.log(
+                    f"  ⏸️ Max open positions reached for {symbol} ({len(open_symbol_trades)}/{max_per_symbol} open). "
+                    f"Skipping new entry for Pair {pair_num}."
+                )
                 continue
 
             htf_tf = "1H"
@@ -418,13 +422,22 @@ class TradingBot:
                 logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
 
-            # ── Step 2b: Exclude strategies that already have an active open position (DEACTIVATED) ──
-            # active_strat_names = {t.strategy_name for t in self.state.get_open_positions()}
-            # eval_strats = [s for s in self.config.enabled_strategies if s not in active_strat_names]
-            # if not eval_strats:
-            #     logger.info(f"  All enabled strategies ({active_strat_names}) already have an active open trade. Skipping Pair {pair_num} ({symbol}).")
-            #     continue
-            eval_strats = self.config.enabled_strategies
+            # ── Step 2b: Exclude strategies that already have an active open position for this symbol ──
+            # (Every strategy can execute at most 1 trade at a time per symbol)
+            active_strats_on_symbol = {
+                normalize_strategy_key(t.strategy_name, t.magic_number)
+                for t in open_symbol_trades
+            }
+            eval_strats = [
+                s for s in self.config.enabled_strategies
+                if normalize_strategy_key(s) not in active_strats_on_symbol
+            ]
+            if not eval_strats:
+                self.log(
+                    f"  ⏸️ All enabled strategies ({list(active_strats_on_symbol)}) already have active trades for {symbol}. "
+                    f"Skipping Pair {pair_num}."
+                )
+                continue
 
             # ── Step 2b: Generate signals across enabled strategies ──
             htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)

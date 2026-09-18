@@ -417,5 +417,152 @@ class TestWebAPIEndpoints(unittest.TestCase):
         self.assertEqual(set(state_data["enabled_strategies"]), {"SMC", "SMC_SCALP_5M", "ICT"})
 
 
+class TestMultiStrategyConcurrency(unittest.TestCase):
+    """
+    Validates:
+    1. Every strategy can execute 1 trade at a time per symbol.
+    2. Duplicate strategy on the same symbol is rejected.
+    3. Different strategies on the same symbol are authorized up to 3 trades per symbol.
+    4. 4th trade on the same symbol is rejected (max 3 for EURUSD, max 3 for XAUUSD).
+    5. Maximum 6 concurrent open trades across the bot (3 EURUSD + 3 XAUUSD).
+    6. 7th trade across the bot is rejected by the global limit.
+    """
+
+    def setUp(self):
+        self.temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self.temp_db.close()
+        self.state = StateManager(db_path=self.temp_db.name)
+        self.config = TradingConfig()
+        self.risk_engine = RiskEngine(self.config, self.state)
+
+    def tearDown(self):
+        try:
+            os.remove(self.temp_db.name)
+        except OSError:
+            pass
+
+    def _make_signal(self, symbol: str, strategy_name: str, magic_number: int, entry: float, sl: float, tp: float):
+        return TradeSignal(
+            symbol=symbol,
+            direction=Direction.BUY,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=MarketBias.BULLISH,
+            ltf_confirmation=LTFConfirmation.LIQUIDITY_SWEEP,
+            rr_ratio=2.5,
+            quality_score=85.0,
+            timestamp=datetime.now(timezone.utc),
+            sl_distance=abs(entry - sl),
+            tp_distance=abs(tp - entry),
+            strategy_id=strategy_name,
+            strategy_name=strategy_name,
+            magic_number=magic_number,
+        )
+
+    def test_multi_strategy_concurrency_and_limits(self):
+        now = datetime.now(timezone.utc)
+        equity = 100000.0
+
+        # 1. Authorize SMC on EURUSD -> Should succeed
+        sig_eur_smc = self._make_signal("EURUSD", "SMC", 124456, 1.0850, 1.0830, 1.0900)
+        auth = self.risk_engine.authorize_trade(sig_eur_smc, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth.authorized)
+
+        # Record trade as OPEN in state
+        t1 = TradeRecord(
+            id=1, timestamp=now, symbol="EURUSD", direction="BUY",
+            entry_price=1.0850, stop_loss=1.0830, take_profit=1.0900,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="SMC", magic_number=124456
+        )
+        self.state.record_trade(t1)
+
+        # 2. Authorize duplicate SMC on EURUSD -> Must be REJECTED
+        auth_dup = self.risk_engine.authorize_trade(sig_eur_smc, equity, fixed_lot_size=0.01)
+        self.assertFalse(auth_dup.authorized)
+        self.assertIn("already has an active trade for EURUSD", auth_dup.rejection_reason)
+
+        # 3. Authorize ICT on EURUSD -> Should SUCCEED (different strategy)
+        sig_eur_ict = self._make_signal("EURUSD", "ICT", 126456, 1.0855, 1.0835, 1.0905)
+        auth_ict = self.risk_engine.authorize_trade(sig_eur_ict, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth_ict.authorized)
+
+        t2 = TradeRecord(
+            id=2, timestamp=now, symbol="EURUSD", direction="BUY",
+            entry_price=1.0855, stop_loss=1.0835, take_profit=1.0905,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="ICT", magic_number=126456
+        )
+        self.state.record_trade(t2)
+
+        # 4. Authorize SMC_SCALP_5M on EURUSD -> Should SUCCEED (3rd strategy on EURUSD)
+        sig_eur_scalp = self._make_signal("EURUSD", "SMC_SCALP_5M", 125456, 1.0860, 1.0840, 1.0910)
+        auth_scalp = self.risk_engine.authorize_trade(sig_eur_scalp, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth_scalp.authorized)
+
+        t3 = TradeRecord(
+            id=3, timestamp=now, symbol="EURUSD", direction="BUY",
+            entry_price=1.0860, stop_loss=1.0840, take_profit=1.0910,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="SMC_SCALP_5M", magic_number=125456
+        )
+        self.state.record_trade(t3)
+
+        # 5. EURUSD now has 3 open trades (SMC, ICT, SMC_SCALP_5M). 4th trade on EURUSD must be REJECTED.
+        sig_eur_4th = self._make_signal("EURUSD", "CUSTOM_STRAT", 999999, 1.0865, 1.0845, 1.0915)
+        auth_4th = self.risk_engine.authorize_trade(sig_eur_4th, equity, fixed_lot_size=0.01)
+        self.assertFalse(auth_4th.authorized)
+        self.assertIn("Max open positions for EURUSD reached", auth_4th.rejection_reason)
+
+        # 6. Now test XAUUSD: SMC on XAUUSD should SUCCEED (even though SMC is open on EURUSD)
+        sig_xau_smc = self._make_signal("XAUUSD", "SMC", 124456, 2500.0, 2490.0, 2525.0)
+        auth_xau_smc = self.risk_engine.authorize_trade(sig_xau_smc, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth_xau_smc.authorized)
+
+        t4 = TradeRecord(
+            id=4, timestamp=now, symbol="XAUUSD", direction="BUY",
+            entry_price=2500.0, stop_loss=2490.0, take_profit=2525.0,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="SMC", magic_number=124456
+        )
+        self.state.record_trade(t4)
+
+        # 7. Authorize ICT on XAUUSD -> SUCCEEDS (2nd open trade on XAUUSD)
+        sig_xau_ict = self._make_signal("XAUUSD", "ICT", 126456, 2505.0, 2495.0, 2530.0)
+        auth_xau_ict = self.risk_engine.authorize_trade(sig_xau_ict, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth_xau_ict.authorized)
+
+        t5 = TradeRecord(
+            id=5, timestamp=now, symbol="XAUUSD", direction="BUY",
+            entry_price=2505.0, stop_loss=2495.0, take_profit=2530.0,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="ICT", magic_number=126456
+        )
+        self.state.record_trade(t5)
+
+        # 8. Authorize SMC_SCALP_5M on XAUUSD -> SUCCEEDS (3rd open trade on XAUUSD, 6th total)
+        sig_xau_scalp = self._make_signal("XAUUSD", "SMC_SCALP_5M", 125456, 2510.0, 2500.0, 2535.0)
+        auth_xau_scalp = self.risk_engine.authorize_trade(sig_xau_scalp, equity, fixed_lot_size=0.01)
+        self.assertTrue(auth_xau_scalp.authorized)
+
+        t6 = TradeRecord(
+            id=6, timestamp=now, symbol="XAUUSD", direction="BUY",
+            entry_price=2510.0, stop_loss=2500.0, take_profit=2535.0,
+            lot_size=0.01, realized_pnl=0.0, status="OPEN",
+            strategy_name="SMC_SCALP_5M", magic_number=125456
+        )
+        self.state.record_trade(t6)
+
+        # 9. Now we have 6 open positions (3 EURUSD, 3 XAUUSD).
+        self.assertEqual(len(self.state.get_open_positions()), 6)
+
+        # 10. A 7th trade across the bot must be REJECTED by the global max_open_positions limit (6/6).
+        sig_7th = self._make_signal("GBPUSD", "SMC", 124456, 1.3000, 1.2980, 1.3050)
+        auth_7th = self.risk_engine.authorize_trade(sig_7th, equity, fixed_lot_size=0.01)
+        self.assertFalse(auth_7th.authorized)
+        self.assertIn("Max concurrent open positions reached (6/6 open)", auth_7th.rejection_reason)
+
+
 if __name__ == '__main__':
     unittest.main()
