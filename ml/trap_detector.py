@@ -173,6 +173,8 @@ FEATURE_ORDER: dict[EventKind, list[str]] = {
     ],
 }
 
+ALL_FEATURES: list[str] = sorted({k for kind in FEATURE_ORDER.values() for k in kind})
+
 
 def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     h, l, c = df["high"], df["low"], df["close"]
@@ -621,9 +623,31 @@ class TrapModel:
             self.n_samples = int(state["n_samples"])
             self.version = str(state["version"])
             self._sgd_fitted = bool(state["_sgd_fitted"])
-            logger.info(
-                "TrapModel loaded: version=%s samples=%d", self.version, self.n_samples
-            )
+            scaler_features = getattr(self.scaler, "n_features_in_", None)
+            if scaler_features is not None and scaler_features != len(ALL_FEATURES):
+                logger.warning(
+                    "TrapModel feature dimension mismatch (%d != %d). Resetting model to cold start.",
+                    scaler_features,
+                    len(ALL_FEATURES),
+                )
+                from sklearn.linear_model import SGDClassifier
+                from sklearn.preprocessing import StandardScaler
+                self.scaler = StandardScaler()
+                self.sgd = SGDClassifier(
+                    loss="log_loss",
+                    penalty="elasticnet",
+                    alpha=1e-4,
+                    learning_rate="optimal",
+                    random_state=42,
+                )
+                self.lgbm = None
+                self.n_samples = 0
+                self.version = "cold"
+                self._sgd_fitted = False
+            else:
+                logger.info(
+                    "TrapModel loaded: version=%s samples=%d", self.version, self.n_samples
+                )
         except Exception as exc:  # corrupt artifact -> start fresh, never crash bot
             logger.exception("Failed to load TrapModel artifact: %s", exc)
 
@@ -655,8 +679,7 @@ class TrapGate:
                 reason=f"shadow mode ({self.model.n_samples}/{self.cfg.shadow_until_samples})",
             )
 
-        order = FEATURE_ORDER[kind]
-        x = np.array([[features.get(k, 0.0) for k in order]], dtype=float)
+        x = np.array([[features.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
 
         try:
             p = float(self.model.predict_proba_genuine(x)[0])
@@ -775,7 +798,7 @@ class TrapDetectorService:
         for ev in pending:
             try:
                 df = history_provider(ev.symbol, ev.timeframe, 500)
-                if df.empty:
+                if df is None or df.empty:
                     continue
 
                 if not isinstance(df.index, pd.DatetimeIndex):
@@ -807,8 +830,7 @@ class TrapDetectorService:
                 ev.label_ts = datetime.now(timezone.utc)
                 self.store.upsert(ev)
 
-                order = FEATURE_ORDER[ev.kind]
-                x = ev.feature_vector(order)
+                x = ev.feature_vector(ALL_FEATURES)
                 self.model.partial_fit(x, np.array([label]))
                 labeled += 1
             except Exception:
@@ -833,7 +855,7 @@ class TrapDetectorService:
         # Group by kind so each kind gets its own column layout — concatenate
         # feature vectors with a union schema; missing -> 0.0. Keeps one model
         # but preserves per-kind signal via the presence mask.
-        union: list[str] = sorted({k for kind in FEATURE_ORDER.values() for k in kind})
+        union: list[str] = ALL_FEATURES
         X = np.array(
             [[r.features.get(k, 0.0) for k in union] for r in rows], dtype=float
         )
@@ -853,7 +875,7 @@ class TrapDetectorService:
         p = Path(self.cfg.model_path).with_suffix(".columns.json")
         if p.exists():
             return json.loads(p.read_text())
-        return sorted({k for kind in FEATURE_ORDER.values() for k in kind})
+        return ALL_FEATURES
 
     # -- async worker --------------------------------------------------------
     async def run_labeler(
@@ -936,6 +958,19 @@ def _self_test() -> None:
     label, outcome, r = label_triple_barrier(dn, i0, "long", entry, stop, target, 10)
     assert (label, outcome) == (0, "sl"), (label, outcome)
     print("[ok] labeler SL-first")
+
+    # --- model: multi-kind partial_fit invariant ---------------------------
+    model = TrapModel(path="ml/artifacts/_selftest.joblib")
+    f_fvg = extract_features(df, 30, EventKind.FVG_BULL, cfg)
+    f_sweep = extract_features(df, 30, EventKind.SWEEP_BSL, cfg)
+    x_fvg = np.array([[f_fvg.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
+    x_sweep = np.array([[f_sweep.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
+    model.partial_fit(x_fvg, np.array([1]))
+    model.partial_fit(x_sweep, np.array([0]))
+    p_fvg = model.predict_proba_genuine(x_fvg)
+    p_sweep = model.predict_proba_genuine(x_sweep)
+    assert len(p_fvg) == 1 and len(p_sweep) == 1
+    print("[ok] multi-kind partial_fit invariant")
 
     print("All self-tests passed.")
 

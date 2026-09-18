@@ -751,7 +751,7 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     labeler_task = asyncio.create_task(
         bot.trap_svc.run_labeler(
             history_provider=lambda sym, tf, n: bot._prepare_df_for_trap_detector(
-                bot._get_ohlcv(sym, tf, count=max(n, 300)) or pd.DataFrame()
+                bot._get_ohlcv(sym, tf, count=max(n, 300))
             )
         )
     )

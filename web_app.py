@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
     labeler_task_instance = asyncio.create_task(
         bot_instance.trap_svc.run_labeler(
             history_provider=lambda sym, tf, n: bot_instance._prepare_df_for_trap_detector(
-                bot_instance._get_ohlcv(sym, tf, count=max(n, 300)) or pd.DataFrame()
+                bot_instance._get_ohlcv(sym, tf, count=max(n, 300))
             )
         )
     )
