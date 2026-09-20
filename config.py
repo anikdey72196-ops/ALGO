@@ -57,6 +57,7 @@ class StrategyType(str, Enum):
     SMC = "SMC"                      # 15m Institutional Swing Liquidity Sweep
     SMC_SCALP_5M = "SMC_SCALP_5M"    # 5m Order Block (OB) Scalp
     ICT = "ICT"                      # ICT KillZone, Judas Swing, MSS & FVG/OTE Model
+    ORDER_FLOW = "ORDER_FLOW"        # Order Flow Volume Delta, CVD & Absorption Model
 
 
 def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> str:
@@ -65,6 +66,7 @@ def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> 
     - 'SMC'
     - 'SMC_SCALP_5M'
     - 'ICT'
+    - 'ORDER_FLOW'
     """
     if magic == 124456:
         return "SMC"
@@ -72,11 +74,15 @@ def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> 
         return "SMC_SCALP_5M"
     elif magic == 126456:
         return "ICT"
+    elif magic == 127456:
+        return "ORDER_FLOW"
 
     if not strat_name:
         return "SMC"
     s = str(strat_name).upper().strip()
-    if "SCALP" in s or "5M" in s:
+    if "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
+        return "ORDER_FLOW"
+    elif "SCALP" in s or "5M" in s:
         return "SMC_SCALP_5M"
     elif "ICT" in s:
         return "ICT"
@@ -107,6 +113,17 @@ class ICTConfig(BaseModel):
     ote_fib_min: float = Field(default=0.618, description="Optimal Trade Entry minimum Fibonacci retracement.")
     ote_fib_max: float = Field(default=0.786, description="Optimal Trade Entry maximum Fibonacci retracement.")
     target_rr: float = Field(default=2.0, ge=1.0, description="Default Target Risk-to-Reward ratio for ICT setups.")
+
+
+class OrderFlowConfig(BaseModel):
+    """Parameters for Order Flow & Volume Delta analysis."""
+    delta_lookback_bars: int = Field(default=20, ge=5, le=100, description="Lookback window for volume and CVD calculations.")
+    absorption_volume_factor: float = Field(default=1.8, ge=1.1, le=5.0, description="Volume multiplier vs 20-period SMA to flag absorption candidate.")
+    wick_ratio_threshold: float = Field(default=0.4, ge=0.2, le=0.9, description="Minimum wick-to-total-range ratio to qualify as absorption.")
+    cvd_divergence_bars: int = Field(default=14, ge=5, le=50, description="Lookback period to check CVD divergence against price swings.")
+    min_rr: float = Field(default=1.8, ge=1.0, description="Minimum acceptable R:R ratio for Order Flow setups.")
+    target_rr: float = Field(default=2.2, ge=1.0, description="Default target Risk-to-Reward ratio for Order Flow setups.")
+    enforce_htf_alignment: bool = Field(default=True, description="Only take order flow trades aligned with HTF bias.")
 
 
 
@@ -328,11 +345,12 @@ class TradingConfig(BaseModel):
     risk: RiskConfig = Field(default_factory=RiskConfig)
     timeframes: TimeframeConfig = Field(default_factory=TimeframeConfig)
     ict: ICTConfig = Field(default_factory=ICTConfig)
+    order_flow: OrderFlowConfig = Field(default_factory=OrderFlowConfig)
     
     # Multi-strategy concurrent execution
     enabled_strategies: List[str] = Field(
-        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT"],
-        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT).",
+        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
+        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW).",
     )
     
     # Dual Independent Pair Configurations

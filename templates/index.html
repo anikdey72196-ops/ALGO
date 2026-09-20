@@ -151,9 +151,9 @@
       <!-- Strategy Multi-Select Cards -->
       <div>
         <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-3">
-          1. Active Strategies (Select 1 to 3 Concurrent Strategies)
+          1. Active Strategies (Select 1 to 4 Concurrent Strategies)
         </label>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- SMC Swing Card -->
           <label class="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-amber-500/50 p-4 rounded-xl cursor-pointer transition-all">
             <input type="checkbox" id="stratSMC" value="SMC" checked class="w-4 h-4 mt-0.5 text-amber-500 bg-gray-800 border-gray-700 rounded focus:ring-amber-500">
@@ -187,6 +187,18 @@
                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-400 font-mono">15M/5M</span>
               </div>
               <p class="text-[11px] text-gray-400 mt-1">London/NY KillZones, Judas Swings, MSS Displacement, FVG & OTE 61.8%-78.6% Fib.</p>
+            </div>
+          </label>
+
+          <!-- Order Flow Card -->
+          <label class="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-purple-500/50 p-4 rounded-xl cursor-pointer transition-all">
+            <input type="checkbox" id="stratOF" value="ORDER_FLOW" checked class="w-4 h-4 mt-0.5 text-purple-500 bg-gray-800 border-gray-700 rounded focus:ring-purple-500">
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-2">
+                <span>Order Flow (Delta & Abs)</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800 text-purple-400 font-mono">15M/5M</span>
+              </div>
+              <p class="text-[11px] text-gray-400 mt-1">Volume Delta, Institutional Absorption at Key S/D, CVD Divergence & Stop Grabs.</p>
             </div>
           </label>
         </div>
@@ -1050,13 +1062,14 @@
         const stratSMC = document.getElementById('stratSMC');
         const stratScalp = document.getElementById('stratScalp');
         const stratICT = document.getElementById('stratICT');
+        const stratOF = document.getElementById('stratOF');
 
         const saveBtn = document.getElementById('saveConfigBtn');
         const tickBtn = document.getElementById('tickBtn');
         const aiCb = document.getElementById('aiToggleCheckbox');
         const aiBadge = document.getElementById('aiStatusBadge');
 
-        const formElements = [c1, c2, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, stratSMC, stratScalp, stratICT, aiCb];
+        const formElements = [c1, c2, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, stratSMC, stratScalp, stratICT, stratOF, aiCb];
 
         if (isBotActive) {
           dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
@@ -1094,6 +1107,7 @@
           if (stratSMC) stratSMC.checked = enabledStrats.includes("SMC");
           if (stratScalp) stratScalp.checked = enabledStrats.includes("SMC_SCALP_5M");
           if (stratICT) stratICT.checked = enabledStrats.includes("ICT");
+          if (stratOF) stratOF.checked = enabledStrats.includes("ORDER_FLOW");
 
           // Sync Pair 1
           if (data.pair1) {
@@ -1292,11 +1306,13 @@
       const stratSMC = document.getElementById('stratSMC').checked;
       const stratScalp = document.getElementById('stratScalp').checked;
       const stratICT = document.getElementById('stratICT').checked;
+      const stratOF = document.getElementById('stratOF') ? document.getElementById('stratOF').checked : false;
 
       const enabledStrats = [];
       if (stratSMC) enabledStrats.push("SMC");
       if (stratScalp) enabledStrats.push("SMC_SCALP_5M");
       if (stratICT) enabledStrats.push("ICT");
+      if (stratOF) enabledStrats.push("ORDER_FLOW");
 
       if (enabledStrats.length === 0) {
         if (showNotification) showToast("Please select at least 1 strategy to run.", true);
@@ -1525,6 +1541,8 @@
     if (stratScalp_el) stratScalp_el.addEventListener('change', () => triggerAutoSave(0));
     const stratICT_el = document.getElementById('stratICT');
     if (stratICT_el) stratICT_el.addEventListener('change', () => triggerAutoSave(0));
+    const stratOF_el = document.getElementById('stratOF');
+    if (stratOF_el) stratOF_el.addEventListener('change', () => triggerAutoSave(0));
 
     const p1En_el = document.getElementById('pair1Enabled');
     if (p1En_el) p1En_el.addEventListener('change', () => triggerAutoSave(0));

@@ -431,7 +431,7 @@ class TradingBot:
                 continue
 
             htf_tf = "1H"
-            ltf_tf = "5m" if "SMC_SCALP_5M" in self.config.enabled_strategies or "ICT" in self.config.enabled_strategies else self.config.timeframes.ltf
+            ltf_tf = "5m" if ("SMC_SCALP_5M" in self.config.enabled_strategies or "ICT" in self.config.enabled_strategies or "ORDER_FLOW" in self.config.enabled_strategies) else self.config.timeframes.ltf
 
             self.log(f"Analyzing Pair {pair_num} ({symbol}) | Sizing: lot={pair_lot or 'Dynamic'}, SL={pair_sl or 'Dynamic'} pips | HTF: {htf_tf} | LTF: {ltf_tf}...")
 
@@ -748,6 +748,7 @@ class TradingBot:
         "OB_PLUS_FVG":       EventKind.FVG_BULL,
         "ICT_KILLZONE_FVG":  EventKind.FVG_BULL,
         "LIQUIDITY_SWEEP":   EventKind.SWEEP_BSL,  # direction resolved at call site
+        "OF_LIQUIDITY_TRAP": EventKind.SWEEP_BSL,
     }
 
     def _signal_to_trap_kind(self, sig: TradeSignal) -> EventKind | None:

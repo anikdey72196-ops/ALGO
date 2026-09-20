@@ -18,6 +18,7 @@ from typing import List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -81,7 +82,7 @@ class BotStateResponse(BaseModel):
     losing_trades: int = 0
     total_closed_trades: int = 0
     active_session: Optional[dict] = None
-    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT"]
+    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
     stats_by_strategy: dict = {}
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
@@ -259,7 +260,7 @@ async def get_bot_state():
         losing_trades=losing_trades,
         total_closed_trades=total_closed,
         active_session=active_session,
-        available_strategies=["SMC", "SMC_SCALP_5M", "ICT"],
+        available_strategies=["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
         stats_by_strategy=stats_by_strategy,
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
@@ -385,7 +386,7 @@ async def update_configuration(payload: BotConfigUpdate):
 
     # Handle enabled strategies update
     if payload.enabled_strategies is not None:
-        valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT")]
+        valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW")]
         if not valid_strats:
             raise HTTPException(status_code=400, detail="At least 1 strategy must be enabled.")
         if bot_instance.is_active and set(valid_strats) != set(bot_instance.config.enabled_strategies):

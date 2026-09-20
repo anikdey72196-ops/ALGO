@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig, StrategyType, ICTConfig
+from config import MarketBias, Direction, TimeframeConfig, InstrumentConfig, StrategyType, ICTConfig, OrderFlowConfig
 
 
 
@@ -41,6 +41,9 @@ class LTFConfirmation(str, Enum):
     ICT_SILVER_BULLET = "ICT_SILVER_BULLET" # ICT Silver Bullet Model
     ICT_JUDAS_SWING = "ICT_JUDAS_SWING"   # ICT Judas Swing Liquidity Purge
     ICT_OTE_RETEST = "ICT_OTE_RETEST"     # ICT Optimal Trade Entry (61.8%-78.6% Fib)
+    OF_ABSORPTION = "OF_ABSORPTION"       # Order Flow Institutional Absorption at Key Level
+    OF_DELTA_DIVERGENCE = "OF_DELTA_DIVERGENCE" # Cumulative Volume Delta Divergence
+    OF_LIQUIDITY_TRAP = "OF_LIQUIDITY_TRAP"     # Stop Sweep with Instant Delta Reversal
     PULLBACK = "PULLBACK"                 # Compatibility fallback
     STRUCTURAL_BREAK = "STRUCTURAL_BREAK" # Compatibility fallback
     NONE = "NONE"
@@ -1319,6 +1322,301 @@ class ICTEngine:
 
 
 # ─────────────────────────────────────────────
+#  Order Flow Microstructure Engine
+# ─────────────────────────────────────────────
+
+class OrderFlowEngine:
+    """
+    Order Flow Microstructure Strategy Engine.
+
+    Analyzes real-time or aggregated candlestick volume data to detect:
+    1. Intrabar / Tick Volume Delta and Cumulative Volume Delta (CVD).
+    2. Institutional Absorption (OF_ABSORPTION) at key support/resistance levels.
+    3. CVD Divergences (OF_DELTA_DIVERGENCE) signaling exhaustion.
+    4. Liquidity Traps and Stop Sweeps (OF_LIQUIDITY_TRAP) with delta reversal.
+    """
+
+    def __init__(self, config: OrderFlowConfig | None = None):
+        self.config = config or OrderFlowConfig()
+
+    def compute_volume_delta(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Enrich dataframe with estimated Volume Delta and Cumulative Volume Delta (CVD).
+        Works seamlessly with real_volume or tick_volume in MT5.
+        """
+        df = df.copy()
+
+        # Determine volume series
+        if 'real_volume' in df.columns and (df['real_volume'] > 0).any():
+            vol = df['real_volume'].astype(float)
+        elif 'tick_volume' in df.columns:
+            vol = df['tick_volume'].astype(float)
+        elif 'volume' in df.columns:
+            vol = df['volume'].astype(float)
+        else:
+            vol = pd.Series(100.0, index=df.index)
+
+        # Handle zero or missing volume gracefully
+        vol = vol.replace(0, 1.0)
+
+        high = df['high'].astype(float)
+        low = df['low'].astype(float)
+        close = df['close'].astype(float)
+
+        hl = high - low
+        hl = hl.replace(0, 1e-6)
+
+        # Intrabar volume fraction based on price location within range
+        buy_fraction = ((close - low) / hl).clip(0.0, 1.0)
+
+        buy_vol = vol * buy_fraction
+        sell_vol = vol * (1.0 - buy_fraction)
+
+        bar_delta = buy_vol - sell_vol
+        if 'delta' in df.columns:
+            bar_delta = df['delta'].astype(float)
+
+        df['vol_delta'] = bar_delta
+        df['cvd'] = bar_delta.cumsum()
+        df['vol_sma20'] = vol.rolling(window=min(20, len(df)), min_periods=1).mean()
+        df['raw_vol'] = vol
+
+        return df
+
+    def detect_order_flow_entry(
+        self,
+        df: pd.DataFrame,
+        htf_analysis: HTFAnalysis,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+    ) -> dict | None:
+        """
+        Scan for Order Flow confirmations aligned with HTF bias:
+        - Liquidity Trap / Stop Sweep (Highest conviction)
+        - Institutional Absorption
+        - CVD Divergence
+        """
+        n = len(df)
+        if n < 15:
+            return None
+
+        bias = htf_analysis.bias
+        if bias not in (MarketBias.BULLISH, MarketBias.BEARISH):
+            return None
+
+        df_of = self.compute_volume_delta(df)
+
+        current_bar = df_of.iloc[-1]
+        prev_bar = df_of.iloc[-2]
+
+        timestamp = current_bar['time'] if 'time' in df_of.columns else datetime.now(timezone.utc)
+        if isinstance(timestamp, pd.Timestamp):
+            timestamp = timestamp.to_pydatetime()
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        atr_series = compute_atr(df, period=14)
+        current_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 10.0 * instrument.pip_size
+        if current_atr <= 0:
+            current_atr = 10.0 * instrument.pip_size
+
+        entry_price = float(current_bar['close'])
+        min_buffer = 1.0 * instrument.pip_size
+
+        # Find recent swing points for structure reference
+        swing_points = find_swing_points_logic(df['high'], df['low'], lookback=3)
+        recent_swing_highs = [p.price for p in swing_points if p.is_high and p.index < n - 1]
+        recent_swing_lows = [p.price for p in swing_points if not p.is_high and p.index < n - 1]
+
+        # -------------------------------------------------------------
+        # BULLISH SETUPS (HTF Bias == BULLISH)
+        # -------------------------------------------------------------
+        if bias == MarketBias.BULLISH:
+            # Check 1: Liquidity Trap / Stop Sweep
+            if recent_swing_lows:
+                last_swing_low = recent_swing_lows[-1]
+                swept_low = min(float(prev_bar['low']), float(current_bar['low']))
+                if swept_low < last_swing_low:
+                    if float(current_bar['close']) > last_swing_low and float(current_bar['vol_delta']) > 0:
+                        stop_loss = swept_low - min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price - sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+
+                        return {
+                            'direction': Direction.BUY,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
+                            'timestamp': timestamp,
+                        }
+
+            # Check 2: Institutional Absorption (Selling absorbed at support)
+            for bar in [prev_bar, current_bar]:
+                bar_range = float(bar['high'] - bar['low'])
+                if bar_range > 0:
+                    lower_wick = float(min(bar['open'], bar['close']) - bar['low'])
+                    wick_ratio = lower_wick / bar_range
+                    vol_factor = float(bar['raw_vol']) / max(1.0, float(bar['vol_sma20']))
+
+                    if (wick_ratio >= self.config.wick_ratio_threshold and 
+                        vol_factor >= self.config.absorption_volume_factor and 
+                        float(current_bar['close']) >= float(current_bar['open'])):
+
+                        stop_loss = min(float(prev_bar['low']), float(current_bar['low'])) - min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price - sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+
+                        return {
+                            'direction': Direction.BUY,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_ABSORPTION,
+                            'timestamp': timestamp,
+                        }
+
+            # Check 3: Cumulative Volume Delta Divergence (Bullish)
+            lookback = min(self.config.cvd_divergence_bars, n - 2)
+            if lookback >= 5:
+                window_df = df_of.iloc[-(lookback + 2):-1]
+                min_price_idx = window_df['low'].idxmin()
+                prior_lowest_price = float(window_df.loc[min_price_idx, 'low'])
+                prior_cvd_at_low = float(window_df.loc[min_price_idx, 'cvd'])
+
+                curr_low = float(current_bar['low'])
+                curr_cvd = float(current_bar['cvd'])
+
+                if curr_low <= prior_lowest_price + (0.1 * current_atr) and curr_cvd > prior_cvd_at_low:
+                    if float(current_bar['close']) > float(current_bar['open']) and float(current_bar['vol_delta']) > 0:
+                        stop_loss = curr_low - min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price - sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+
+                        return {
+                            'direction': Direction.BUY,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
+                            'timestamp': timestamp,
+                        }
+
+        # -------------------------------------------------------------
+        # BEARISH SETUPS (HTF Bias == BEARISH)
+        # -------------------------------------------------------------
+        elif bias == MarketBias.BEARISH:
+            # Check 1: Liquidity Trap / Stop Sweep (Bearish)
+            if recent_swing_highs:
+                last_swing_high = recent_swing_highs[-1]
+                swept_high = max(float(prev_bar['high']), float(current_bar['high']))
+                if swept_high > last_swing_high:
+                    if float(current_bar['close']) < last_swing_high and float(current_bar['vol_delta']) < 0:
+                        stop_loss = swept_high + min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price + sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+
+                        return {
+                            'direction': Direction.SELL,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
+                            'timestamp': timestamp,
+                        }
+
+            # Check 2: Institutional Absorption (Buying absorbed at resistance)
+            for bar in [prev_bar, current_bar]:
+                bar_range = float(bar['high'] - bar['low'])
+                if bar_range > 0:
+                    upper_wick = float(bar['high'] - max(bar['open'], bar['close']))
+                    wick_ratio = upper_wick / bar_range
+                    vol_factor = float(bar['raw_vol']) / max(1.0, float(bar['vol_sma20']))
+
+                    if (wick_ratio >= self.config.wick_ratio_threshold and 
+                        vol_factor >= self.config.absorption_volume_factor and 
+                        float(current_bar['close']) <= float(current_bar['open'])):
+
+                        stop_loss = max(float(prev_bar['high']), float(current_bar['high'])) + min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price + sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+
+                        return {
+                            'direction': Direction.SELL,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_ABSORPTION,
+                            'timestamp': timestamp,
+                        }
+
+            # Check 3: Cumulative Volume Delta Divergence (Bearish)
+            lookback = min(self.config.cvd_divergence_bars, n - 2)
+            if lookback >= 5:
+                window_df = df_of.iloc[-(lookback + 2):-1]
+                max_price_idx = window_df['high'].idxmax()
+                prior_highest_price = float(window_df.loc[max_price_idx, 'high'])
+                prior_cvd_at_high = float(window_df.loc[max_price_idx, 'cvd'])
+
+                curr_high = float(current_bar['high'])
+                curr_cvd = float(current_bar['cvd'])
+
+                if curr_high >= prior_highest_price - (0.1 * current_atr) and curr_cvd < prior_cvd_at_high:
+                    if float(current_bar['close']) < float(current_bar['open']) and float(current_bar['vol_delta']) < 0:
+                        stop_loss = curr_high + min_buffer
+                        sl_distance = abs(entry_price - stop_loss)
+                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                            sl_distance = fixed_sl_pips * instrument.pip_size
+                            stop_loss = entry_price + sl_distance
+
+                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+
+                        return {
+                            'direction': Direction.SELL,
+                            'entry': entry_price,
+                            'sl': stop_loss,
+                            'tp': take_profit,
+                            'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
+                            'timestamp': timestamp,
+                        }
+
+        return None
+
+
+# ─────────────────────────────────────────────
 #  Strategy Classes (Unified BaseStrategy Interface)
 # ─────────────────────────────────────────────
 
@@ -1696,6 +1994,119 @@ class ICTStrategy(BaseStrategy):
         )]
 
 
+class OrderFlowStrategy(BaseStrategy):
+    """Strategy D: Order Flow Volume Delta, CVD Divergence & Absorption Model."""
+    id = "ORDER_FLOW"
+    name = "Order Flow (Delta & Absorption)"
+    magic_offset = 4000
+
+    def __init__(self, htf_analyzer_or_config: HTFAnalyzer | TimeframeConfig | TradingConfig, of_config: OrderFlowConfig | InstrumentConfig | None = None):
+        if isinstance(htf_analyzer_or_config, HTFAnalyzer):
+            self.htf_analyzer = htf_analyzer_or_config
+            self.of_config = of_config if isinstance(of_config, OrderFlowConfig) else OrderFlowConfig()
+        elif hasattr(htf_analyzer_or_config, 'order_flow'):
+            self.of_config = htf_analyzer_or_config.order_flow
+            self.htf_analyzer = HTFAnalyzer(
+                ema_period=htf_analyzer_or_config.timeframes.htf_ema_period,
+                swing_lookback=htf_analyzer_or_config.timeframes.swing_lookback,
+                equal_level_tolerance=htf_analyzer_or_config.timeframes.equal_level_tolerance,
+            )
+        else:
+            self.of_config = of_config if isinstance(of_config, OrderFlowConfig) else OrderFlowConfig()
+            self.htf_analyzer = HTFAnalyzer()
+        self.engine = OrderFlowEngine(self.of_config)
+
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        dist = 20.0 * instrument.pip_size
+        return entry_price - dist if direction == Direction.BUY else entry_price + dist
+
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        sl_dist = abs(entry_price - sl)
+        return entry_price + (sl_dist * 2.2) if direction == Direction.BUY else entry_price - (sl_dist * 2.2)
+
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
+    ) -> list[TradeSignal]:
+        if htf_analysis is None:
+            htf_analysis = self.htf_analyzer.analyze(htf_data)
+        if htf_analysis.bias == MarketBias.NEUTRAL and self.of_config.enforce_htf_alignment:
+            return []
+
+        raw = self.engine.detect_order_flow_entry(
+            df=ltf_data,
+            htf_analysis=htf_analysis,
+            instrument=instrument,
+            current_spread=current_spread,
+            fixed_sl_pips=fixed_sl_pips,
+        )
+        if not raw:
+            return []
+
+        entry = raw['entry']
+        direction = raw['direction']
+        conf = raw['conf']
+
+        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+            sl_dist = fixed_sl_pips * instrument.pip_size
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+        else:
+            sl = raw['sl']
+            sl_dist = abs(entry - sl)
+
+        tp = raw['tp']
+        tp_dist = abs(entry - tp)
+        min_buffer = 1.0 * instrument.pip_size
+        if sl_dist < min_buffer:
+            sl_dist = min_buffer
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
+
+        # Quality scoring
+        quality_score = min(25.0, htf_analysis.trend_clarity_score)
+        if conf == LTFConfirmation.OF_LIQUIDITY_TRAP:
+            quality_score += 35.0
+        elif conf == LTFConfirmation.OF_ABSORPTION:
+            quality_score += 30.0
+        elif conf == LTFConfirmation.OF_DELTA_DIVERGENCE:
+            quality_score += 28.0
+        else:
+            quality_score += 25.0
+
+        quality_score += 15.0  # Invalidation quality
+        quality_score += min(15.0, (rr_ratio / 2.0) * 15.0)
+        if current_spread > 0:
+            quality_score += min(10.0, (tp_dist / current_spread) * 1.0)
+        else:
+            quality_score += 10.0
+        quality_score = min(100.0, quality_score)
+
+        return [TradeSignal(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=htf_analysis.bias,
+            ltf_confirmation=conf,
+            rr_ratio=rr_ratio,
+            quality_score=quality_score,
+            timestamp=raw['timestamp'],
+            sl_distance=sl_dist,
+            tp_distance=tp_dist,
+            strategy_id=self.id,
+            strategy_name=self.name,
+            magic_number=123456 + self.magic_offset,
+        )]
+
+
 # ─────────────────────────────────────────────
 #  Strategy Orchestrator Engine
 # ─────────────────────────────────────────────
@@ -1703,7 +2114,7 @@ class ICTStrategy(BaseStrategy):
 class StrategyEngine:
     """Orchestrates HTF macro structure and executes registered strategies."""
 
-    def __init__(self, config: TradingConfig | TimeframeConfig | None = None, instrument: InstrumentConfig | None = None, ict_config: ICTConfig | None = None):
+    def __init__(self, config: TradingConfig | TimeframeConfig | None = None, instrument: InstrumentConfig | None = None, ict_config: ICTConfig | None = None, of_config: OrderFlowConfig | None = None):
         if config is None:
             from config import DEFAULT_CONFIG
             config = DEFAULT_CONFIG
@@ -1711,10 +2122,12 @@ class StrategyEngine:
         if hasattr(config, 'timeframes'):
             self.tf_config = config.timeframes
             self.ict_config = ict_config or getattr(config, 'ict', ICTConfig())
+            self.of_config = of_config or getattr(config, 'order_flow', OrderFlowConfig())
             self.trading_config = config
         else:
             self.tf_config = config
             self.ict_config = ict_config or ICTConfig()
+            self.of_config = of_config or OrderFlowConfig()
             self.trading_config = None
 
         self.instrument = instrument
@@ -1729,8 +2142,9 @@ class StrategyEngine:
             "SMC": SMCSwingStrategy(self.htf_analyzer, self.tf_config),
             "SMC_SCALP_5M": SMCScalp5MStrategy(self.htf_analyzer, self.tf_config),
             "ICT": ICTStrategy(self.htf_analyzer, self.ict_config),
+            "ORDER_FLOW": OrderFlowStrategy(self.htf_analyzer, self.of_config),
         }
-        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT"]
+        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
 
     @property
     def active_strategies(self) -> list[BaseStrategy]:
@@ -1777,8 +2191,8 @@ class StrategyEngine:
             if strat is None:
                 continue
             try:
-                # If scalping strategy and 5m bars available, prefer 5m bars as LTF
-                active_ltf = bars_5m if (strat_id == "SMC_SCALP_5M" and bars_5m is not None) else ltf
+                # If scalping or order flow strategy and 5m bars available, prefer 5m bars as LTF
+                active_ltf = bars_5m if (strat_id in ("SMC_SCALP_5M", "ORDER_FLOW") and bars_5m is not None) else ltf
                 sigs = strat.evaluate(
                     symbol=sym,
                     htf_data=htf,

@@ -193,6 +193,15 @@ Decision Rules:
         elif "OB_PLUS_FVG" in conf_name:
             score += 35.0
             reasons.append("Order Block + Fair Value Gap confluence retest")
+        elif "OF_LIQUIDITY_TRAP" in conf_name:
+            score += 35.0
+            reasons.append("Order Flow Liquidity Trap stop-run & delta reversal")
+        elif "OF_ABSORPTION" in conf_name:
+            score += 35.0
+            reasons.append("Order Flow institutional passive limit absorption")
+        elif "OF_DELTA_DIVERGENCE" in conf_name:
+            score += 30.0
+            reasons.append("Order Flow Cumulative Volume Delta (CVD) divergence")
         elif "OB_MITIGATION" in conf_name:
             score += 30.0
             reasons.append("Clean Order Block mitigation")
@@ -221,6 +230,13 @@ Decision Rules:
             elif signal.rr_ratio >= 1.5:
                 score += 15.0
                 reasons.append(f"Acceptable ICT Model R:R ({signal.rr_ratio:.2f}:1)")
+        elif "OF_" in conf_name or "ORDER_FLOW" in getattr(signal, 'strategy_id', ''):
+            if signal.rr_ratio >= 2.0:
+                score += 20.0
+                reasons.append(f"Optimal Order Flow R:R ({signal.rr_ratio:.2f}:1)")
+            elif signal.rr_ratio >= 1.5:
+                score += 15.0
+                reasons.append(f"Acceptable Order Flow R:R ({signal.rr_ratio:.2f}:1)")
         else:
             if signal.rr_ratio >= 3.0:
                 score += 20.0
