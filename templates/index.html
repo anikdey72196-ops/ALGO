@@ -9,23 +9,71 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600;1,700;1,800&family=Space+Grotesk:wght@500;600;700;800;900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
   
   <style>
     @layer base {
-      html, body { margin: 0; padding: 0; }
-      body { overscroll-behavior: none; background-color: #f8f9fd; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-size: 16px;
+        font-weight: 600;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      body {
+        overscroll-behavior: none;
+        background-color: #e4e8f0 !important;
+        color: #020617;
+      }
       main > :first-child { margin-top: 0 !important; }
       main > :last-child { margin-bottom: 0 !important; }
     }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    strong, b { font-weight: 800 !important; }
+    th { font-weight: 800 !important; }
+    button { font-weight: 800 !important; }
+    input, select { font-weight: 700 !important; }
+
+    /* Reduced brightness for white surfaces - low-glare, eye-comfort light theme */
+    .bg-white {
+      background-color: #edf2f7 !important;
+    }
+    .bg-background {
+      background-color: #e4e8f0 !important;
+    }
+    header {
+      background-color: rgba(237, 242, 247, 0.96) !important;
+      border-bottom-color: #cbd5e1 !important;
+    }
+    footer {
+      background-color: #edf2f7 !important;
+      border-top-color: #cbd5e1 !important;
+    }
+    input[type="text"], input[type="number"], select {
+      background-color: #e2e8f1 !important;
+      border-color: #c4b5fd !important;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      background-color: #edf2f7 !important;
+    }
+    .bg-purple-50\/70, .bg-purple-50\/80, .bg-purple-50\/60, .bg-purple-50\/50 {
+      background-color: rgba(226, 232, 243, 0.92) !important;
+    }
+    .bg-purple-50 {
+      background-color: #e4e9f3 !important;
+    }
+    #terminalContainer {
+      background-color: #e2e8f1 !important;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #ddd6fe; border-radius: 9999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #c4b5fd; }
-    .pulse-glow-green { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
-    .pulse-glow-red { box-shadow: 0 0 15px rgba(225, 29, 72, 0.4); }
-    .pulse-glow-purple { box-shadow: 0 0 15px rgba(124, 58, 237, 0.4); }
+    ::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a78bfa; }
+    .pulse-glow-green { box-shadow: 0 0 16px rgba(16, 185, 129, 0.45); }
+    .pulse-glow-red { box-shadow: 0 0 16px rgba(225, 29, 72, 0.45); }
+    .pulse-glow-purple { box-shadow: 0 0 16px rgba(124, 58, 237, 0.45); }
   </style>
 
   <!-- Tailwind CSS -->
@@ -41,12 +89,12 @@
             "on-primary": "#ffffff",
             secondary: "#6d28d9",
             tertiary: "#059669",
-            background: "#f8f9fd",
-            surface: "#ffffff",
-            "surface-variant": "#f3f0fb",
-            "surface-container": "#f5f3ff",
+            background: "#e4e8f0",
+            surface: "#edf2f7",
+            "surface-variant": "#e2e8f1",
+            "surface-container": "#e8edf5",
             "on-surface": "#0f172a",
-            "on-surface-variant": "#64748b",
+            "on-surface-variant": "#475569",
             error: "#e11d48",
             "error-container": "#fff1f2",
             outline: "#cbd5e1",
@@ -70,152 +118,148 @@
   </script>
 </head>
 
-<body class="bg-background font-body-md text-on-surface antialiased selection:bg-purple-100 selection:text-primary min-h-screen">
+<body class="bg-background font-body-md text-on-surface antialiased selection:bg-purple-200 selection:text-primary min-h-screen">
 
   <!-- Fixed Top Header -->
-  <header class="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-xl border-b border-purple-100/80 shadow-[0_4px_20px_-4px_rgba(124,58,237,0.06)]">
-    <div class="w-full px-4 lg:px-8 flex flex-col justify-between pt-2 pb-1.5 gap-2">
+  <header class="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-xl border-b border-purple-200 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.08)]">
+    <div class="w-full px-4 lg:px-8 flex flex-col justify-between pt-2.5 pb-2 gap-2">
       <div class="flex items-center justify-between gap-4">
         <!-- Logo & Terminal Status -->
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 cursor-pointer" onclick="switchTab('control')">
-            <div class="w-2.5 h-6 bg-primary rounded-full shadow-[0_0_10px_rgba(124,58,237,0.4)]"></div>
-            <span class="font-headline-md text-lg sm:text-xl font-bold tracking-tight text-slate-900">ALGOQUANT</span>
-            <span class="font-telemetry-sub text-[11px] text-primary font-bold tracking-widest px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200/80 hidden sm:inline-block">// PRO-TERMINAL</span>
+          <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchTab('control')">
+            <div class="w-3 h-7 bg-primary rounded-full shadow-[0_0_12px_rgba(124,58,237,0.5)]"></div>
+            <span class="font-headline-md text-2xl sm:text-3xl font-black tracking-tight text-slate-950">ALGOQUANT</span>
+            <span class="font-telemetry-sub text-sm text-primary font-black tracking-widest px-3 py-1 rounded-full bg-purple-100/90 border border-purple-300 hidden sm:inline-block">// PRO-TERMINAL</span>
           </div>
-          <div id="modeBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/60">
-            <span class="relative flex h-2 w-2">
+          <div id="modeBadge" class="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-300">
+            <span class="relative flex h-2.5 w-2.5">
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <span class="font-body-sm text-[12px] text-emerald-700 font-semibold">MT5 Live</span>
-            <span class="text-slate-400 font-body-sm text-[11px] hidden md:inline">| #5055838633</span>
+            <span class="font-body-sm text-base text-emerald-900 font-black">MT5 Live</span>
+            <span class="text-slate-600 font-body-sm text-sm font-bold hidden md:inline">| #5055838633</span>
           </div>
         </div>
 
         <!-- Header Live Telemetry KPIs -->
-        <div class="hidden lg:flex items-center gap-6">
+        <div class="hidden lg:flex items-center gap-7">
           <div class="flex flex-col">
-            <span class="font-label-sm text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Live Equity</span>
-            <span id="headerEquity" class="font-telemetry-metric text-lg font-bold text-slate-900">$99,746.70</span>
+            <span class="font-label-sm text-xs sm:text-sm text-slate-700 font-black tracking-wider uppercase">Live Equity</span>
+            <span id="headerEquity" class="font-telemetry-metric text-2xl sm:text-3xl font-black text-slate-950">$99,746.70</span>
           </div>
           <div class="flex flex-col">
-            <span class="font-label-sm text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Daily PnL</span>
-            <div class="flex items-center gap-1.5">
-              <span id="headerPnL" class="font-telemetry-sub text-[13px] text-emerald-600 font-bold">+$0.00</span>
-              <span id="headerPnLPct" class="font-label-sm text-[10px] text-emerald-700 font-bold px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200/60">+0.00%</span>
+            <span class="font-label-sm text-xs sm:text-sm text-slate-700 font-black tracking-wider uppercase">Daily PnL</span>
+            <div class="flex items-center gap-2">
+              <span id="headerPnL" class="font-telemetry-sub text-lg sm:text-xl text-emerald-700 font-black">+$0.00</span>
+              <span id="headerPnLPct" class="font-label-sm text-xs sm:text-sm text-emerald-900 font-black px-2.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">+0.00%</span>
             </div>
-          </div>
-          <div class="flex flex-col">
-            <span class="font-label-sm text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Positions</span>
-            <span class="font-telemetry-sub text-[13px] text-slate-800 font-bold"><span id="headerOpenPosCount">0</span> <span class="text-slate-400 font-normal">/ 15 Active</span></span>
           </div>
         </div>
 
         <!-- Fast Operational Controls in Header -->
         <div class="flex items-center gap-3">
-          <div class="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 border border-purple-200/70">
-            <span class="relative flex h-2 w-2">
+          <div class="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-50 border border-purple-200">
+            <span class="relative flex h-2.5 w-2.5">
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
             </span>
-            <span class="font-body-sm text-[11px] text-primary font-bold tracking-wide uppercase" id="headerMarketScanningPill">SCANNING 5 MARKETS</span>
+            <span class="font-body-sm text-xs sm:text-sm text-primary font-black tracking-wide uppercase" id="headerMarketScanningPill">SCANNING 5 MARKETS</span>
           </div>
           
-          <button id="killSwitchBtn" onclick="toggleHaltModal()" class="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200/80 font-label-md text-[11px] font-bold uppercase tracking-wider hover:bg-rose-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5 active:scale-95" title="Emergency halt trading and deactivate execution engine">
-            <span class="material-symbols-outlined text-[15px]">power_settings_new</span>
+          <button id="killSwitchBtn" onclick="toggleHaltModal()" class="px-5 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-300 font-label-md text-xs sm:text-sm font-black uppercase tracking-wider hover:bg-rose-600 hover:text-white transition-all shadow-sm flex items-center gap-2 active:scale-95" title="Emergency halt trading and deactivate execution engine">
+            <span class="material-symbols-outlined text-[17px]">power_settings_new</span>
             <span>HALT</span>
           </button>
           
           <div class="hidden 2xl:flex flex-col text-right">
-            <span class="font-body-sm text-[11px] text-emerald-600 font-semibold">0.4ms ping</span>
-            <span id="headerUptimeBadge" class="hidden font-telemetry-sub text-[10px] text-primary font-bold">00:00:00</span>
+            <span class="font-body-sm text-xs text-emerald-700 font-bold">0.4ms ping</span>
+            <span id="headerUptimeBadge" class="hidden font-telemetry-sub text-xs text-primary font-black">00:00:00</span>
           </div>
           
-          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-400 flex items-center justify-center shadow-md shadow-purple-500/20 text-white cursor-pointer" title="Operator Session Active">
-            <span class="material-symbols-outlined text-[18px]">person</span>
+          <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center shadow-md shadow-purple-500/30 text-white cursor-pointer" title="Operator Session Active">
+            <span class="material-symbols-outlined text-[20px]">person</span>
           </div>
         </div>
       </div>
 
       <!-- Navigation Tabs -->
-      <div class="flex items-center justify-between border-t border-purple-50 pt-1">
-        <nav class="flex items-center gap-1 sm:gap-2">
-          <button id="tabBtnControl" onclick="switchTab('control')" class="px-3 py-1 text-xs font-bold rounded-lg transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-1">
-            <span class="material-symbols-outlined text-[15px]">dashboard</span>
+      <div class="flex items-center justify-between border-t border-purple-100 pt-1.5">
+        <nav class="flex items-center gap-1.5 sm:gap-2">
+          <button id="tabBtnControl" onclick="switchTab('control')" class="px-5 py-2 text-sm sm:text-base font-black rounded-xl transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-2">
+            <span class="material-symbols-outlined text-[17px]">dashboard</span>
             <span>Terminal Overview</span>
           </button>
-          <button id="tabBtnAnalytics" onclick="switchTab('analytics')" class="px-3 py-1 text-xs font-semibold rounded-lg text-slate-600 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-1">
-            <span class="material-symbols-outlined text-[15px]">insights</span>
+          <button id="tabBtnAnalytics" onclick="switchTab('analytics')" class="px-5 py-2 text-sm sm:text-base font-extrabold rounded-xl text-slate-800 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[17px]">insights</span>
             <span>Performance Analytics</span>
           </button>
-          <button id="tabBtnHistory" onclick="switchTab('history')" class="px-3 py-1 text-xs font-semibold rounded-lg text-slate-600 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-1">
-            <span class="material-symbols-outlined text-[15px]">table_chart</span>
+          <button id="tabBtnHistory" onclick="switchTab('history')" class="px-5 py-2 text-sm sm:text-base font-extrabold rounded-xl text-slate-800 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[17px]">table_chart</span>
             <span>Trade History & PnL</span>
           </button>
-          <button id="tabBtnSessions" onclick="switchTab('sessions')" class="px-3 py-1 text-xs font-semibold rounded-lg text-slate-600 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-1">
-            <span class="material-symbols-outlined text-[15px]">history</span>
+          <button id="tabBtnSessions" onclick="switchTab('sessions')" class="px-5 py-2 text-sm sm:text-base font-extrabold rounded-xl text-slate-800 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[17px]">history</span>
             <span>Activation Sessions</span>
           </button>
         </nav>
-        <div class="font-body-sm text-[11px] text-slate-400 hidden md:block">
-          HOST: <span class="text-purple-600 font-semibold">lon-core-04.algoquant.internal</span>
+        <div class="font-body-sm text-xs text-slate-500 font-semibold hidden md:block">
+          HOST: <span class="text-purple-700 font-bold">lon-core-04.algoquant.internal</span>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Main View Area -->
-  <main class="w-full pt-28 px-4 lg:px-8 bg-background">
-    <div class="flex flex-col w-full pb-12">
+  <main class="w-full pt-32 px-4 lg:px-8 bg-background">
+    <div class="flex flex-col w-full pb-14">
 
       <!-- Status Context Ribbon -->
-      <div class="w-full bg-white rounded-2xl p-4 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.08)] border border-purple-100 flex flex-wrap items-center justify-between gap-4 mb-6 relative overflow-hidden">
+      <div class="w-full bg-white rounded-2xl p-4 sm:p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.08)] border border-purple-100 flex flex-wrap items-center justify-between gap-4 mb-6 relative overflow-hidden">
         <div class="absolute -right-16 -top-16 w-64 h-64 bg-purple-200/30 rounded-full blur-3xl pointer-events-none"></div>
 
         <!-- Left: Server & Engine State -->
         <div class="flex flex-wrap items-center gap-4 z-10">
-          <div class="flex items-center gap-2 bg-purple-50 border border-purple-200/70 px-3 py-1.5 rounded-lg shadow-sm">
-            <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-            <span id="statusLabel" class="font-headline-sm text-xs tracking-widest text-primary font-bold uppercase">DEACTIVATED (IDLE)</span>
+          <div class="flex items-center gap-2.5 bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-xl shadow-sm">
+            <span id="statusDot" class="w-3 h-3 rounded-full bg-red-500"></span>
+            <span id="statusLabel" class="font-headline-sm text-sm sm:text-base tracking-wider text-primary font-black uppercase">DEACTIVATED (IDLE)</span>
           </div>
 
           <!-- Lock Notice Badge -->
-          <div id="lockNotice" class="hidden flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg font-semibold">
-            <span class="material-symbols-outlined text-[16px] text-amber-600">lock</span>
+          <div id="lockNotice" class="hidden flex items-center gap-2.5 text-sm sm:text-base text-amber-900 bg-amber-50 border border-amber-300 px-4 py-2.5 rounded-xl font-black">
+            <span class="material-symbols-outlined text-[18px] text-amber-700">lock</span>
             <span>Configurations Locked While Active</span>
           </div>
 
-          <div class="hidden sm:flex items-center gap-3 font-body-sm text-xs text-slate-500">
-            <span class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-primary text-[17px]">dns</span>
-              <span class="text-slate-800 font-semibold">MT5 Bridge #5055838633</span>
+          <div class="hidden sm:flex items-center gap-3 font-body-sm text-sm sm:text-base text-slate-800 font-bold">
+            <span class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[21px]">dns</span>
+              <span class="text-slate-950 font-black">MT5 Bridge #5055838633</span>
             </span>
-            <span class="w-1 h-1 bg-purple-200 rounded-full"></span>
-            <span class="text-slate-500">Leverage: <strong class="text-slate-800">1:100</strong></span>
-            <span class="w-1 h-1 bg-purple-200 rounded-full"></span>
-            <span class="text-slate-500">Max Sizing: <strong class="text-slate-800">3 trades / pair</strong></span>
+            <span class="w-2 h-2 bg-purple-300 rounded-full"></span>
+            <span>Leverage: <strong class="text-slate-950 font-black">1:100</strong></span>
+            <span class="w-2 h-2 bg-purple-300 rounded-full"></span>
+            <span>Max Sizing: <strong class="text-slate-950 font-black">3 trades / pair</strong></span>
           </div>
         </div>
 
         <!-- Right: Primary Operational Action Buttons -->
-        <div class="flex items-center gap-2 sm:gap-3 z-10 ml-auto">
+        <div class="flex items-center gap-3 z-10 ml-auto">
           <!-- AI Confirmation Gate Toggle -->
-          <div class="flex items-center gap-2 bg-purple-50/90 border border-purple-200/80 rounded-xl px-3 py-1.5 shadow-sm">
-            <span class="material-symbols-outlined text-primary text-[16px]">psychology</span>
-            <label for="aiToggleCheckbox" class="text-[11px] font-bold text-slate-800 cursor-pointer select-none">AI Gate (≥75%)</label>
-            <input type="checkbox" id="aiToggleCheckbox" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer">
+          <div class="flex items-center gap-2.5 bg-purple-50 border border-purple-200 rounded-xl px-3.5 py-2 shadow-sm">
+            <span class="material-symbols-outlined text-primary text-[18px]">psychology</span>
+            <label for="aiToggleCheckbox" class="text-sm sm:text-base font-black text-slate-950 cursor-pointer select-none">AI Gate (≥75%)</label>
+            <input type="checkbox" id="aiToggleCheckbox" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer">
           </div>
 
           <!-- Save Config Button -->
-          <button type="button" id="saveConfigBtn" onclick="saveConfig()" class="px-4 py-2 rounded-xl bg-white border border-purple-200 hover:bg-purple-50 text-slate-700 font-headline-sm text-xs font-bold tracking-wide uppercase transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-50" title="Save market selections, fixed lots, stop loss, and strategies">
-            <span class="material-symbols-outlined text-[16px] text-primary">save</span>
+          <button type="button" id="saveConfigBtn" onclick="saveConfig()" class="px-5 py-2.5 rounded-xl bg-white border border-purple-300 hover:bg-purple-50 text-slate-950 font-headline-sm text-sm sm:text-base font-black tracking-wide uppercase transition-all shadow-sm flex items-center gap-2 active:scale-95 disabled:opacity-50" title="Save market selections, fixed lots, stop loss, and strategies">
+            <span class="material-symbols-outlined text-[18px] text-primary">save</span>
             <span>Save Config</span>
           </button>
 
           <!-- Master Activate / Deactivate Button -->
-          <button type="button" id="toggleActiveBtn" onclick="toggleActivation()" class="group relative px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-headline-sm text-xs font-bold tracking-wider uppercase flex items-center gap-2 hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-[0_4px_16px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.35)] active:scale-95">
-            <span class="material-symbols-outlined text-[18px]">play_circle</span>
+          <button type="button" id="toggleActiveBtn" onclick="toggleActivation()" class="group relative px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-headline-sm text-sm sm:text-base font-black tracking-wider uppercase flex items-center gap-2.5 hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-[0_4px_16px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_22px_rgba(16,185,129,0.4)] active:scale-95">
+            <span class="material-symbols-outlined text-[20px]">play_circle</span>
             <span id="toggleBtnText">ACTIVATE BOT</span>
           </button>
         </div>
@@ -225,30 +269,30 @@
       <section id="viewControl" class="space-y-6">
 
         <!-- Top 4 Bento KPI Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           <!-- Card 1: Total Equity & Balance -->
           <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
             <div class="flex items-start justify-between">
               <div>
-                <span class="font-label-sm text-[11px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-primary text-[17px]">account_balance_wallet</span> Total Net Equity
+                <span class="font-label-sm text-sm sm:text-base uppercase text-slate-800 font-black tracking-wider flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary text-[21px]">account_balance_wallet</span> Total Net Equity
                 </span>
-                <div class="mt-1 flex items-baseline gap-2">
-                  <span id="kpiEquity" class="font-telemetry-metric text-2xl lg:text-[28px] text-slate-900 font-bold tracking-tight">$99,746.70</span>
-                  <span id="kpiPnL" class="text-emerald-600 font-body-sm text-xs font-bold flex items-center bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
-                    <span class="material-symbols-outlined text-[15px]">trending_up</span>+$0.00
+                <div class="mt-1.5 flex items-baseline gap-2.5">
+                  <span id="kpiEquity" class="font-telemetry-metric text-4xl lg:text-5xl text-slate-950 font-black tracking-tight">$99,746.70</span>
+                  <span id="kpiPnL" class="text-emerald-700 font-body-sm text-sm sm:text-base font-black flex items-center bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-300">
+                    <span class="material-symbols-outlined text-[16px]">trending_up</span>+$0.00
                   </span>
                 </div>
               </div>
-              <span class="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-primary font-telemetry-sub text-[10px] font-bold">LIVE FEED</span>
+              <span class="px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary font-telemetry-sub text-xs sm:text-sm font-black">LIVE FEED</span>
             </div>
 
             <!-- Glowing Sparkline SVG -->
-            <div class="w-full my-3 h-14 relative">
+            <div class="w-full my-3.5 h-16 relative">
               <svg class="w-full h-full overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 280 60">
                 <defs>
                   <linearGradient id="equityGrad" x1="0%" x2="0%" y1="0%" y2="100%">
-                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.25"></stop>
+                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
                     <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.0"></stop>
                   </linearGradient>
                   <linearGradient id="strokeGrad" x1="0%" x2="100%" y1="0%" y2="0%">
@@ -258,99 +302,24 @@
                   </linearGradient>
                 </defs>
                 <path d="M0,48 Q20,44 40,46 T80,38 T120,40 T160,28 T200,24 T240,16 T280,6 L280,60 L0,60 Z" fill="url(#equityGrad)"></path>
-                <path d="M0,48 Q20,44 40,46 T80,38 T120,40 T160,28 T200,24 T240,16 T280,6" fill="none" stroke="url(#strokeGrad)" stroke-linecap="round" stroke-width="2.5"></path>
-                <circle class="fill-emerald-500 stroke-white stroke-2 shadow-sm" cx="280" cy="6" r="4"></circle>
+                <path d="M0,48 Q20,44 40,46 T80,38 T120,40 T160,28 T200,24 T240,16 T280,6" fill="none" stroke="url(#strokeGrad)" stroke-linecap="round" stroke-width="3"></path>
+                <circle class="fill-emerald-500 stroke-white stroke-2 shadow-sm" cx="280" cy="6" r="4.5"></circle>
               </svg>
             </div>
 
-            <div class="grid grid-cols-3 gap-2 pt-2 bg-purple-50/60 rounded-xl p-2.5 font-body-sm text-xs border border-purple-100/60">
+            <div class="grid grid-cols-3 gap-2 pt-2 bg-purple-50/80 rounded-xl p-3.5 font-body-sm text-sm sm:text-base border border-purple-200">
               <div>
-                <div class="text-slate-400 font-label-sm text-[10px] uppercase font-semibold">BALANCE</div>
-                <div id="kpiBalance" class="text-slate-800 font-bold font-mono">$99,753.18</div>
+                <div class="text-slate-700 font-label-sm text-xs sm:text-sm uppercase font-black">BALANCE</div>
+                <div id="kpiBalance" class="text-slate-950 font-black font-mono text-sm sm:text-base">$99,753.18</div>
               </div>
               <div>
-                <div class="text-slate-400 font-label-sm text-[10px] uppercase font-semibold">FREE MARGIN</div>
-                <div id="kpiFreeMargin" class="text-slate-800 font-bold font-mono">$84,110.40</div>
+                <div class="text-slate-700 font-label-sm text-xs sm:text-sm uppercase font-black">FREE MARGIN</div>
+                <div id="kpiFreeMargin" class="text-slate-950 font-black font-mono text-sm sm:text-base">$84,110.40</div>
               </div>
               <div class="text-right">
-                <div class="text-slate-400 font-label-sm text-[10px] uppercase font-semibold">CIRCUIT</div>
-                <div id="kpiBreaker" class="text-emerald-600 font-bold font-mono">NORMAL</div>
+                <div class="text-slate-700 font-label-sm text-xs sm:text-sm uppercase font-black">CIRCUIT</div>
+                <div id="kpiBreaker" class="text-emerald-700 font-black font-mono text-sm sm:text-base">NORMAL</div>
               </div>
-            </div>
-          </div>
-
-          <!-- Card 2: Win Rate with Radial Gauge -->
-          <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-            <div class="flex items-start justify-between">
-              <div>
-                <span class="font-label-sm text-[11px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-emerald-600 text-[17px]">verified</span> Today's Win Rate
-                </span>
-                <div class="mt-1 flex items-baseline gap-2">
-                  <span id="kpiAccuracy" class="font-telemetry-metric text-2xl lg:text-[28px] text-emerald-600 font-bold tracking-tight">---%</span>
-                  <span class="text-slate-500 font-body-sm text-xs">Win Rate</span>
-                </div>
-              </div>
-              <!-- Radial Gauge -->
-              <div class="relative w-14 h-14 flex items-center justify-center">
-                <svg class="w-full h-full -rotate-90" viewBox="0 0 44 44">
-                  <circle class="stroke-purple-100" cx="22" cy="22" fill="none" r="17" stroke-width="4"></circle>
-                  <circle id="kpiAccuracyCircle" class="stroke-emerald-500" cx="22" cy="22" fill="none" r="17" stroke-dasharray="106.8" stroke-dashoffset="30.0" stroke-linecap="round" stroke-width="4"></circle>
-                </svg>
-                <span id="kpiProfitFactor" class="absolute font-headline-sm text-xs font-bold text-slate-900">2.84</span>
-              </div>
-            </div>
-
-            <div class="my-2 flex items-center justify-between text-xs font-body-sm bg-purple-50/60 p-2 rounded-xl border border-purple-100/60">
-              <span id="kpiAccuracySub" class="text-emerald-700 font-bold">0 Wins <span class="text-slate-400 font-normal">/</span> <span class="text-rose-600">0 Losses</span></span>
-              <span class="text-slate-500">Trades: <strong id="kpiTrades" class="text-slate-900">0</strong></span>
-            </div>
-
-            <div class="flex items-center justify-between pt-1 font-body-sm text-xs">
-              <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span class="text-slate-500">Avg Win:</span>
-                <span id="kpiAvgWin" class="text-emerald-700 font-mono font-bold">+$112.40</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-                <span class="text-slate-500">Avg Loss:</span>
-                <span id="kpiAvgLoss" class="text-rose-600 font-mono font-bold">-$38.60</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Card 3: Multi-Pair Exposure Meter -->
-          <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-            <div class="flex items-start justify-between">
-              <div>
-                <span class="font-label-sm text-[11px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-primary text-[17px]">pie_chart</span> Portfolio Exposure
-                </span>
-                <div class="mt-1 flex items-baseline gap-2">
-                  <span id="kpiActiveLots" class="font-telemetry-metric text-2xl lg:text-[28px] text-slate-900 font-bold tracking-tight">0.00 Lots</span>
-                  <span class="text-primary font-body-sm text-xs font-semibold">Active Size</span>
-                </div>
-              </div>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-telemetry-sub text-[10px] font-bold">OPTIMAL</span>
-            </div>
-
-            <div class="my-2 space-y-1.5">
-              <div class="flex justify-between text-xs text-slate-500">
-                <span>Multi-Market Allocation</span>
-                <span class="font-bold text-slate-800">5 Active Instruments</span>
-              </div>
-              <div class="w-full bg-purple-100 rounded-full h-2 overflow-hidden flex">
-                <div class="bg-amber-400 h-full" style="width: 35%" title="Gold (XAUUSD): 35%"></div>
-                <div class="bg-purple-600 h-full" style="width: 30%" title="Forex (EUR/GBP): 30%"></div>
-                <div class="bg-emerald-500 h-full" style="width: 35%" title="Crypto (BTC/ETH): 35%"></div>
-              </div>
-            </div>
-
-            <div class="pt-1 flex items-center justify-between text-[11px] font-mono text-slate-500">
-              <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Gold 35%</span>
-              <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-purple-600"></span> FX 30%</span>
-              <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Crypto 35%</span>
             </div>
           </div>
 
@@ -358,385 +327,346 @@
           <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
             <div class="flex items-start justify-between">
               <div>
-                <span class="font-label-sm text-[11px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-primary text-[17px]">psychology</span> AI Sentinel Gate
+                <span class="font-label-sm text-sm sm:text-base uppercase text-slate-800 font-black tracking-wider flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary text-[21px]">psychology</span> AI Sentinel Gate
                 </span>
-                <div class="mt-1 flex items-baseline gap-2">
-                  <span id="aiConvictionVal" class="font-telemetry-metric text-2xl lg:text-[28px] text-primary font-bold tracking-tight">82%</span>
-                  <span class="text-slate-500 font-body-sm text-xs">Avg Conviction</span>
+                <div class="mt-1.5 flex items-baseline gap-2.5">
+                  <span id="aiConvictionVal" class="font-telemetry-metric text-4xl lg:text-5xl text-primary font-black tracking-tight">82%</span>
+                  <span class="text-slate-700 font-body-sm text-sm sm:text-base font-extrabold">Avg Conviction</span>
                 </div>
               </div>
-              <span id="aiGateStatusPill" class="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-primary font-telemetry-sub text-[10px] font-bold flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON
+              <span id="aiGateStatusPill" class="px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary font-telemetry-sub text-xs font-black flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON
               </span>
             </div>
 
-            <div class="my-2 space-y-1.5 font-body-sm text-xs">
-              <div class="flex items-center justify-between text-slate-500">
+            <div class="my-2.5 space-y-2 font-body-sm text-sm sm:text-base">
+              <div class="flex items-center justify-between text-slate-800 font-extrabold">
                 <span>Trap Avoidances:</span>
-                <span class="text-emerald-700 font-mono font-bold bg-emerald-50 px-1.5 py-0.2 rounded">14 Today</span>
+                <span class="text-emerald-900 font-mono font-black bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">14 Today</span>
               </div>
-              <div class="flex items-center justify-between text-slate-500">
+              <div class="flex items-center justify-between text-slate-800 font-extrabold">
                 <span>False Breakout Filter:</span>
-                <span class="text-slate-900 font-mono font-bold">99.1% Acc.</span>
+                <span class="text-slate-950 font-mono font-black">99.1% Acc.</span>
               </div>
             </div>
 
-            <div class="pt-1 flex items-center justify-between bg-purple-50/60 px-2.5 py-1.5 rounded-lg border border-purple-100 font-body-sm text-xs">
-              <span class="text-slate-500 text-[11px]">Gemini 2.0 Inference:</span>
-              <span class="text-primary font-mono font-bold text-[11px]">114ms Fast Route</span>
+            <div class="pt-1 flex items-center justify-between bg-purple-50/70 px-3 py-2 rounded-xl border border-purple-200 font-body-sm text-xs font-bold">
+              <span class="text-slate-600">Gemini 2.0 Inference:</span>
+              <span class="text-primary font-mono font-black text-xs">114ms Fast Route</span>
             </div>
           </div>
         </div>
 
         <!-- 4 Quantitative Execution Engines -->
         <div class="w-full">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-2.5 h-2.5 bg-primary rounded-sm"></div>
-              <h2 class="font-headline-md text-base sm:text-lg text-slate-900 font-bold tracking-tight">Quantitative Execution Engines</h2>
-              <span class="font-body-sm text-xs text-purple-600 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 hidden sm:inline-block">// RUN CONCURRENTLY</span>
+          <div class="flex items-center justify-between mb-3.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-3 h-3 bg-primary rounded-sm"></div>
+              <h2 class="font-headline-md text-xl sm:text-2xl text-slate-950 font-black tracking-tight">Quantitative Execution Engines</h2>
+              <span class="font-body-sm text-sm text-purple-800 font-black bg-purple-100 px-3 py-1 rounded-lg border border-purple-200 hidden sm:inline-block">// RUN CONCURRENTLY</span>
             </div>
-            <div class="flex items-center gap-2 text-xs text-slate-500 font-mono">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> ALL PROTOCOLS VERIFIED
+            <div class="flex items-center gap-2 text-sm sm:text-base text-slate-800 font-mono font-black">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> ALL PROTOCOLS VERIFIED
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
             <!-- Strategy 1: SMC Swing -->
-            <div class="bg-white rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-              <div class="absolute top-0 left-0 right-0 h-1.5 bg-emerald-500 rounded-t-2xl"></div>
+            <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
+              <div class="absolute top-0 left-0 right-0 h-2 bg-emerald-500 rounded-t-2xl"></div>
               <div>
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                    <h3 class="font-headline-sm text-sm sm:text-base font-bold text-slate-900">SMC Swing</h3>
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                    <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">SMC Swing</h3>
                   </div>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" id="stratSMC" value="SMC" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                   </label>
                 </div>
-                <p class="font-body-sm text-xs text-slate-500 mb-3 leading-relaxed">15M Institutional Liquidity Sweeps, 2.5:1 Target R:R. Strict structural sweeps & order imbalance.</p>
-                <div class="space-y-1 font-body-sm text-xs bg-purple-50/70 p-2.5 rounded-xl mb-3 border border-purple-100">
+                <div class="space-y-2 font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl mb-3.5 border border-purple-200">
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Win Rate:</span>
-                    <span id="smcWinRate" class="text-emerald-700 font-mono font-bold">78.4% <span class="text-slate-400 font-normal">(18 trades)</span></span>
+                    <span class="text-slate-800 font-extrabold">Open Positions:</span>
+                    <span id="smcOpenPos" class="text-slate-900 font-mono font-black">2 Active</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Open Positions:</span>
-                    <span id="smcOpenPos" class="text-slate-800 font-mono font-semibold">2 Active</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">Core Protocol:</span>
-                    <span class="text-primary font-mono font-medium">FVG Fill + BSL/SSL</span>
+                    <span class="text-slate-800 font-extrabold">Core Protocol:</span>
+                    <span class="text-primary font-mono font-black">FVG Fill + BSL/SSL</span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center justify-between pt-2 text-[11px] font-mono text-slate-500 border-t border-purple-50">
-                <span>TARGET: <strong class="text-slate-900">2.5:1 R:R</strong></span>
-                <span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">HEALTH: NOMINAL</span>
+              <div class="flex items-center justify-between pt-2.5 text-sm font-mono text-slate-900 font-black border-t border-purple-100">
+                <span>TARGET: <strong class="text-slate-950 font-black">2.5:1 R:R</strong></span>
+                <span class="text-emerald-800 font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">HEALTH: NOMINAL</span>
               </div>
             </div>
 
             <!-- Strategy 2: 5M Scalp -->
-            <div class="bg-white rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-              <div class="absolute top-0 left-0 right-0 h-1.5 bg-primary rounded-t-2xl"></div>
+            <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
+              <div class="absolute top-0 left-0 right-0 h-2 bg-primary rounded-t-2xl"></div>
               <div>
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.5)]"></span>
-                    <h3 class="font-headline-sm text-sm sm:text-base font-bold text-slate-900">5M Scalp</h3>
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.6)]"></span>
+                    <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">5M Scalp</h3>
                   </div>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" id="stratScalp" value="SMC_SCALP_5M" class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
-                <p class="font-body-sm text-xs text-slate-500 mb-3 leading-relaxed">5M Order Block Mitigation & Fast Momentum Ingestion. Dynamic trailing stop mechanism.</p>
-                <div class="space-y-1 font-body-sm text-xs bg-purple-50/70 p-2.5 rounded-xl mb-3 border border-purple-100">
+                <div class="space-y-2 font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl mb-3.5 border border-purple-200">
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Win Rate:</span>
-                    <span id="scalpWinRate" class="text-emerald-700 font-mono font-bold">73.1% <span class="text-slate-400 font-normal">(34 trades)</span></span>
+                    <span class="text-slate-800 font-extrabold">Open Positions:</span>
+                    <span id="scalpOpenPos" class="text-slate-900 font-mono font-black">2 Active</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Open Positions:</span>
-                    <span id="scalpOpenPos" class="text-slate-800 font-mono font-semibold">2 Active</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">Trailing Param:</span>
-                    <span class="text-primary font-mono font-medium">8 pips (BE: +12 p)</span>
+                    <span class="text-slate-800 font-extrabold">Trailing Param:</span>
+                    <span class="text-primary font-mono font-black">8 pips (BE: +12 p)</span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center justify-between pt-2 text-[11px] font-mono text-slate-500 border-t border-purple-50">
-                <span>LATENCY: <strong class="text-slate-900">0.8ms</strong></span>
-                <span class="text-primary font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">ACTIVE EXEC</span>
+              <div class="flex items-center justify-between pt-2.5 text-sm font-mono text-slate-900 font-black border-t border-purple-100">
+                <span>LATENCY: <strong class="text-slate-950 font-black">0.8ms</strong></span>
+                <span class="text-primary font-black bg-purple-50 px-2 py-0.5 rounded border border-purple-200">ACTIVE EXEC</span>
               </div>
             </div>
 
             <!-- Strategy 3: ICT Institutional -->
-            <div class="bg-white rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-              <div class="absolute top-0 left-0 right-0 h-1.5 bg-indigo-500 rounded-t-2xl"></div>
+            <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
+              <div class="absolute top-0 left-0 right-0 h-2 bg-indigo-500 rounded-t-2xl"></div>
               <div>
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></span>
-                    <h3 class="font-headline-sm text-sm sm:text-base font-bold text-slate-900">ICT Institutional</h3>
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
+                    <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">ICT Institutional</h3>
                   </div>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" id="stratICT" value="ICT" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                   </label>
                 </div>
-                <p class="font-body-sm text-xs text-slate-500 mb-3 leading-relaxed">London & NY KillZones, Judas Swings, and algorithmic Optimal Trade Entry (61.8% - 78.6%).</p>
-                <div class="space-y-1 font-body-sm text-xs bg-purple-50/70 p-2.5 rounded-xl mb-3 border border-purple-100">
+                <div class="space-y-2 font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl mb-3.5 border border-purple-200">
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Win Rate:</span>
-                    <span id="ictWinRate" class="text-emerald-700 font-mono font-bold">81.2% <span class="text-slate-400 font-normal">(16 trades)</span></span>
+                    <span class="text-slate-800 font-extrabold">Open Positions:</span>
+                    <span id="ictOpenPos" class="text-slate-900 font-mono font-black">2 Active</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Open Positions:</span>
-                    <span id="ictOpenPos" class="text-slate-800 font-mono font-semibold">2 Active</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">Active Zone:</span>
-                    <span class="text-indigo-600 font-mono font-medium">NY Afternoon Open</span>
+                    <span class="text-slate-800 font-extrabold">Active Zone:</span>
+                    <span class="text-indigo-700 font-mono font-black">NY Afternoon Open</span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center justify-between pt-2 text-[11px] font-mono text-slate-500 border-t border-purple-50">
-                <span>ALGO REGIME: <strong class="text-slate-900">OTE 70.5%</strong></span>
-                <span class="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">STANDBY NY</span>
+              <div class="flex items-center justify-between pt-2.5 text-sm font-mono text-slate-900 font-black border-t border-purple-100">
+                <span>ALGO REGIME: <strong class="text-slate-950 font-black">OTE 70.5%</strong></span>
+                <span class="text-indigo-700 font-black bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">STANDBY NY</span>
               </div>
             </div>
 
             <!-- Strategy 4: Order Flow Engine -->
-            <div class="bg-white rounded-2xl p-4 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
-              <div class="absolute top-0 left-0 right-0 h-1.5 bg-purple-500 rounded-t-2xl"></div>
+            <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between relative group hover:border-purple-300 transition-all hover:shadow-[0_8px_28px_-4px_rgba(124,58,237,0.12)]">
+              <div class="absolute top-0 left-0 right-0 h-2 bg-purple-500 rounded-t-2xl"></div>
               <div>
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></span>
-                    <h3 class="font-headline-sm text-sm sm:text-base font-bold text-slate-900">Order Flow Engine</h3>
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span>
+                    <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Order Flow Engine</h3>
                   </div>
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" id="stratOF" value="ORDER_FLOW" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                   </label>
                 </div>
-                <p class="font-body-sm text-xs text-slate-500 mb-3 leading-relaxed">Volume Delta, CVD Divergence, Level 2 Book Absorption & Aggressive Participant tracking.</p>
-                <div class="space-y-1 font-body-sm text-xs bg-purple-50/70 p-2.5 rounded-xl mb-3 border border-purple-100">
+                <div class="space-y-2 font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl mb-3.5 border border-purple-200">
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Win Rate:</span>
-                    <span id="ofWinRate" class="text-emerald-700 font-mono font-bold">75.0% <span class="text-slate-400 font-normal">(20 trades)</span></span>
+                    <span class="text-slate-800 font-extrabold">Open Positions:</span>
+                    <span id="ofOpenPos" class="text-slate-900 font-mono font-black">1 Active</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-slate-500">Open Positions:</span>
-                    <span id="ofOpenPos" class="text-slate-800 font-mono font-semibold">1 Active</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">Delta Inflow:</span>
-                    <span class="text-purple-700 font-mono font-bold">+4,280 Lots</span>
+                    <span class="text-slate-800 font-extrabold">Delta Inflow:</span>
+                    <span class="text-purple-800 font-mono font-black">+4,280 Lots</span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center justify-between pt-2 text-[11px] font-mono text-slate-500 border-t border-purple-50">
-                <span>ABSORPTION: <strong class="text-emerald-600">BID HEAVY</strong></span>
-                <span class="text-purple-600 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">OPTIMIZED</span>
+              <div class="flex items-center justify-between pt-2.5 text-sm font-mono text-slate-900 font-black border-t border-purple-100">
+                <span>ABSORPTION: <strong class="text-emerald-700 font-black">BUY HEAVY</strong></span>
+                <span class="text-purple-700 font-black bg-purple-50 px-2 py-0.5 rounded border border-purple-200">OPTIMIZED</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Concurrent Multi-Pair Scanner Section -->
-        <div class="w-full bg-white rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 gap-2 border-b border-purple-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[22px]">radar</span>
-              <h3 class="font-headline-sm text-base text-slate-900 font-bold uppercase tracking-wide">Multi-Pair Institutional Matrix</h3>
-              <span class="font-body-sm text-xs text-primary font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">5 Active Instruments</span>
+        <!-- [FEATURE COMMENTED OUT]: Concurrent Multi-Pair Scanner Section
+        <div class="w-full bg-white rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 mb-4 gap-2 border-b border-purple-100">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-primary text-[24px]">radar</span>
+              <h3 class="font-headline-sm text-lg sm:text-xl text-slate-950 font-black uppercase tracking-wide">Multi-Pair Institutional Matrix</h3>
+              <span class="font-body-sm text-sm text-primary font-black bg-purple-50 px-3 py-1 rounded-lg border border-purple-200">5 Active Instruments</span>
             </div>
-            <span class="px-3 py-1 rounded-full bg-purple-50 border border-purple-200/70 text-slate-600 font-body-sm text-xs">
-              Policy: <strong class="text-primary">Up to 3 concurrent trades</strong> per pair across strategies
+            <span class="px-4 py-2 rounded-full bg-purple-50 border border-purple-200 text-slate-800 font-body-sm text-sm sm:text-base font-extrabold">
+              Policy: <strong class="text-primary font-black">Up to 3 concurrent trades</strong> per pair across strategies
             </span>
           </div>
 
-          <!-- Horizontal Instrument Strip -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="multiPairSelector">
-            <!-- 1. Gold XAUUSD -->
-            <label class="bg-purple-50/50 p-3.5 rounded-xl flex flex-col justify-between hover:bg-purple-100/60 transition-all border border-purple-100/80 cursor-pointer">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs font-mono border border-amber-200">AU</span>
+          [-- Horizontal Instrument Strip --]
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5" id="multiPairSelector">
+            [-- 1. Gold XAUUSD --]
+            <label class="bg-purple-50/60 p-4 rounded-xl flex flex-col justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+              <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm font-mono border border-amber-300">AU</span>
                   <div>
-                    <span class="font-headline-sm text-sm font-bold text-slate-900">XAUUSD</span>
-                    <span class="font-body-sm text-slate-400 block -mt-1 text-[10px]">Gold Spot</span>
+                    <span class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">XAUUSD</span>
+                    <span class="font-body-sm text-slate-700 font-extrabold block -mt-0.5 text-sm">Gold Spot</span>
                   </div>
                 </div>
                 <input type="checkbox" name="activeSymbol" value="XAUUSD" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
               </div>
-              <div class="space-y-1 font-mono text-xs pt-2">
-                <div class="flex justify-between text-slate-500 text-[11px]">
-                  <span>BID / ASK:</span>
-                  <span class="text-slate-800 font-bold">2,648.42 / .54</span>
-                </div>
-                <div class="flex justify-between text-slate-500 text-[11px]">
+              <div class="space-y-2 font-mono text-sm sm:text-base pt-2">
+                <div class="flex justify-between text-slate-600 font-bold">
                   <span>SPREAD:</span>
-                  <span class="text-emerald-700 font-semibold">1.2 pips</span>
+                  <span class="text-emerald-700 font-black">1.2 pips</span>
                 </div>
-                <div class="flex justify-between items-center pt-1 border-t border-purple-100/60">
-                  <span class="text-slate-400 text-[10px]">CONCURRENCY:</span>
-                  <span class="px-1.5 py-0.5 rounded bg-white text-primary font-bold text-[11px] border border-purple-200 shadow-sm">2 / 3 Active</span>
+                <div class="flex justify-between items-center pt-1.5 border-t border-purple-200">
+                  <span class="text-slate-700 font-black text-xs sm:text-sm">CONCURRENCY:</span>
+                  <span class="px-2.5 py-0.5 rounded bg-white text-primary font-black text-sm border border-purple-300 shadow-sm">2 / 3 Active</span>
                 </div>
               </div>
             </label>
 
-            <!-- 2. Forex EURUSD -->
-            <label class="bg-purple-50/50 p-3.5 rounded-xl flex flex-col justify-between hover:bg-purple-100/60 transition-all border border-purple-100/80 cursor-pointer">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs font-mono border border-blue-200">EU</span>
+            [-- 2. Forex EURUSD --]
+            <label class="bg-purple-50/60 p-4 rounded-xl flex flex-col justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+              <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-black text-sm font-mono border border-blue-300">EU</span>
                   <div>
-                    <span class="font-headline-sm text-sm font-bold text-slate-900">EURUSD</span>
-                    <span class="font-body-sm text-slate-400 block -mt-1 text-[10px]">Euro / Dollar</span>
+                    <span class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">EURUSD</span>
+                    <span class="font-body-sm text-slate-700 font-extrabold block -mt-0.5 text-sm">Euro / Dollar</span>
                   </div>
                 </div>
                 <input type="checkbox" name="activeSymbol" value="EURUSD" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
               </div>
-              <div class="space-y-1 font-mono text-xs pt-2">
-                <div class="flex justify-between text-slate-500 text-[11px]">
-                  <span>BID / ASK:</span>
-                  <span class="text-slate-800 font-bold">1.05421 / .23</span>
-                </div>
-                <div class="flex justify-between text-slate-500 text-[11px]">
+              <div class="space-y-2 font-mono text-sm sm:text-base pt-2">
+                <div class="flex justify-between text-slate-600 font-bold">
                   <span>SPREAD:</span>
-                  <span class="text-emerald-700 font-semibold">0.2 pips</span>
+                  <span class="text-emerald-700 font-black">0.2 pips</span>
                 </div>
-                <div class="flex justify-between items-center pt-1 border-t border-purple-100/60">
-                  <span class="text-slate-400 text-[10px]">CONCURRENCY:</span>
-                  <span class="px-1.5 py-0.5 rounded bg-white text-primary font-bold text-[11px] border border-purple-200 shadow-sm">2 / 3 Active</span>
+                <div class="flex justify-between items-center pt-1.5 border-t border-purple-200">
+                  <span class="text-slate-700 font-black text-xs sm:text-sm">CONCURRENCY:</span>
+                  <span class="px-2.5 py-0.5 rounded bg-white text-primary font-black text-sm border border-purple-300 shadow-sm">2 / 3 Active</span>
                 </div>
               </div>
             </label>
 
-            <!-- 3. Forex GBPUSD -->
-            <label class="bg-purple-50/50 p-3.5 rounded-xl flex flex-col justify-between hover:bg-purple-100/60 transition-all border border-purple-100/80 cursor-pointer">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs font-mono border border-purple-200">GB</span>
+            [-- 3. Forex GBPUSD --]
+            <label class="bg-purple-50/60 p-4 rounded-xl flex flex-col justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+              <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center font-black text-sm font-mono border border-purple-300">GB</span>
                   <div>
-                    <span class="font-headline-sm text-sm font-bold text-slate-900">GBPUSD</span>
-                    <span class="font-body-sm text-slate-400 block -mt-1 text-[10px]">British Pound</span>
+                    <span class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">GBPUSD</span>
+                    <span class="font-body-sm text-slate-700 font-extrabold block -mt-0.5 text-sm">British Pound</span>
                   </div>
                 </div>
                 <input type="checkbox" name="activeSymbol" value="GBPUSD" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
               </div>
-              <div class="space-y-1 font-mono text-xs pt-2">
-                <div class="flex justify-between text-slate-500 text-[11px]">
-                  <span>BID / ASK:</span>
-                  <span class="text-slate-800 font-bold">1.26184 / .89</span>
-                </div>
-                <div class="flex justify-between text-slate-500 text-[11px]">
+              <div class="space-y-2 font-mono text-sm sm:text-base pt-2">
+                <div class="flex justify-between text-slate-600 font-bold">
                   <span>SPREAD:</span>
-                  <span class="text-emerald-700 font-semibold">0.5 pips</span>
+                  <span class="text-emerald-700 font-black">0.5 pips</span>
                 </div>
-                <div class="flex justify-between items-center pt-1 border-t border-purple-100/60">
-                  <span class="text-slate-400 text-[10px]">CONCURRENCY:</span>
-                  <span class="px-1.5 py-0.5 rounded bg-white text-primary font-bold text-[11px] border border-purple-200 shadow-sm">1 / 3 Active</span>
+                <div class="flex justify-between items-center pt-1.5 border-t border-purple-200">
+                  <span class="text-slate-700 font-black text-xs sm:text-sm">CONCURRENCY:</span>
+                  <span class="px-2.5 py-0.5 rounded bg-white text-primary font-black text-sm border border-purple-300 shadow-sm">1 / 3 Active</span>
                 </div>
               </div>
             </label>
 
-            <!-- 4. Crypto BTCUSD -->
-            <label class="bg-purple-50/50 p-3.5 rounded-xl flex flex-col justify-between hover:bg-purple-100/60 transition-all border border-purple-100/80 cursor-pointer">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs font-mono border border-amber-300">₿</span>
+            [-- 4. Crypto BTCUSD --]
+            <label class="bg-purple-50/60 p-4 rounded-xl flex flex-col justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+              <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm font-mono border border-amber-400">₿</span>
                   <div>
-                    <span class="font-headline-sm text-sm font-bold text-slate-900">BTCUSD</span>
-                    <span class="font-body-sm text-slate-400 block -mt-1 text-[10px]">Bitcoin Spot</span>
+                    <span class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">BTCUSD</span>
+                    <span class="font-body-sm text-slate-700 font-extrabold block -mt-0.5 text-sm">Bitcoin Spot</span>
                   </div>
                 </div>
                 <input type="checkbox" name="activeSymbol" value="BTCUSD" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
               </div>
-              <div class="space-y-1 font-mono text-xs pt-2">
-                <div class="flex justify-between text-slate-500 text-[11px]">
-                  <span>BID / ASK:</span>
-                  <span class="text-slate-800 font-bold">96,480 / .5</span>
-                </div>
-                <div class="flex justify-between text-slate-500 text-[11px]">
+              <div class="space-y-2 font-mono text-sm sm:text-base pt-2">
+                <div class="flex justify-between text-slate-600 font-bold">
                   <span>SPREAD:</span>
-                  <span class="text-emerald-700 font-semibold">$2.50</span>
+                  <span class="text-emerald-700 font-black">$2.50</span>
                 </div>
-                <div class="flex justify-between items-center pt-1 border-t border-purple-100/60">
-                  <span class="text-slate-400 text-[10px]">CONCURRENCY:</span>
-                  <span class="px-1.5 py-0.5 rounded bg-white text-primary font-bold text-[11px] border border-purple-200 shadow-sm">1 / 3 Active</span>
+                <div class="flex justify-between items-center pt-1.5 border-t border-purple-200">
+                  <span class="text-slate-700 font-black text-xs sm:text-sm">CONCURRENCY:</span>
+                  <span class="px-2.5 py-0.5 rounded bg-white text-primary font-black text-sm border border-purple-300 shadow-sm">1 / 3 Active</span>
                 </div>
               </div>
             </label>
 
-            <!-- 5. Crypto ETHUSD -->
-            <label class="bg-purple-50/50 p-3.5 rounded-xl flex flex-col justify-between hover:bg-purple-100/60 transition-all border border-purple-100/80 cursor-pointer">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs font-mono border border-indigo-200">Ξ</span>
+            [-- 5. Crypto ETHUSD --]
+            <label class="bg-purple-50/60 p-4 rounded-xl flex flex-col justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+              <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-sm font-mono border border-indigo-300">Ξ</span>
                   <div>
-                    <span class="font-headline-sm text-sm font-bold text-slate-900">ETHUSD</span>
-                    <span class="font-body-sm text-slate-400 block -mt-1 text-[10px]">Ethereum Spot</span>
+                    <span class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">ETHUSD</span>
+                    <span class="font-body-sm text-slate-700 font-extrabold block -mt-0.5 text-sm">Ethereum Spot</span>
                   </div>
                 </div>
                 <input type="checkbox" name="activeSymbol" value="ETHUSD" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
               </div>
-              <div class="space-y-1 font-mono text-xs pt-2">
-                <div class="flex justify-between text-slate-500 text-[11px]">
-                  <span>BID / ASK:</span>
-                  <span class="text-slate-800 font-bold">3,421.2 / .6</span>
-                </div>
-                <div class="flex justify-between text-slate-500 text-[11px]">
+              <div class="space-y-2 font-mono text-sm sm:text-base pt-2">
+                <div class="flex justify-between text-slate-600 font-bold">
                   <span>SPREAD:</span>
-                  <span class="text-emerald-700 font-semibold">$0.40</span>
+                  <span class="text-emerald-700 font-black">$0.40</span>
                 </div>
-                <div class="flex justify-between items-center pt-1 border-t border-purple-100/60">
-                  <span class="text-slate-400 text-[10px]">CONCURRENCY:</span>
-                  <span class="px-1.5 py-0.5 rounded bg-white text-primary font-bold text-[11px] border border-purple-200 shadow-sm">1 / 3 Active</span>
+                <div class="flex justify-between items-center pt-1.5 border-t border-purple-200">
+                  <span class="text-slate-700 font-black text-xs sm:text-sm">CONCURRENCY:</span>
+                  <span class="px-2.5 py-0.5 rounded bg-white text-primary font-black text-sm border border-purple-300 shadow-sm">1 / 3 Active</span>
                 </div>
               </div>
             </label>
           </div>
         </div>
+        -->
 
         <!-- Dedicated Primary Pair Customizer (Dual Panels) -->
-        <div class="w-full bg-white rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
-          <div class="flex items-center justify-between pb-3 mb-4 border-b border-purple-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[22px]">tune</span>
+        <div class="w-full bg-white rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
+          <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-purple-100">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-primary text-[24px]">tune</span>
               <div>
-                <h3 class="font-headline-sm text-base text-slate-900 font-bold uppercase tracking-wide">Dedicated Primary Pair Customizer</h3>
-                <p class="font-body-sm text-xs text-slate-400">Set custom fixed lot sizing and hard Stop Loss (pips) overrides for your primary focus pairs</p>
+                <h3 class="font-headline-sm text-lg sm:text-xl text-slate-950 font-black uppercase tracking-wide">Dedicated Primary Pair Customizer</h3>
+                <p class="font-body-sm text-sm sm:text-base text-slate-700 font-bold">Set custom fixed lot sizing and hard Stop Loss (pips) overrides for your primary focus pairs</p>
               </div>
             </div>
-            <span class="px-3 py-1 rounded-full bg-purple-50 text-primary border border-purple-200 font-mono text-xs font-bold hidden sm:inline-block">INDEPENDENT SIZING & SL</span>
+            <span class="px-4 py-2 rounded-full bg-purple-100 text-primary border border-purple-300 font-mono text-sm sm:text-base font-black hidden sm:inline-block">INDEPENDENT SIZING & SL</span>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <!-- Pair 1 (Primary) -->
-            <div class="bg-purple-50/40 border border-purple-100 rounded-xl p-4 space-y-3">
-              <div class="flex items-center justify-between pb-2 border-b border-purple-100">
-                <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span>
-                  <h4 class="font-headline-sm text-sm font-bold text-slate-900">Pair 1 (Primary Instrument)</h4>
+            <div class="bg-purple-50/50 border border-purple-200 rounded-xl p-5 space-y-3.5">
+              <div class="flex items-center justify-between pb-2.5 border-b border-purple-200">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></span>
+                  <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 1 (Primary Instrument)</h4>
                 </div>
-                <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
                   <span>Enable Pair 1</span>
-                  <input type="checkbox" id="pair1Enabled" checked class="w-4 h-4 text-emerald-600 bg-white border-purple-300 rounded focus:ring-emerald-500 cursor-pointer" onchange="triggerAutoSave(0)">
+                  <input type="checkbox" id="pair1Enabled" checked class="w-5 h-5 text-emerald-600 bg-white border-purple-300 rounded focus:ring-emerald-500 cursor-pointer" onchange="triggerAutoSave(0)">
                 </label>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label for="chart1Select" class="block font-label-sm text-[11px] font-semibold text-slate-600 mb-1">Symbol</label>
-                  <select id="chart1Select" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                  <label for="chart1Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
+                  <select id="chart1Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
                     <option value="XAUUSD">XAUUSD (Gold)</option>
                     <option value="EURUSD">EURUSD (Forex)</option>
                     <option value="GBPUSD">GBPUSD (Forex)</option>
@@ -747,40 +677,40 @@
                 </div>
 
                 <div>
-                  <label for="pair1Lot" class="block font-label-sm text-[11px] font-semibold text-slate-600 mb-1 flex justify-between">
+                  <label for="pair1Lot" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5 flex justify-between">
                     <span>Fixed Lot</span>
-                    <span class="text-slate-400 text-[10px]">(Blank=0.5%)</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=0.5%)</span>
                   </label>
-                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair1Lot" placeholder="e.g. 0.05" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair1Lot" placeholder="e.g. 0.05" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
 
                 <div>
-                  <label for="pair1Sl" class="block font-label-sm text-[11px] font-semibold text-emerald-700 mb-1 flex justify-between">
+                  <label for="pair1Sl" class="block font-label-sm text-sm sm:text-base font-black text-emerald-900 mb-1.5 flex justify-between">
                     <span>Fixed SL (Pips)</span>
-                    <span class="text-slate-400 text-[10px]">(Blank=Dynamic)</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=Dynamic)</span>
                   </label>
-                  <input type="number" step="1" min="1" max="1000" id="pair1Sl" placeholder="e.g. 25" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                  <input type="number" step="1" min="1" max="1000" id="pair1Sl" placeholder="e.g. 25" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
               </div>
             </div>
 
             <!-- Pair 2 (Secondary) -->
-            <div class="bg-purple-50/40 border border-purple-100 rounded-xl p-4 space-y-3">
-              <div class="flex items-center justify-between pb-2 border-b border-purple-100">
-                <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full bg-primary shadow-sm"></span>
-                  <h4 class="font-headline-sm text-sm font-bold text-slate-900">Pair 2 (Secondary Instrument)</h4>
+            <div class="bg-purple-50/50 border border-purple-200 rounded-xl p-5 space-y-3.5">
+              <div class="flex items-center justify-between pb-2.5 border-b border-purple-200">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-3 h-3 rounded-full bg-primary shadow-sm"></span>
+                  <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 2 (Secondary Instrument)</h4>
                 </div>
-                <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
                   <span>Enable Pair 2</span>
-                  <input type="checkbox" id="pair2Enabled" checked class="w-4 h-4 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+                  <input type="checkbox" id="pair2Enabled" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
                 </label>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label for="chart2Select" class="block font-label-sm text-[11px] font-semibold text-slate-600 mb-1">Symbol</label>
-                  <select id="chart2Select" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                  <label for="chart2Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
+                  <select id="chart2Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
                     <option value="EURUSD">EURUSD (Forex)</option>
                     <option value="XAUUSD">XAUUSD (Gold)</option>
                     <option value="GBPUSD">GBPUSD (Forex)</option>
@@ -791,208 +721,94 @@
                 </div>
 
                 <div>
-                  <label for="pair2Lot" class="block font-label-sm text-[11px] font-semibold text-slate-600 mb-1 flex justify-between">
+                  <label for="pair2Lot" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5 flex justify-between">
                     <span>Fixed Lot</span>
-                    <span class="text-slate-400 text-[10px]">(Blank=0.5%)</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=0.5%)</span>
                   </label>
-                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair2Lot" placeholder="e.g. 0.02" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair2Lot" placeholder="e.g. 0.02" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
 
                 <div>
-                  <label for="pair2Sl" class="block font-label-sm text-[11px] font-semibold text-primary mb-1 flex justify-between">
+                  <label for="pair2Sl" class="block font-label-sm text-sm sm:text-base font-black text-primary mb-1.5 flex justify-between">
                     <span>Fixed SL (Pips)</span>
-                    <span class="text-slate-400 text-[10px]">(Blank=Dynamic)</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=Dynamic)</span>
                   </label>
-                  <input type="number" step="1" min="1" max="1000" id="pair2Sl" placeholder="e.g. 15" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold font-mono text-slate-900 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                  <input type="number" step="1" min="1" max="1000" id="pair2Sl" placeholder="e.g. 15" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Live Open Positions & Executed Trade Ledger -->
-        <div class="w-full bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100 overflow-hidden">
-          <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[22px]">receipt_long</span>
-              <div>
-                <h3 class="font-headline-sm text-base font-bold text-slate-900 uppercase tracking-wide">Live Positions & Executed Trade Ledger</h3>
-                <p class="font-body-sm text-xs text-slate-400">Institutional bracket orders, filled tickets, and realized PnL</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="font-body-sm text-xs text-slate-500">
-                Win Rate: <span id="historyWinRate" class="font-bold text-emerald-600 font-mono">---%</span> 
-                <span id="historyWinLoss" class="text-[11px] text-slate-400">(0W / 0L)</span>
-              </div>
-              <div class="font-body-sm text-xs text-slate-500 border-l border-purple-100 pl-3">
-                Total PnL: <span id="historyNetPnL" class="font-bold text-emerald-600 font-mono">$0.00</span>
-              </div>
-              <button onclick="fetchTradeHistory()" class="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-primary border border-purple-200 font-headline-sm text-xs font-semibold flex items-center gap-1 transition-all shadow-sm">
-                <span class="material-symbols-outlined text-[15px]">refresh</span>
-                <span>Refresh</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-left font-body-sm text-xs text-slate-700">
-              <thead class="bg-purple-50/70 text-slate-500 font-semibold border-b border-purple-100 uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th class="py-3 px-3">Ticket</th>
-                  <th class="py-3 px-3">Time (UTC)</th>
-                  <th class="py-3 px-3">Symbol</th>
-                  <th class="py-3 px-3">Strategy</th>
-                  <th class="py-3 px-3">Side</th>
-                  <th class="py-3 px-3">Entry</th>
-                  <th class="py-3 px-3">Stop Loss</th>
-                  <th class="py-3 px-3">Take Profit</th>
-                  <th class="py-3 px-3 text-center">R:R</th>
-                  <th class="py-3 px-3">Lots</th>
-                  <th class="py-3 px-3 text-center">Holding Time</th>
-                  <th class="py-3 px-3">Status</th>
-                  <th class="py-3 px-3 text-right">Net PnL ($)</th>
-                </tr>
-              </thead>
-              <tbody id="tradeHistoryBody" class="divide-y divide-purple-100/60 font-mono">
-                <tr>
-                  <td colspan="13" class="py-8 text-center text-slate-400 font-sans">Loading trade execution records...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Strategy & Pair Win-Rate Analytics Matrix -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <!-- Strategy Matrix -->
-          <div class="bg-white rounded-2xl p-4 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
-            <div class="flex justify-between items-center pb-2 mb-3 border-b border-purple-100">
-              <h4 class="font-headline-sm text-sm font-bold text-slate-900 uppercase flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-primary text-[18px]">verified</span>
-                <span>Win-Rate by Strategy</span>
-              </h4>
-              <span class="text-[11px] text-slate-400 font-mono">Real-time Breakdown</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left font-body-sm text-xs text-slate-700">
-                <thead class="bg-purple-50/60 text-slate-500 font-semibold border-b border-purple-100 uppercase text-[10px]">
-                  <tr>
-                    <th class="py-2 px-2.5">Strategy</th>
-                    <th class="py-2 px-2.5 text-center">Trades</th>
-                    <th class="py-2 px-2.5 text-center">W / L</th>
-                    <th class="py-2 px-2.5 text-center">Win Rate</th>
-                    <th class="py-2 px-2.5 text-right">Net PnL</th>
-                  </tr>
-                </thead>
-                <tbody id="stratStatsBody" class="divide-y divide-purple-100/60 font-mono">
-                  <tr>
-                    <td colspan="5" class="py-4 text-center text-slate-400 font-sans">No strategy trades recorded yet</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Pair Matrix -->
-          <div class="bg-white rounded-2xl p-4 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100">
-            <div class="flex justify-between items-center pb-2 mb-3 border-b border-purple-100">
-              <h4 class="font-headline-sm text-sm font-bold text-slate-900 uppercase flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-primary text-[18px]">bar_chart</span>
-                <span>Win-Rate by Pair</span>
-              </h4>
-              <span class="text-[11px] text-slate-400 font-mono">Real-time Breakdown</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left font-body-sm text-xs text-slate-700">
-                <thead class="bg-purple-50/60 text-slate-500 font-semibold border-b border-purple-100 uppercase text-[10px]">
-                  <tr>
-                    <th class="py-2 px-2.5">Symbol</th>
-                    <th class="py-2 px-2.5 text-center">Trades</th>
-                    <th class="py-2 px-2.5 text-center">W / L</th>
-                    <th class="py-2 px-2.5 text-center">Win Rate</th>
-                    <th class="py-2 px-2.5 text-right">Net PnL</th>
-                  </tr>
-                </thead>
-                <tbody id="pairStatsBody" class="divide-y divide-purple-100/60 font-mono">
-                  <tr>
-                    <td colspan="5" class="py-4 text-center text-slate-400 font-sans">No pair trades recorded yet</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
 
         <!-- Institutional Intelligence Row (AI Gate + Execution Console) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <!-- Left Widget: AI Sentinel Intelligence Feed -->
-          <div class="bg-white rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between">
+          <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between">
             <div>
-              <div class="flex items-center justify-between pb-2 mb-3 border-b border-purple-100">
-                <div class="flex items-center gap-2">
-                  <span class="material-symbols-outlined text-primary text-[22px]">psychology</span>
-                  <h3 class="font-headline-sm text-base text-slate-900 font-bold">Gemini 2.0 AI Risk Gate & Sentiment</h3>
+              <div class="flex items-center justify-between pb-3 mb-4 border-b border-purple-100">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-primary text-[24px]">psychology</span>
+                  <h3 class="font-headline-sm text-lg sm:text-xl text-slate-950 font-black">Gemini 2.0 AI Risk Gate & Sentiment</h3>
                 </div>
-                <span class="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold font-mono">CONVICTION 82.4%</span>
+                <span class="px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 text-sm sm:text-base font-black font-mono">CONVICTION 82.4%</span>
               </div>
-              <div class="space-y-2.5 font-body-sm text-xs">
-                <div class="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-slate-900 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span> XAUUSD Bullish Structure Validated</span>
-                    <span class="text-slate-400 text-[11px]">14:31:40</span>
+              <div class="space-y-3 font-body-sm text-sm sm:text-base">
+                <div class="p-3.5 bg-purple-50/70 rounded-xl border border-purple-200">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="font-black text-slate-950 flex items-center gap-2.5 text-sm sm:text-base"><span class="w-3 h-3 rounded-full bg-amber-400"></span> XAUUSD Bullish Structure Validated</span>
+                    <span class="text-slate-600 font-bold text-xs sm:text-sm">14:31:40</span>
                   </div>
-                  <p class="text-slate-600 leading-relaxed">London high swept cleanly at 2,642. Institutional liquidity pool cleared with aggressive buyer absorption on 15M Delta. Low risk of pullback.</p>
+                  <p class="text-slate-800 font-bold text-sm sm:text-base leading-relaxed">London high swept cleanly at 2,642. Institutional liquidity pool cleared with aggressive buyer absorption on 15M Delta. Low risk of pullback.</p>
                 </div>
-                <div class="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-slate-900 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> EURUSD Fake Breakout Warning Blocked</span>
-                    <span class="text-slate-400 text-[11px]">14:30:15</span>
+                <div class="p-3.5 bg-purple-50/70 rounded-xl border border-purple-200">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="font-black text-slate-950 flex items-center gap-2.5 text-sm sm:text-base"><span class="w-3 h-3 rounded-full bg-rose-500"></span> EURUSD Fake Breakout Warning Blocked</span>
+                    <span class="text-slate-600 font-bold text-xs sm:text-sm">14:30:15</span>
                   </div>
-                  <p class="text-slate-600 leading-relaxed">Attempted 5M long trigger rejected by AI Gate. Order book shows 68% sell-side wall at 1.0560. Engine prevented false long signal.</p>
+                  <p class="text-slate-800 font-bold text-sm sm:text-base leading-relaxed">Attempted 5M long trigger rejected by AI Gate. Order book shows 68% sell-side wall at 1.0560. Engine prevented false long signal.</p>
                 </div>
-                <div class="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold text-slate-900 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> Macro Safeguard: US Session Opening</span>
-                    <span class="text-slate-400 text-[11px]">14:28:00</span>
+                <div class="p-3.5 bg-purple-50/70 rounded-xl border border-purple-200">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="font-black text-slate-950 flex items-center gap-2.5 text-sm sm:text-base"><span class="w-3 h-3 rounded-full bg-indigo-500"></span> Macro Safeguard: US Session Opening</span>
+                    <span class="text-slate-600 font-bold text-xs sm:text-sm">14:28:00</span>
                   </div>
-                  <p class="text-slate-600 leading-relaxed">NY Open Volatility surge impending. Auto-tightening stop loss buffers by 1.8 pips across all open EUR & GBP tickets.</p>
+                  <p class="text-slate-800 font-bold text-sm sm:text-base leading-relaxed">NY Open Volatility surge impending. Auto-tightening stop loss buffers by 1.8 pips across all open EUR & GBP tickets.</p>
                 </div>
               </div>
             </div>
-            <div class="flex items-center justify-between pt-3 mt-3 border-t border-purple-100 font-mono text-[11px] text-slate-500">
-              <span>GATE STATUS: <strong class="text-emerald-600">ZERO BREACHES</strong></span>
-              <span class="text-primary font-bold">14 TRAPS INTERCEPTED TODAY</span>
+            <div class="flex items-center justify-between pt-3.5 mt-3.5 border-t border-purple-100 font-mono text-xs sm:text-sm text-slate-700 font-bold">
+              <span>GATE STATUS: <strong class="text-emerald-700 font-black">ZERO BREACHES</strong></span>
+              <span class="text-primary font-black">14 TRAPS INTERCEPTED TODAY</span>
             </div>
           </div>
 
           <!-- Right Widget: Live Terminal Execution Stream -->
-          <div class="bg-white rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between">
+          <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between">
             <div>
-              <div class="flex items-center justify-between pb-2 mb-3 border-b border-purple-100">
-                <div class="flex items-center gap-2">
-                  <span class="material-symbols-outlined text-primary text-[22px]">terminal</span>
-                  <h3 class="font-headline-sm text-base text-slate-900 font-mono font-bold">HFT Core Telemetry Feed</h3>
+              <div class="flex items-center justify-between pb-3 mb-4 border-b border-purple-100">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-primary text-[24px]">terminal</span>
+                  <h3 class="font-headline-sm text-lg sm:text-xl text-slate-950 font-mono font-black">HFT Core Telemetry Feed</h3>
                 </div>
-                <div class="flex items-center gap-2">
-                  <button onclick="triggerManualTick()" id="tickBtn" class="text-xs bg-purple-50 hover:bg-purple-100 text-primary border border-purple-200 px-3 py-1 rounded-lg transition-all disabled:opacity-50 font-bold flex items-center gap-1 shadow-sm" title="Forces an instant multi-strategy analysis cycle across active pairs right now">
-                    <span class="material-symbols-outlined text-[15px]">bolt</span>
+                <div class="flex items-center gap-2.5">
+                  <button onclick="triggerManualTick()" id="tickBtn" class="text-sm sm:text-base bg-purple-50 hover:bg-purple-100 text-primary border border-purple-300 px-4 py-2 rounded-xl transition-all disabled:opacity-50 font-black flex items-center gap-2 shadow-sm active:scale-95" title="Forces an instant multi-strategy analysis cycle across active pairs right now">
+                    <span class="material-symbols-outlined text-[17px]">bolt</span>
                     <span>Run Tick Now</span>
                   </button>
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span class="font-body-sm text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 uppercase font-mono font-bold tracking-wider">LIVE</span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span class="font-body-sm text-sm text-emerald-900 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-300 uppercase font-mono font-black tracking-wider">LIVE</span>
                 </div>
               </div>
 
               <!-- Telemetry Log Sub-View Window -->
-              <div class="w-full h-[250px] bg-[#fbfaff] rounded-xl p-3.5 font-mono text-[11.5px] leading-relaxed text-slate-600 overflow-y-auto space-y-1.5 border border-purple-100/90 shadow-inner" id="terminalContainer">
-                <div class="text-slate-400">Connecting to trading engine log stream...</div>
+              <div class="w-full h-[300px] bg-[#fbfaff] rounded-xl p-4 font-mono text-sm sm:text-base font-bold leading-relaxed text-slate-900 overflow-y-auto space-y-2.5 border border-purple-200 shadow-inner" id="terminalContainer">
+                <div class="text-slate-500 font-semibold">Connecting to trading engine log stream...</div>
               </div>
             </div>
 
-            <div class="flex items-center justify-between pt-2.5 mt-2 font-mono text-[11px] text-slate-500 border-t border-purple-50">
-              <span>AUTO-SCROLL: <strong class="text-emerald-600 font-bold">ENABLED</strong></span>
-              <span>BUFFER: <strong class="text-primary">100/1000 FRAMES</strong></span>
+            <div class="flex items-center justify-between pt-3 mt-3 font-mono text-sm sm:text-base text-slate-800 font-black border-t border-purple-100">
+              <span>AUTO-SCROLL: <strong class="text-emerald-700 font-black">ENABLED</strong></span>
+              <span>BUFFER: <strong class="text-primary font-black">100/1000 FRAMES</strong></span>
             </div>
           </div>
         </div>
@@ -1001,200 +817,167 @@
 
       <!-- ==================== TAB 2: PERFORMANCE ANALYTICS ==================== -->
       <section id="viewAnalytics" class="hidden space-y-6">
-        <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 class="font-headline-md text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary text-[22px]">insights</span>
-              <span>Institutional Performance Analytics & Trade Statistics</span>
-            </h2>
-            <p class="font-body-sm text-xs text-slate-500 mt-0.5">Real-time statistics covering Win Rates, SL/TP ratios, Risk-to-Reward, and trade holding durations</p>
-          </div>
-          <button onclick="fetchAnalytics()" class="text-xs bg-purple-50 hover:bg-purple-100 text-primary border border-purple-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 font-bold shadow-sm">
-            <span class="material-symbols-outlined text-[16px]">refresh</span>
-            <span>Refresh Analytics</span>
-          </button>
-        </div>
 
-        <!-- 6 Primary Metric Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Primary Metric Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <!-- 1. Total TP -->
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">target</span> Total Take Profit (TP)
+              <span class="font-label-sm text-xs sm:text-sm font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[19px]">target</span> Total Take Profit (TP)
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">WINS</span>
+              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-emerald-50 border border-emerald-300 text-emerald-800">WINS</span>
             </div>
             <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalTP" class="text-3xl font-black text-emerald-600 font-mono">0</div>
-              <div class="text-xs text-slate-400">hits</div>
+              <div id="analyticsTotalTP" class="text-4xl sm:text-5xl font-black text-emerald-700 font-mono">0</div>
+              <div class="text-xs sm:text-sm text-slate-500 font-bold">hits</div>
             </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
+            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
               <span>Total Realized Profit:</span>
-              <span id="analyticsTPAmount" class="font-bold text-emerald-600 font-mono">+$0.00</span>
+              <span id="analyticsTPAmount" class="font-black text-emerald-700 font-mono">+$0.00</span>
             </div>
           </div>
 
           <!-- 2. Total SL -->
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">cancel</span> Total Stop Loss (SL)
+              <span class="font-label-sm text-xs sm:text-sm font-black text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[19px]">cancel</span> Total Stop Loss (SL)
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700">LOSSES</span>
+              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-rose-50 border border-rose-300 text-rose-800">LOSSES</span>
             </div>
             <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalSL" class="text-3xl font-black text-rose-600 font-mono">0</div>
-              <div class="text-xs text-slate-400">hits</div>
+              <div id="analyticsTotalSL" class="text-4xl sm:text-5xl font-black text-rose-700 font-mono">0</div>
+              <div class="text-xs sm:text-sm text-slate-500 font-bold">hits</div>
             </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
+            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
               <span>Total Stopped Out:</span>
-              <span id="analyticsSLAmount" class="font-bold text-rose-600 font-mono">-$0.00</span>
-            </div>
-          </div>
-
-          <!-- 3. Win Rate & Differential -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">trending_up</span> Win Rate & Differential
-              </span>
-              <span id="analyticsDiffBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-primary border border-purple-200">0 Net Diff</span>
-            </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsWinRate" class="text-3xl font-black text-slate-900 font-mono">0.0%</div>
-              <div id="analyticsWinLossSpread" class="text-xs font-bold text-slate-400 font-mono">(0W / 0L)</div>
-            </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
-              <span>Net Balance (Wins − Losses):</span>
-              <span id="analyticsNetSpread" class="font-bold text-slate-700 font-mono">0</span>
+              <span id="analyticsSLAmount" class="font-black text-rose-700 font-mono">-$0.00</span>
             </div>
           </div>
 
           <!-- 4. Risk:Reward (R:R) -->
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">balance</span> Risk : Reward (R:R)
+              <span class="font-label-sm text-xs sm:text-sm font-black text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[19px]">balance</span> Risk : Reward (R:R)
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">TARGET</span>
+              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-indigo-50 border border-indigo-300 text-indigo-800">TARGET</span>
             </div>
             <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsPlannedRR" class="text-3xl font-black text-indigo-600 font-mono">1:2.50</div>
-              <div class="text-xs text-slate-400">planned</div>
+              <div id="analyticsPlannedRR" class="text-4xl sm:text-5xl font-black text-indigo-700 font-mono">1:2.50</div>
+              <div class="text-xs sm:text-sm text-slate-500 font-bold">planned</div>
             </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
+            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
               <span>Realized R:R (Avg Win/Loss):</span>
-              <span id="analyticsRealizedRR" class="font-bold text-indigo-700 font-mono">1:2.50</span>
+              <span id="analyticsRealizedRR" class="font-black text-indigo-800 font-mono">1:2.50</span>
             </div>
           </div>
 
           <!-- 5. Total Trades -->
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">inventory_2</span> Total Trades Executed
+              <span class="font-label-sm text-xs sm:text-sm font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[19px]">inventory_2</span> Total Trades Executed
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700">LIFETIME</span>
+              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-amber-50 border border-amber-300 text-amber-800">LIFETIME</span>
             </div>
             <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalTrades" class="text-3xl font-black text-slate-900 font-mono">0</div>
-              <div class="text-xs text-slate-400">total entries</div>
+              <div id="analyticsTotalTrades" class="text-4xl sm:text-5xl font-black text-slate-950 font-mono">0</div>
+              <div class="text-xs sm:text-sm text-slate-500 font-bold">total entries</div>
             </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
+            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
               <span>Position Status:</span>
-              <span class="font-bold text-slate-700"><span id="analyticsClosedTrades">0</span> Closed · <span id="analyticsOpenTrades">0</span> Open</span>
+              <span class="font-black text-slate-900"><span id="analyticsClosedTrades">0</span> Closed · <span id="analyticsOpenTrades">0</span> Open</span>
             </div>
           </div>
 
           <!-- 6. Holding Time -->
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[17px]">schedule</span> Holding Time
+              <span class="font-label-sm text-xs sm:text-sm font-black text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[19px]">schedule</span> Holding Time
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 border border-blue-200 text-blue-700">DURATION</span>
+              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-blue-50 border border-blue-300 text-blue-800">DURATION</span>
             </div>
             <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsAvgHolding" class="text-3xl font-black text-blue-600 font-mono">0s</div>
-              <div class="text-xs text-slate-400">avg per trade</div>
+              <div id="analyticsAvgHolding" class="text-4xl sm:text-5xl font-black text-blue-700 font-mono">0s</div>
+              <div class="text-xs sm:text-sm text-slate-500 font-bold">avg per trade</div>
             </div>
-            <div class="mt-2 pt-2 border-t border-purple-50 flex items-center justify-between text-xs text-slate-500">
+            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
               <span>Total Market Exposure:</span>
-              <span id="analyticsTotalHolding" class="font-bold text-blue-700 font-mono">0s</span>
+              <span id="analyticsTotalHolding" class="font-black text-blue-800 font-mono">0s</span>
             </div>
           </div>
         </div>
 
         <!-- Secondary Insights -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div class="bg-white border border-purple-100 rounded-xl p-4 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Profit Factor</div>
-            <div id="analyticsProfitFactor" class="text-xl font-bold mt-1 text-emerald-600 font-mono">0.00</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Gross Win / Gross Loss</div>
+          <div class="bg-white border border-purple-100 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div class="text-sm font-black text-slate-700 uppercase">Profit Factor</div>
+            <div id="analyticsProfitFactor" class="text-3xl sm:text-4xl font-black mt-1 text-emerald-700 font-mono">0.00</div>
+            <div class="text-xs sm:text-sm text-slate-600 font-bold mt-0.5">Gross Win / Gross Loss</div>
           </div>
-          <div class="bg-white border border-purple-100 rounded-xl p-4 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Net Realized PnL</div>
-            <div id="analyticsNetPnL" class="text-xl font-bold mt-1 text-emerald-600 font-mono">$0.00</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Total closed profits</div>
+          <div class="bg-white border border-purple-100 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div class="text-sm font-black text-slate-700 uppercase">Net Realized PnL</div>
+            <div id="analyticsNetPnL" class="text-3xl sm:text-4xl font-black mt-1 text-emerald-700 font-mono">$0.00</div>
+            <div class="text-xs sm:text-sm text-slate-600 font-bold mt-0.5">Total closed profits</div>
           </div>
-          <div class="bg-white border border-purple-100 rounded-xl p-4 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Best Winning Trade</div>
-            <div id="analyticsBestTrade" class="text-xl font-bold mt-1 text-emerald-600 font-mono">+$0.00</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Single largest gain</div>
+          <div class="bg-white border border-purple-100 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div class="text-sm font-black text-slate-700 uppercase">Best Winning Trade</div>
+            <div id="analyticsBestTrade" class="text-3xl sm:text-4xl font-black mt-1 text-emerald-700 font-mono">+$0.00</div>
+            <div class="text-xs sm:text-sm text-slate-600 font-bold mt-0.5">Single largest gain</div>
           </div>
-          <div class="bg-white border border-purple-100 rounded-xl p-4 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Worst Drawdown Trade</div>
-            <div id="analyticsWorstTrade" class="text-xl font-bold mt-1 text-rose-600 font-mono">-$0.00</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Single largest loss</div>
+          <div class="bg-white border border-purple-100 rounded-xl p-4 sm:p-5 shadow-sm">
+            <div class="text-sm font-black text-slate-700 uppercase">Worst Drawdown Trade</div>
+            <div id="analyticsWorstTrade" class="text-3xl sm:text-4xl font-black mt-1 text-rose-700 font-mono">-$0.00</div>
+            <div class="text-xs sm:text-sm text-slate-600 font-bold mt-0.5">Single largest loss</div>
           </div>
         </div>
 
         <!-- Breakdown Tables -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <!-- Strategy Table -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <h3 class="font-headline-sm text-sm font-bold text-slate-900 uppercase mb-3 flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-primary text-[18px]">bolt</span>
+          <div class="bg-white border border-purple-100 rounded-2xl p-5 sm:p-6 shadow-sm">
+            <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950 uppercase mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">bolt</span>
               <span>Performance by Strategy</span>
             </h3>
             <div class="overflow-x-auto">
-              <table class="w-full text-left font-body-sm text-xs text-slate-700">
-                <thead class="bg-purple-50/60 text-slate-500 font-semibold border-b border-purple-100 uppercase text-[10px]">
+              <table class="w-full text-left font-body-sm text-sm sm:text-base text-slate-950 font-bold">
+                <thead class="bg-purple-50 text-slate-800 font-black border-b border-purple-200 uppercase text-xs sm:text-sm">
                   <tr>
-                    <th class="py-2.5 px-3">Strategy</th>
-                    <th class="py-2.5 px-3 text-center">Trades</th>
-                    <th class="py-2.5 px-3 text-center">TP / SL</th>
-                    <th class="py-2.5 px-3 text-center">Win Rate</th>
-                    <th class="py-2.5 px-3 text-right">Net PnL</th>
+                    <th class="py-3 px-3">Strategy</th>
+                    <th class="py-3 px-3 text-center">Trades</th>
+                    <th class="py-3 px-3 text-center">TP / SL</th>
+                    <th class="py-3 px-3 text-right">Net PnL</th>
                   </tr>
                 </thead>
-                <tbody id="analyticsStrategyBody" class="divide-y divide-purple-100/60 font-mono">
-                  <tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No strategy trades recorded.</td></tr>
+                <tbody id="analyticsStrategyBody" class="divide-y divide-purple-100 font-mono font-bold">
+                  <tr><td colspan="4" class="py-5 text-center text-slate-500 font-sans font-semibold">No strategy trades recorded.</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
           <!-- Pair Table -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <h3 class="font-headline-sm text-sm font-bold text-slate-900 uppercase mb-3 flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-primary text-[18px]">currency_exchange</span>
+          <div class="bg-white border border-purple-100 rounded-2xl p-5 sm:p-6 shadow-sm">
+            <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950 uppercase mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">currency_exchange</span>
               <span>Performance by Pair / Asset</span>
             </h3>
             <div class="overflow-x-auto">
-              <table class="w-full text-left font-body-sm text-xs text-slate-700">
-                <thead class="bg-purple-50/60 text-slate-500 font-semibold border-b border-purple-100 uppercase text-[10px]">
+              <table class="w-full text-left font-body-sm text-sm sm:text-base text-slate-950 font-bold">
+                <thead class="bg-purple-50 text-slate-800 font-black border-b border-purple-200 uppercase text-xs sm:text-sm">
                   <tr>
-                    <th class="py-2.5 px-3">Symbol</th>
-                    <th class="py-2.5 px-3 text-center">Trades</th>
-                    <th class="py-2.5 px-3 text-center">TP / SL</th>
-                    <th class="py-2.5 px-3 text-center">Win Rate</th>
-                    <th class="py-2.5 px-3 text-right">Net PnL</th>
+                    <th class="py-3 px-3">Symbol</th>
+                    <th class="py-3 px-3 text-center">Trades</th>
+                    <th class="py-3 px-3 text-center">TP / SL</th>
+                    <th class="py-3 px-3 text-right">Net PnL</th>
                   </tr>
                 </thead>
-                <tbody id="analyticsPairBody" class="divide-y divide-purple-100/60 font-mono">
-                  <tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No pair trades recorded.</td></tr>
+                <tbody id="analyticsPairBody" class="divide-y divide-purple-100 font-mono font-bold">
+                  <tr><td colspan="4" class="py-5 text-center text-slate-500 font-sans font-semibold">No pair trades recorded.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1204,33 +987,32 @@
 
       <!-- ==================== TAB 3: TRADE HISTORY ==================== -->
       <section id="viewHistory" class="hidden space-y-6">
-        <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)]">
-          <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-purple-100 gap-3">
+        <div class="bg-white border border-purple-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)]">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-purple-100 gap-3.5">
             <div>
-              <h2 class="font-headline-md text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-[22px]">table_chart</span>
+              <h2 class="font-headline-md text-xl sm:text-2xl font-black text-slate-950 flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-primary text-[26px]">table_chart</span>
                 <span>Executed Trade Ledger & Realized PnL</span>
               </h2>
-              <p class="font-body-sm text-xs text-slate-500 mt-0.5">Comprehensive audit log of filled bracket orders, exits, and net profitability</p>
+              <p class="font-body-sm text-sm sm:text-base text-slate-700 font-bold mt-1">Comprehensive audit log of filled bracket orders, exits, and net profitability</p>
             </div>
             <div class="flex items-center gap-4">
-              <div class="font-body-sm text-xs text-slate-500">
-                Accuracy: <span id="historyWinRate2" class="font-bold text-emerald-600 font-mono">---%</span> 
-                <span id="historyWinLoss2" class="text-[11px] text-slate-400">(0W / 0L)</span>
+              <div class="font-body-sm text-sm sm:text-base text-slate-800 font-black">
+                Closed Trades: <span id="historyWinLoss" class="text-slate-950 font-mono font-black">(0W / 0L)</span>
               </div>
-              <div class="font-body-sm text-xs text-slate-500 border-l border-purple-100 pl-4">
-                Total Net PnL: <span id="historyNetPnL2" class="font-bold text-emerald-600 font-mono">$0.00</span>
+              <div class="font-body-sm text-sm sm:text-base text-slate-800 font-black border-l border-purple-200 pl-4">
+                Total Net PnL: <span id="historyNetPnL" class="font-black text-emerald-700 font-mono">$0.00</span>
               </div>
-              <button onclick="fetchTradeHistory()" class="text-xs bg-purple-50 hover:bg-purple-100 text-primary border border-purple-200 px-3.5 py-1.5 rounded-lg transition-all font-bold flex items-center gap-1 shadow-sm">
-                <span class="material-symbols-outlined text-[15px]">refresh</span>
+              <button onclick="fetchTradeHistory()" class="text-sm sm:text-base bg-purple-50 hover:bg-purple-100 text-primary border border-purple-300 px-5 py-2.5 rounded-xl transition-all font-black flex items-center gap-2 shadow-sm active:scale-95">
+                <span class="material-symbols-outlined text-[17px]">refresh</span>
                 <span>Refresh</span>
               </button>
             </div>
           </div>
 
           <div class="mt-4 overflow-x-auto">
-            <table class="w-full text-left font-body-sm text-xs text-slate-700">
-              <thead class="bg-purple-50/70 text-slate-500 font-semibold border-b border-purple-100 uppercase tracking-wider text-[11px]">
+            <table class="w-full text-left font-body-sm text-sm sm:text-base text-slate-950 font-bold">
+              <thead class="bg-purple-50 text-slate-800 font-black border-b border-purple-200 uppercase tracking-wider text-xs sm:text-sm">
                 <tr>
                   <th class="py-3 px-3">Ticket</th>
                   <th class="py-3 px-3">Time (UTC)</th>
@@ -1247,9 +1029,9 @@
                   <th class="py-3 px-3 text-right">Net PnL ($)</th>
                 </tr>
               </thead>
-              <tbody id="tradeHistoryBody2" class="divide-y divide-purple-100/60 font-mono">
+              <tbody id="tradeHistoryBody" class="divide-y divide-purple-100 font-mono font-bold">
                 <tr>
-                  <td colspan="13" class="py-8 text-center text-slate-400 font-sans">Loading trade history records...</td>
+                  <td colspan="13" class="py-8 text-center text-slate-500 font-sans font-semibold">Loading trade history records...</td>
                 </tr>
               </tbody>
             </table>
@@ -1262,61 +1044,61 @@
         <!-- Session KPIs -->
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bot Status</div>
-            <div id="kpiSessionStatus" class="text-xl font-bold mt-2 text-slate-700">IDLE</div>
-            <div id="kpiSessionUptime" class="text-xs text-slate-400 mt-1 font-mono">Not running</div>
+            <div class="text-sm font-black text-slate-700 uppercase tracking-wider">Bot Status</div>
+            <div id="kpiSessionStatus" class="text-2xl sm:text-3xl font-black mt-2 text-slate-900">IDLE</div>
+            <div id="kpiSessionUptime" class="text-xs sm:text-sm text-slate-600 mt-1 font-mono font-bold">Not running</div>
           </div>
 
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Sessions</div>
-            <div id="kpiTotalSessions" class="text-2xl font-bold mt-2 text-slate-900 font-mono">0</div>
-            <div class="text-xs text-slate-400 mt-1">Activation cycles</div>
+            <div class="text-sm font-black text-slate-700 uppercase tracking-wider">Total Sessions</div>
+            <div id="kpiTotalSessions" class="text-3xl sm:text-4xl font-black mt-2 text-slate-950 font-mono">0</div>
+            <div class="text-xs sm:text-sm text-slate-600 mt-1 font-bold">Activation cycles</div>
           </div>
 
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Bot Uptime</div>
-            <div id="kpiTotalUptime" class="text-2xl font-bold mt-2 text-emerald-600 font-mono">0s</div>
-            <div class="text-xs text-slate-400 mt-1">Cumulative active time</div>
+            <div class="text-sm font-black text-slate-700 uppercase tracking-wider">Total Bot Uptime</div>
+            <div id="kpiTotalUptime" class="text-3xl sm:text-4xl font-black mt-2 text-emerald-700 font-mono">0s</div>
+            <div class="text-xs sm:text-sm text-slate-600 mt-1 font-bold">Cumulative active time</div>
           </div>
 
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Session Time</div>
-            <div id="kpiAvgDuration" class="text-2xl font-bold mt-2 text-primary font-mono">0s</div>
-            <div class="text-xs text-slate-400 mt-1">Per active cycle</div>
+            <div class="text-sm font-black text-slate-700 uppercase tracking-wider">Avg Session Time</div>
+            <div id="kpiAvgDuration" class="text-3xl sm:text-4xl font-black mt-2 text-primary font-mono">0s</div>
+            <div class="text-xs sm:text-sm text-slate-600 mt-1 font-bold">Per active cycle</div>
           </div>
 
           <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Activity</div>
-            <div id="kpiLastActivity" class="text-sm font-bold mt-2 text-slate-800 truncate font-mono">---</div>
-            <div id="kpiLastActivitySub" class="text-xs text-slate-400 mt-1 truncate">No records yet</div>
+            <div class="text-sm font-black text-slate-700 uppercase tracking-wider">Last Activity</div>
+            <div id="kpiLastActivity" class="text-base sm:text-lg font-black mt-2 text-slate-950 truncate font-mono">---</div>
+            <div id="kpiLastActivitySub" class="text-xs sm:text-sm text-slate-600 mt-1 truncate font-bold">No records yet</div>
           </div>
         </div>
 
         <!-- Activation History Table -->
-        <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)]">
-          <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-purple-100 gap-3">
+        <div class="bg-white border border-purple-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_24px_-4px_rgba(124,58,237,0.06)]">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-purple-100 gap-3.5">
             <div>
-              <h2 class="font-headline-md text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary text-[22px]">history</span>
+              <h2 class="font-headline-md text-xl sm:text-2xl font-black text-slate-950 flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-primary text-[26px]">history</span>
                 <span>Bot Activation & Deactivation Time History</span>
               </h2>
-              <p class="font-body-sm text-xs text-slate-500 mt-0.5">Permanent operational audit log of bot run intervals, timestamps, active instruments, and triggers</p>
+              <p class="font-body-sm text-sm sm:text-base text-slate-700 font-bold mt-1">Permanent operational audit log of bot run intervals, timestamps, active instruments, and triggers</p>
             </div>
-            <div class="flex items-center gap-2">
-              <button onclick="fetchActivationHistory()" class="text-xs bg-purple-50 hover:bg-purple-100 text-primary border border-purple-200 px-3 py-1.5 rounded-lg transition-all font-bold flex items-center gap-1 shadow-sm">
-                <span class="material-symbols-outlined text-[15px]">refresh</span>
+            <div class="flex items-center gap-2.5">
+              <button onclick="fetchActivationHistory()" class="text-sm sm:text-base bg-purple-50 hover:bg-purple-100 text-primary border border-purple-300 px-5 py-2.5 rounded-xl transition-all font-black flex items-center gap-2 shadow-sm active:scale-95">
+                <span class="material-symbols-outlined text-[19px]">refresh</span>
                 <span>Refresh</span>
               </button>
-              <button onclick="confirmClearSessions()" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg transition-all font-bold flex items-center gap-1 shadow-sm" title="Clear past completed sessions">
-                <span class="material-symbols-outlined text-[15px]">delete</span>
+              <button onclick="confirmClearSessions()" class="text-sm sm:text-base bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-5 py-2.5 rounded-xl transition-all font-black flex items-center gap-2 shadow-sm active:scale-95" title="Clear past completed sessions">
+                <span class="material-symbols-outlined text-[19px]">delete</span>
                 <span>Clear History</span>
               </button>
             </div>
           </div>
 
           <div class="mt-4 overflow-x-auto">
-            <table class="w-full text-left font-body-sm text-xs text-slate-700">
-              <thead class="bg-purple-50/70 text-slate-500 font-semibold border-b border-purple-100 uppercase tracking-wider text-[11px]">
+            <table class="w-full text-left font-body-sm text-sm sm:text-base text-slate-950 font-bold">
+              <thead class="bg-purple-50 text-slate-800 font-black border-b border-purple-200 uppercase tracking-wider text-xs sm:text-sm">
                 <tr>
                   <th class="py-3 px-4">Session #</th>
                   <th class="py-3 px-4">Status</th>
@@ -1329,9 +1111,9 @@
                   <th class="py-3 px-4">Deactivation Reason</th>
                 </tr>
               </thead>
-              <tbody id="sessionHistoryBody" class="divide-y divide-purple-100/60 font-mono">
+              <tbody id="sessionHistoryBody" class="divide-y divide-purple-100 font-mono font-bold">
                 <tr>
-                  <td colspan="9" class="py-8 text-center text-slate-400 font-sans">Loading session records...</td>
+                  <td colspan="9" class="py-8 text-center text-slate-500 font-sans font-semibold">Loading session records...</td>
                 </tr>
               </tbody>
             </table>
@@ -1343,8 +1125,8 @@
   </main>
 
   <!-- Notification Toast Container -->
-  <div id="terminalToast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-white border border-purple-200 text-slate-900 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(124,58,237,0.15)] flex items-center gap-2 font-body-sm text-xs">
-    <span class="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+  <div id="terminalToast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-white border border-purple-300 text-slate-950 px-5 py-3.5 rounded-xl shadow-[0_10px_30px_rgba(124,58,237,0.2)] flex items-center gap-3 font-body-sm text-sm sm:text-base font-black">
+    <span class="material-symbols-outlined text-primary text-[22px]">check_circle</span>
     <span id="toastMessage">Action executed successfully.</span>
   </div>
   <!-- Legacy Toast ID for compatibility -->
@@ -1353,22 +1135,22 @@
   </div>
 
   <!-- Halt Confirmation Modal -->
-  <div class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" id="haltModal">
-    <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-purple-100">
-      <div class="flex items-center gap-3 text-rose-600 mb-3">
-        <div class="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center border border-rose-200">
-          <span class="material-symbols-outlined text-[24px]">warning</span>
+  <div class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" id="haltModal">
+    <div class="bg-white rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-purple-200">
+      <div class="flex items-center gap-3 text-rose-600 mb-3.5">
+        <div class="w-11 h-11 rounded-full bg-rose-50 flex items-center justify-center border border-rose-300">
+          <span class="material-symbols-outlined text-[26px]">warning</span>
         </div>
-        <h4 class="font-headline-md text-lg text-slate-900 font-bold">Execute Emergency Kill Switch?</h4>
+        <h4 class="font-headline-md text-xl sm:text-2xl text-slate-950 font-black">Execute Emergency Kill Switch?</h4>
       </div>
-      <p class="font-body-md text-xs text-slate-600 mb-5 leading-relaxed">
+      <p class="font-body-md text-sm sm:text-base text-slate-800 font-bold mb-6 leading-relaxed">
         This will immediately deactivate the execution engine across all 5 pairs, stop automated scanning, pause the Gemini AI sentinel, and ensure no further order execution occurs.
       </p>
-      <div class="flex items-center justify-end gap-3">
-        <button type="button" class="px-4 py-2 rounded-xl bg-purple-50 text-slate-700 font-headline-sm text-xs hover:bg-purple-100 transition-colors font-semibold" onclick="toggleHaltModal()">
+      <div class="flex items-center justify-end gap-3.5">
+        <button type="button" class="px-5 py-3 rounded-xl bg-purple-50 text-slate-900 font-headline-sm text-sm sm:text-base hover:bg-purple-100 transition-colors font-black" onclick="toggleHaltModal()">
           Cancel & Keep Active
         </button>
-        <button type="button" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-headline-sm text-xs hover:bg-rose-700 transition-colors font-bold shadow-md shadow-rose-500/20" onclick="confirmHalt()">
+        <button type="button" class="px-6 py-3 rounded-xl bg-rose-600 text-white font-headline-sm text-sm sm:text-base hover:bg-rose-700 transition-colors font-black shadow-md shadow-rose-500/30" onclick="confirmHalt()">
           CONFIRM HALT ALL
         </button>
       </div>
@@ -1377,11 +1159,11 @@
 
   <!-- Footer -->
   <footer class="w-full bg-white border-t border-purple-100 py-4 mt-8">
-    <div class="w-full px-4 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 font-body-sm text-xs text-slate-500">
+    <div class="w-full px-4 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 font-body-sm text-sm sm:text-base text-slate-800 font-bold">
       <div class="flex items-center gap-3">
-        <span class="font-bold text-slate-700">ALGOQUANT Engine v4.8.2-HFT</span>
+        <span class="font-black text-slate-900">ALGOQUANT Engine v4.8.2-HFT</span>
         <span>•</span>
-        <span class="text-emerald-600 font-semibold">Memory Buffer: Stable (128MB)</span>
+        <span class="text-emerald-700 font-bold">Memory Buffer: Stable (128MB)</span>
         <span>•</span>
         <span>Broker Protocol: FIX 4.4 / MT5 Active</span>
       </div>
@@ -1419,7 +1201,7 @@
         if (badge) badge.classList.add('hidden');
         if (kpiStatus) {
           kpiStatus.innerText = "IDLE";
-          kpiStatus.className = "text-xl font-bold mt-2 text-slate-500";
+          kpiStatus.className = "text-xl sm:text-2xl font-black mt-2 text-slate-700";
         }
         if (kpiUptime) kpiUptime.innerText = "Not running";
         return;
@@ -1435,7 +1217,7 @@
       }
       if (kpiStatus) {
         kpiStatus.innerText = "ACTIVE";
-        kpiStatus.className = "text-xl font-bold mt-2 text-emerald-600 animate-pulse";
+        kpiStatus.className = "text-xl sm:text-2xl font-black mt-2 text-emerald-700 animate-pulse";
       }
       if (kpiUptime) {
         kpiUptime.innerText = `Running: ${formatted}`;
@@ -1454,9 +1236,9 @@
       toastMsg.innerText = msg;
       
       if (isError) {
-        toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 pointer-events-none bg-rose-50 border border-rose-200 text-rose-900 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(225,29,72,0.15)] flex items-center gap-2 font-body-sm text-xs opacity-100 translate-y-0";
+        toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 pointer-events-none bg-rose-50 border border-rose-300 text-rose-950 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(225,29,72,0.2)] flex items-center gap-2.5 font-body-sm text-xs sm:text-sm font-black opacity-100 translate-y-0";
       } else {
-        toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 pointer-events-none bg-white border border-purple-200 text-slate-900 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(124,58,237,0.15)] flex items-center gap-2 font-body-sm text-xs opacity-100 translate-y-0";
+        toast.className = "fixed bottom-6 right-6 z-50 transition-all duration-300 pointer-events-none bg-white border border-purple-300 text-slate-950 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(124,58,237,0.2)] flex items-center gap-2.5 font-body-sm text-xs sm:text-sm font-black opacity-100 translate-y-0";
       }
 
       setTimeout(() => {
@@ -1501,24 +1283,24 @@
       btns.forEach(b => {
         const el = document.getElementById(b);
         if (el) {
-          el.className = "px-3 py-1 text-xs font-semibold rounded-lg text-slate-600 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-1";
+          el.className = "px-5 py-2 text-sm sm:text-base font-extrabold rounded-xl text-slate-800 hover:bg-purple-50 hover:text-primary transition-all uppercase tracking-wider flex items-center gap-2";
         }
       });
 
       if (tabId === 'control') {
         document.getElementById('viewControl').classList.remove('hidden');
-        document.getElementById('tabBtnControl').className = "px-3 py-1 text-xs font-bold rounded-lg transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-1";
+        document.getElementById('tabBtnControl').className = "px-5 py-2 text-sm sm:text-base font-black rounded-xl transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-2";
       } else if (tabId === 'analytics') {
         document.getElementById('viewAnalytics').classList.remove('hidden');
-        document.getElementById('tabBtnAnalytics').className = "px-3 py-1 text-xs font-bold rounded-lg transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-1";
+        document.getElementById('tabBtnAnalytics').className = "px-5 py-2 text-sm sm:text-base font-black rounded-xl transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-2";
         fetchAnalytics();
       } else if (tabId === 'history') {
         document.getElementById('viewHistory').classList.remove('hidden');
-        document.getElementById('tabBtnHistory').className = "px-3 py-1 text-xs font-bold rounded-lg transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-1";
+        document.getElementById('tabBtnHistory').className = "px-5 py-2 text-sm sm:text-base font-black rounded-xl transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-2";
         fetchTradeHistory();
       } else if (tabId === 'sessions') {
         document.getElementById('viewSessions').classList.remove('hidden');
-        document.getElementById('tabBtnSessions').className = "px-3 py-1 text-xs font-bold rounded-lg transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-1";
+        document.getElementById('tabBtnSessions').className = "px-5 py-2 text-sm sm:text-base font-black rounded-xl transition-all uppercase tracking-wider bg-purple-100 text-primary shadow-sm flex items-center gap-2";
         fetchActivationHistory();
       }
     }
@@ -1537,34 +1319,38 @@
         document.getElementById('analyticsTotalSL').innerText = data.total_sl || 0;
         document.getElementById('analyticsSLAmount').innerText = `-$${Math.abs(data.total_sl_pnl || 0).toFixed(2)}`;
 
-        // 3. Win Rate & Differential
+        // 3. Trade Edge & Differential (null guarded)
         const winRateEl = document.getElementById('analyticsWinRate');
         const diffBadge = document.getElementById('analyticsDiffBadge');
         const netSpread = document.getElementById('analyticsNetSpread');
         const winLossSpread = document.getElementById('analyticsWinLossSpread');
 
-        const winRate = data.win_rate || 0.0;
-        winRateEl.innerText = `${winRate.toFixed(1)}%`;
-        winRateEl.className = `text-3xl font-black font-mono ${winRate >= 50 ? 'text-emerald-600' : (data.total_closed_trades > 0 ? 'text-rose-600' : 'text-slate-900')}`;
+        if (winRateEl) {
+          const winRate = data.win_rate || 0.0;
+          winRateEl.innerText = `${winRate.toFixed(1)}%`;
+          winRateEl.className = `text-3xl sm:text-4xl font-black font-mono ${winRate >= 50 ? 'text-emerald-700' : (data.total_closed_trades > 0 ? 'text-rose-700' : 'text-slate-950')}`;
+        }
 
-        winLossSpread.innerText = `(${data.total_tp || 0}W / ${data.total_sl || 0}L)`;
+        if (winLossSpread) winLossSpread.innerText = `(${data.total_tp || 0}W / ${data.total_sl || 0}L)`;
 
-        const diff = data.win_loss_diff !== undefined ? data.win_loss_diff : ((data.total_tp || 0) - (data.total_sl || 0));
-        if (diff > 0) {
-          diffBadge.innerText = `+${diff} Net Wins`;
-          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700";
-          netSpread.innerText = `+${diff} (Positive Edge)`;
-          netSpread.className = "font-bold text-emerald-600 font-mono";
-        } else if (diff < 0) {
-          diffBadge.innerText = `${diff} Net Losses`;
-          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700";
-          netSpread.innerText = `${diff} (Negative Drawdown)`;
-          netSpread.className = "font-bold text-rose-600 font-mono";
-        } else {
-          diffBadge.innerText = "0 Neutral";
-          diffBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-slate-700 border border-purple-200";
-          netSpread.innerText = "0 (Breakeven Balance)";
-          netSpread.className = "font-bold text-slate-600 font-mono";
+        if (diffBadge && netSpread) {
+          const diff = data.win_loss_diff !== undefined ? data.win_loss_diff : ((data.total_tp || 0) - (data.total_sl || 0));
+          if (diff > 0) {
+            diffBadge.innerText = `+${diff} Net Wins`;
+            diffBadge.className = "px-3 py-1 rounded text-xs sm:text-sm font-black bg-emerald-50 border border-emerald-300 text-emerald-900";
+            netSpread.innerText = `+${diff} (Positive Edge)`;
+            netSpread.className = "font-black text-emerald-700 font-mono";
+          } else if (diff < 0) {
+            diffBadge.innerText = `${diff} Net Losses`;
+            diffBadge.className = "px-3 py-1 rounded text-xs sm:text-sm font-black bg-rose-50 border border-rose-300 text-rose-900";
+            netSpread.innerText = `${diff} (Negative Drawdown)`;
+            netSpread.className = "font-black text-rose-700 font-mono";
+          } else {
+            diffBadge.innerText = "0 Neutral";
+            diffBadge.className = "px-3 py-1 rounded text-xs sm:text-sm font-black bg-purple-50 text-slate-900 border border-purple-300";
+            netSpread.innerText = "0 (Breakeven Balance)";
+            netSpread.className = "font-black text-slate-700 font-mono";
+          }
         }
 
         // 4. R:R
@@ -1586,7 +1372,7 @@
         const netPnLEl = document.getElementById('analyticsNetPnL');
         const netPnL = data.total_pnl || 0.0;
         netPnLEl.innerText = `${netPnL >= 0 ? '+' : ''}$${netPnL.toFixed(2)}`;
-        netPnLEl.className = `text-xl font-bold mt-1 font-mono ${netPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+        netPnLEl.className = `text-2xl font-black mt-1 font-mono ${netPnL >= 0 ? 'text-emerald-700' : 'text-rose-700'}`;
 
         document.getElementById('analyticsBestTrade').innerText = `+$${(data.best_trade_pnl || 0).toFixed(2)}`;
         document.getElementById('analyticsWorstTrade').innerText = `-$${Math.abs(data.worst_trade_pnl || 0).toFixed(2)}`;
@@ -1596,21 +1382,21 @@
         const stratData = data.by_strategy || {};
         const stratKeys = Object.keys(stratData);
         if (stratKeys.length === 0) {
-          stratBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No strategy trades recorded yet.</td></tr>`;
+          stratBody.innerHTML = `<tr><td colspan="5" class="py-5 text-center text-slate-500 font-sans font-semibold">No strategy trades recorded yet.</td></tr>`;
         } else {
           stratBody.innerHTML = stratKeys.map(k => {
             const s = stratData[k];
-            const pnlColor = s.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600';
+            const pnlColor = s.pnl >= 0 ? 'text-emerald-700' : 'text-rose-700';
             const pnlSign = s.pnl >= 0 ? '+' : '';
             return `
               <tr class="hover:bg-purple-50/40 transition-colors">
-                <td class="py-2.5 px-3 font-bold text-slate-900">${k}</td>
-                <td class="py-2.5 px-3 text-center font-mono">${s.total || s.total_trades || 0}</td>
-                <td class="py-2.5 px-3 text-center font-mono text-slate-600">
-                  <span class="text-emerald-600">${s.wins || 0}</span> / <span class="text-rose-600">${s.losses || 0}</span>
+                <td class="py-3 px-3 font-black text-slate-950">${k}</td>
+                <td class="py-3 px-3 text-center font-mono">${s.total || s.total_trades || 0}</td>
+                <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">
+                  <span class="text-emerald-700 font-black">${s.wins || 0}</span> / <span class="text-rose-700 font-black">${s.losses || 0}</span>
                 </td>
-                <td class="py-2.5 px-3 text-center font-mono ${(s.win_rate || 0) >= 50 ? 'text-emerald-600' : 'text-rose-600'} font-bold">${(s.win_rate || 0).toFixed(1)}%</td>
-                <td class="py-2.5 px-3 text-right font-mono font-bold ${pnlColor}">${pnlSign}$${(s.pnl || 0).toFixed(2)}</td>
+                
+                <td class="py-3 px-3 text-right font-mono font-black ${pnlColor}">${pnlSign}$${(s.pnl || 0).toFixed(2)}</td>
               </tr>
             `;
           }).join('');
@@ -1621,21 +1407,21 @@
         const pairData = data.by_pair || {};
         const pairKeys = Object.keys(pairData);
         if (pairKeys.length === 0) {
-          pairBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No pair trades recorded yet.</td></tr>`;
+          pairBody.innerHTML = `<tr><td colspan="5" class="py-5 text-center text-slate-500 font-sans font-semibold">No pair trades recorded yet.</td></tr>`;
         } else {
           pairBody.innerHTML = pairKeys.map(k => {
             const p = pairData[k];
-            const pnlColor = p.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600';
+            const pnlColor = p.pnl >= 0 ? 'text-emerald-700' : 'text-rose-700';
             const pnlSign = p.pnl >= 0 ? '+' : '';
             return `
               <tr class="hover:bg-purple-50/40 transition-colors">
-                <td class="py-2.5 px-3 font-bold text-slate-900">${k}</td>
-                <td class="py-2.5 px-3 text-center font-mono">${p.total || p.total_trades || 0}</td>
-                <td class="py-2.5 px-3 text-center font-mono text-slate-600">
-                  <span class="text-emerald-600">${p.wins || 0}</span> / <span class="text-rose-600">${p.losses || 0}</span>
+                <td class="py-3 px-3 font-black text-slate-950">${k}</td>
+                <td class="py-3 px-3 text-center font-mono">${p.total || p.total_trades || 0}</td>
+                <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">
+                  <span class="text-emerald-700 font-black">${p.wins || 0}</span> / <span class="text-rose-700 font-black">${p.losses || 0}</span>
                 </td>
-                <td class="py-2.5 px-3 text-center font-mono ${(p.win_rate || 0) >= 50 ? 'text-emerald-600' : 'text-rose-600'} font-bold">${(p.win_rate || 0).toFixed(1)}%</td>
-                <td class="py-2.5 px-3 text-right font-mono font-bold ${pnlColor}">${pnlSign}$${(p.pnl || 0).toFixed(2)}</td>
+                
+                <td class="py-3 px-3 text-right font-mono font-black ${pnlColor}">${pnlSign}$${(p.pnl || 0).toFixed(2)}</td>
               </tr>
             `;
           }).join('');
@@ -1653,35 +1439,28 @@
         const data = await res.json();
 
         const tbody1 = document.getElementById('tradeHistoryBody');
-        const tbody2 = document.getElementById('tradeHistoryBody2');
         const netPnlEl = document.getElementById('historyNetPnL');
-        const netPnlEl2 = document.getElementById('historyNetPnL2');
         const histWinRate = document.getElementById('historyWinRate');
-        const histWinRate2 = document.getElementById('historyWinRate2');
         const histWinLoss = document.getElementById('historyWinLoss');
-        const histWinLoss2 = document.getElementById('historyWinLoss2');
 
         const pnlPrefix = (data.total_pnl || 0) >= 0 ? '+' : '';
         const pnlFormatted = `${pnlPrefix}$${(data.total_pnl || 0).toFixed(2)}`;
-        const pnlClass = `font-bold text-xs ml-1 font-mono ${(data.total_pnl || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+        const pnlClass = `font-black text-sm ml-1 font-mono ${(data.total_pnl || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`;
 
         if (netPnlEl) { netPnlEl.innerText = pnlFormatted; netPnlEl.className = pnlClass; }
-        if (netPnlEl2) { netPnlEl2.innerText = pnlFormatted; netPnlEl2.className = pnlClass; }
 
         const accuracyText = (data.total_closed_trades || 0) > 0 ? `${(data.accuracy || data.win_rate || 0).toFixed(1)}%` : `---%`;
-        const accuracyClass = (data.total_closed_trades || 0) > 0 && (data.accuracy || data.win_rate || 0) >= 50 ? 'font-bold text-emerald-600 font-mono' : 'font-bold text-slate-500 font-mono';
+        const accuracyClass = (data.total_closed_trades || 0) > 0 && (data.accuracy || data.win_rate || 0) >= 50 ? 'font-black text-emerald-700 font-mono text-sm ml-1' : 'font-black text-slate-600 font-mono text-sm ml-1';
         const winLossText = `(${data.winning_trades || data.total_tp || 0}W / ${data.losing_trades || data.total_sl || 0}L)`;
 
         if (histWinRate) { histWinRate.innerText = accuracyText; histWinRate.className = accuracyClass; }
-        if (histWinRate2) { histWinRate2.innerText = accuracyText; histWinRate2.className = accuracyClass; }
         if (histWinLoss) histWinLoss.innerText = winLossText;
-        if (histWinLoss2) histWinLoss2.innerText = winLossText;
 
         const renderRows = (data.trades && data.trades.length > 0) ? data.trades.map(t => {
           const isWin = t.realized_pnl > 0;
           const isLoss = t.realized_pnl < 0;
-          const pnlColor = isWin ? 'text-emerald-600 font-bold' : (isLoss ? 'text-rose-600 font-bold' : 'text-slate-500');
-          const sideColor = t.direction === 'BUY' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200';
+          const pnlColor = isWin ? 'text-emerald-700 font-black' : (isLoss ? 'text-rose-700 font-black' : 'text-slate-600 font-bold');
+          const sideColor = t.direction === 'BUY' ? 'text-emerald-800 bg-emerald-100 border-emerald-300' : 'text-rose-800 bg-rose-100 border-rose-300';
           const pnlSign = t.realized_pnl >= 0 ? '+' : '';
           const strat = t.strategy_name || "SMC";
           const holding = t.holding_time_formatted || "---";
@@ -1689,29 +1468,28 @@
 
           return `
             <tr class="hover:bg-purple-50/40 transition-colors">
-              <td class="py-2.5 px-3 font-mono text-slate-500">#${t.id}</td>
-              <td class="py-2.5 px-3 font-mono text-[11px] text-slate-400">${t.timestamp}</td>
-              <td class="py-2.5 px-3 font-bold text-slate-900">${t.symbol}</td>
-              <td class="py-2.5 px-3 font-mono text-[11px] text-primary font-bold">${strat}</td>
-              <td class="py-2.5 px-3">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${sideColor}">${t.direction}</span>
+              <td class="py-3.5 px-3.5 font-mono text-slate-700 font-bold text-sm">#${t.id}</td>
+              <td class="py-3.5 px-3.5 font-mono text-xs sm:text-sm text-slate-600 font-bold">${t.timestamp}</td>
+              <td class="py-3.5 px-3.5 font-black text-slate-950 text-sm sm:text-base">${t.symbol}</td>
+              <td class="py-3.5 px-3.5 font-mono text-xs sm:text-sm text-primary font-black">${strat}</td>
+              <td class="py-3.5 px-3.5">
+                <span class="px-3 py-1 rounded text-xs sm:text-sm font-black border ${sideColor}">${t.direction}</span>
               </td>
-              <td class="py-2.5 px-3 font-mono">${t.entry_price}</td>
-              <td class="py-2.5 px-3 font-mono text-rose-600 font-semibold">${t.stop_loss}</td>
-              <td class="py-2.5 px-3 font-mono text-emerald-600 font-semibold">${t.take_profit}</td>
-              <td class="py-2.5 px-3 font-mono text-center text-primary font-bold">${plannedRR}</td>
-              <td class="py-2.5 px-3 font-mono">${t.lot_size}</td>
-              <td class="py-2.5 px-3 font-mono text-center text-blue-600">${holding}</td>
-              <td class="py-2.5 px-3">
-                <span class="text-[11px] font-medium text-slate-600">${t.status}</span>
+              <td class="py-3.5 px-3.5 font-mono font-bold text-sm sm:text-base text-slate-900">${t.entry_price}</td>
+              <td class="py-3.5 px-3.5 font-mono text-rose-700 font-black text-sm sm:text-base">${t.stop_loss}</td>
+              <td class="py-3.5 px-3.5 font-mono text-emerald-700 font-black text-sm sm:text-base">${t.take_profit}</td>
+              <td class="py-3.5 px-3.5 font-mono text-center text-primary font-black text-sm sm:text-base">${plannedRR}</td>
+              <td class="py-3.5 px-3.5 font-mono font-bold text-sm sm:text-base text-slate-900">${t.lot_size}</td>
+              <td class="py-3.5 px-3.5 font-mono text-center text-blue-800 font-bold text-sm sm:text-base">${holding}</td>
+              <td class="py-3.5 px-3.5">
+                <span class="text-xs sm:text-sm font-black text-slate-800">${t.status}</span>
               </td>
-              <td class="py-2.5 px-3 text-right font-mono ${pnlColor}">${pnlSign}$${t.realized_pnl.toFixed(2)}</td>
+              <td class="py-3.5 px-3.5 text-right font-mono font-black ${pnlColor} text-sm sm:text-base">${pnlSign}$${t.realized_pnl.toFixed(2)}</td>
             </tr>
           `;
-        }).join('') : `<tr><td colspan="13" class="py-8 text-center text-slate-400 font-sans">No executed trades recorded yet.</td></tr>`;
+        }).join('') : `<tr><td colspan="13" class="py-8 text-center text-slate-500 font-sans font-semibold">No executed trades recorded yet.</td></tr>`;
 
         if (tbody1) tbody1.innerHTML = renderRows;
-        if (tbody2) tbody2.innerHTML = renderRows;
 
       } catch (err) {
         console.error("Failed to fetch trade history:", err);
@@ -1763,13 +1541,13 @@
         const formElements = [c1, c2, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, stratSMC, stratScalp, stratICT, stratOF, aiCb];
 
         if (isBotActive) {
-          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping";
+          if (dot) dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-ping";
           if (label) {
             label.innerText = "ACTIVE - FULL AUTO CONCURRENT";
-            label.className = "font-headline-sm text-xs tracking-widest text-emerald-700 font-bold uppercase";
+            label.className = "font-headline-sm text-xs sm:text-sm tracking-widest text-emerald-800 font-black uppercase";
           }
           if (btn) {
-            btn.className = "group relative px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 text-white font-headline-sm text-xs font-bold tracking-wider uppercase flex items-center gap-2 hover:from-rose-600 hover:to-rose-700 transition-all shadow-[0_4px_16px_rgba(225,29,72,0.25)] hover:shadow-[0_6px_20px_rgba(225,29,72,0.35)] active:scale-95";
+            btn.className = "group relative px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 text-white font-headline-sm text-xs sm:text-sm font-black tracking-wider uppercase flex items-center gap-2.5 hover:from-rose-700 hover:to-rose-800 transition-all shadow-[0_4px_16px_rgba(225,29,72,0.3)] hover:shadow-[0_6px_22px_rgba(225,29,72,0.4)] active:scale-95";
           }
           if (btnText) btnText.innerText = "DEACTIVATE BOT";
           if (lockNotice) lockNotice.classList.remove('hidden');
@@ -1779,13 +1557,13 @@
           if (saveBtn) saveBtn.disabled = true;
           if (tickBtn) tickBtn.disabled = false;
         } else {
-          if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+          if (dot) dot.className = "w-3 h-3 rounded-full bg-rose-500";
           if (label) {
             label.innerText = "DEACTIVATED (IDLE)";
-            label.className = "font-headline-sm text-xs tracking-widest text-primary font-bold uppercase";
+            label.className = "font-headline-sm text-xs sm:text-sm tracking-widest text-primary font-black uppercase";
           }
           if (btn) {
-            btn.className = "group relative px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-headline-sm text-xs font-bold tracking-wider uppercase flex items-center gap-2 hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-[0_4px_16px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.35)] active:scale-95";
+            btn.className = "group relative px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-headline-sm text-xs sm:text-sm font-black tracking-wider uppercase flex items-center gap-2.5 hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-[0_4px_16px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_22px_rgba(16,185,129,0.4)] active:scale-95";
           }
           if (btnText) btnText.innerText = "ACTIVATE BOT";
           if (lockNotice) lockNotice.classList.add('hidden');
@@ -1854,7 +1632,7 @@
         const headerPnL = document.getElementById('headerPnL');
         if (headerPnL) {
           headerPnL.innerText = formattedPnL;
-          headerPnL.className = `font-telemetry-sub text-[13px] font-bold ${data.daily_pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
+          headerPnL.className = `font-telemetry-sub text-base font-black ${data.daily_pnl >= 0 ? 'text-emerald-700' : 'text-rose-700'}`;
         }
 
         const kpiEq = document.getElementById('kpiEquity');
@@ -1863,7 +1641,7 @@
         const kpiPnL = document.getElementById('kpiPnL');
         if (kpiPnL) {
           kpiPnL.innerText = formattedPnL;
-          kpiPnL.className = `text-xs font-bold flex items-center px-1.5 py-0.5 rounded border ${data.daily_pnl >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200/50' : 'text-rose-600 bg-rose-50 border-rose-200/50'}`;
+          kpiPnL.className = `text-xs sm:text-sm font-black flex items-center px-2 py-0.5 rounded border ${data.daily_pnl >= 0 ? 'text-emerald-800 bg-emerald-50 border-emerald-300' : 'text-rose-800 bg-rose-50 border-rose-300'}`;
         }
 
         const kpiAcc = document.getElementById('kpiAccuracy');
@@ -1871,10 +1649,10 @@
         if (kpiAcc) {
           if (data.total_closed_trades > 0) {
             kpiAcc.innerText = `${data.accuracy.toFixed(1)}%`;
-            kpiAcc.className = `font-telemetry-metric text-2xl lg:text-[28px] font-bold tracking-tight ${data.accuracy >= 50 ? 'text-emerald-600' : 'text-rose-600'}`;
+            kpiAcc.className = `font-telemetry-metric text-3xl lg:text-4xl font-black tracking-tight ${data.accuracy >= 50 ? 'text-emerald-700' : 'text-rose-700'}`;
           } else {
             kpiAcc.innerText = `---%`;
-            kpiAcc.className = `font-telemetry-metric text-2xl lg:text-[28px] font-bold tracking-tight text-slate-500`;
+            kpiAcc.className = `font-telemetry-metric text-3xl lg:text-4xl font-black tracking-tight text-slate-500`;
           }
         }
         if (kpiAccSub) {
@@ -1888,10 +1666,10 @@
         if (breaker) {
           if (data.circuit_breaker_active) {
             breaker.innerText = "TRIPPED";
-            breaker.className = "text-rose-600 font-bold font-mono";
+            breaker.className = "text-rose-700 font-black font-mono";
           } else {
             breaker.innerText = "NORMAL";
-            breaker.className = "text-emerald-600 font-bold font-mono";
+            breaker.className = "text-emerald-700 font-black font-mono";
           }
         }
 
@@ -1899,70 +1677,21 @@
         const modeBadge = document.getElementById('modeBadge');
         if (modeBadge) {
           if (data.mock_mode) {
-            modeBadge.innerHTML = `<span class="relative flex h-2 w-2"><span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span><span class="font-body-sm text-[12px] text-blue-700 font-semibold">Simulation Mock</span>`;
+            modeBadge.innerHTML = `<span class="relative flex h-2.5 w-2.5"><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span></span><span class="font-body-sm text-sm text-blue-800 font-bold">Simulation Mock</span>`;
           } else if (data.broker_info && data.broker_info.login) {
-            modeBadge.innerHTML = `<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span><span class="font-body-sm text-[12px] text-emerald-700 font-semibold">MT5 Connected</span><span class="text-slate-400 font-body-sm text-[11px] hidden md:inline">| #${data.broker_info.login}</span>`;
+            modeBadge.innerHTML = `<span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span><span class="font-body-sm text-sm text-emerald-800 font-bold">MT5 Connected</span><span class="text-slate-500 font-body-sm text-xs font-semibold hidden md:inline">| #${data.broker_info.login}</span>`;
           }
         }
 
-        // Strategy Win-Rate Breakdown Matrix
-        const stratBody = document.getElementById('stratStatsBody');
-        if (stratBody && data.stats_by_strategy) {
-          const stratKeys = Object.keys(data.stats_by_strategy);
-          if (stratKeys.length === 0) {
-            stratBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No strategy trades recorded yet</td></tr>`;
-          } else {
-            stratBody.innerHTML = stratKeys.map(k => {
-              const st = data.stats_by_strategy[k];
-              const pnlSign = st.total_pnl >= 0 ? '+' : '';
-              const pnlColor = st.total_pnl >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
-              const wrColor = st.win_rate >= 50 ? 'text-emerald-600 font-bold' : (st.total_trades > 0 ? 'text-rose-600 font-bold' : 'text-slate-400');
-              return `
-                <tr class="hover:bg-purple-50/40 transition-colors">
-                  <td class="py-2.5 px-3 font-semibold text-slate-900">${st.strategy_name || k}</td>
-                  <td class="py-2.5 px-3 font-mono text-center">${st.total_trades}</td>
-                  <td class="py-2.5 px-3 font-mono text-center text-[11px] text-slate-600">${st.winning_trades}W / ${st.losing_trades}L</td>
-                  <td class="py-2.5 px-3 font-mono text-center ${wrColor}">${st.win_rate.toFixed(1)}%</td>
-                  <td class="py-2.5 px-3 font-mono text-right ${pnlColor}">${pnlSign}$${st.total_pnl.toFixed(2)}</td>
-                </tr>
-              `;
-            }).join('');
-          }
-        }
-
-        // Pair Win-Rate Breakdown Matrix
-        const pairBody = document.getElementById('pairStatsBody');
-        if (pairBody && data.stats_by_pair) {
-          const pairKeys = Object.keys(data.stats_by_pair);
-          if (pairKeys.length === 0) {
-            pairBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 font-sans">No pair trades recorded yet</td></tr>`;
-          } else {
-            pairBody.innerHTML = pairKeys.map(k => {
-              const pt = data.stats_by_pair[k];
-              const pnlSign = pt.total_pnl >= 0 ? '+' : '';
-              const pnlColor = pt.total_pnl >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
-              const wrColor = pt.win_rate >= 50 ? 'text-emerald-600 font-bold' : (pt.total_trades > 0 ? 'text-rose-600 font-bold' : 'text-slate-400');
-              return `
-                <tr class="hover:bg-purple-50/40 transition-colors">
-                  <td class="py-2.5 px-3 font-bold text-slate-900">${k}</td>
-                  <td class="py-2.5 px-3 font-mono text-center">${pt.total_trades}</td>
-                  <td class="py-2.5 px-3 font-mono text-center text-[11px] text-slate-600">${pt.winning_trades}W / ${pt.losing_trades}L</td>
-                  <td class="py-2.5 px-3 font-mono text-center ${wrColor}">${pt.win_rate.toFixed(1)}%</td>
-                  <td class="py-2.5 px-3 font-mono text-right ${pnlColor}">${pnlSign}$${pt.total_pnl.toFixed(2)}</td>
-                </tr>
-              `;
-            }).join('');
-          }
-        }
 
         // Telemetry Logs Feed
         const term = document.getElementById('terminalContainer');
         if (term && data.recent_logs && data.recent_logs.length > 0) {
           term.innerHTML = data.recent_logs.map(log => {
-            let color = "text-slate-600";
-            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) color = "text-emerald-700 font-semibold";
-            if (log.includes("⛔") || log.includes("🚫") || log.includes("DEACTIVATED")) color = "text-amber-700";
-            if (log.includes("❌") || log.includes("🛑") || log.includes("ERROR") || log.includes("FAILED")) color = "text-rose-600 font-bold";
+            let color = "text-slate-800 font-bold";
+            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) color = "text-emerald-800 font-black";
+            if (log.includes("⛔") || log.includes("🚫") || log.includes("DEACTIVATED")) color = "text-amber-800 font-black";
+            if (log.includes("❌") || log.includes("🛑") || log.includes("ERROR") || log.includes("FAILED")) color = "text-rose-700 font-black";
             return `<div class="${color}">${log}</div>`;
           }).join('');
           term.scrollTop = term.scrollHeight;
@@ -2059,9 +1788,16 @@
 
       // Collect all checked active pairs from the Multi-Pair scanner selector
       const selectedPairs = [];
-      document.querySelectorAll("input[name='activeSymbol']:checked").forEach(cb => {
-        if (!selectedPairs.includes(cb.value)) selectedPairs.push(cb.value);
-      });
+      const activeCheckboxes = document.querySelectorAll("input[name='activeSymbol']");
+      if (activeCheckboxes.length > 0) {
+        document.querySelectorAll("input[name='activeSymbol']:checked").forEach(cb => {
+          if (!selectedPairs.includes(cb.value)) selectedPairs.push(cb.value);
+        });
+      } else if (typeof currentSymbols !== 'undefined' && currentSymbols && currentSymbols.length > 0) {
+        selectedPairs.push(...currentSymbols);
+      } else {
+        selectedPairs.push("XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD");
+      }
       // Ensure pair1 & pair2 symbols are included if enabled and not NONE
       if (pair1Config.enabled && c1 && c1 !== 'NONE' && !selectedPairs.includes(c1)) {
         selectedPairs.unshift(c1);
@@ -2176,7 +1912,7 @@
         if (!tbody) return;
 
         if (!data.sessions || data.sessions.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400 font-sans">No activation or deactivation events recorded yet. Activate the bot to start a session.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500 font-sans font-semibold">No activation or deactivation events recorded yet. Activate the bot to start a session.</td></tr>`;
           return;
         }
 
@@ -2186,34 +1922,34 @@
           let durationCol = '';
 
           if (s.status === 'ACTIVE') {
-            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-bold border bg-emerald-50 border-emerald-200 text-emerald-700 animate-pulse">🟢 ACTIVE</span>`;
-            deactCol = `<span class="text-emerald-600 font-semibold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>Running Now...</span>`;
-            durationCol = `<span id="activeSessionLiveDuration" class="font-mono font-bold text-emerald-600">${s.formatted_duration}</span>`;
+            statusBadge = `<span class="px-2.5 py-1 rounded text-xs font-black border bg-emerald-100 border-emerald-300 text-emerald-800 animate-pulse">🟢 ACTIVE</span>`;
+            deactCol = `<span class="text-emerald-700 font-black flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>Running Now...</span>`;
+            durationCol = `<span id="activeSessionLiveDuration" class="font-mono font-black text-emerald-700">${s.formatted_duration}</span>`;
           } else if (s.status === 'COMPLETED') {
-            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-semibold border bg-purple-50 border-purple-200 text-slate-700">⚪ COMPLETED</span>`;
-            deactCol = `<span class="font-mono text-slate-600">${s.deactivation_time_formatted}</span>`;
-            durationCol = `<span class="font-mono font-medium text-slate-900">${s.formatted_duration}</span>`;
+            statusBadge = `<span class="px-2.5 py-1 rounded text-xs font-bold border bg-purple-50 border-purple-200 text-slate-800">⚪ COMPLETED</span>`;
+            deactCol = `<span class="font-mono text-slate-700 font-bold">${s.deactivation_time_formatted}</span>`;
+            durationCol = `<span class="font-mono font-black text-slate-950">${s.formatted_duration}</span>`;
           } else {
-            statusBadge = `<span class="px-2.5 py-1 rounded text-[10px] font-semibold border bg-amber-50 border-amber-200 text-amber-800">🟡 ${s.status}</span>`;
-            deactCol = `<span class="font-mono text-slate-500">${s.deactivation_time_formatted || '---'}</span>`;
-            durationCol = `<span class="font-mono font-medium text-amber-700">${s.formatted_duration}</span>`;
+            statusBadge = `<span class="px-2.5 py-1 rounded text-xs font-bold border bg-amber-50 border-amber-300 text-amber-900">🟡 ${s.status}</span>`;
+            deactCol = `<span class="font-mono text-slate-600 font-bold">${s.deactivation_time_formatted || '---'}</span>`;
+            durationCol = `<span class="font-mono font-black text-amber-800">${s.formatted_duration}</span>`;
           }
 
           const syms = s.symbols ? s.symbols.split(',').map(item => item.trim()).filter(Boolean) : [];
-          const symPills = syms.map(sym => `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 border border-purple-200 text-primary">${sym}</span>`).join(' ') || '<span class="text-slate-400">None</span>';
+          const symPills = syms.map(sym => `<span class="px-2 py-0.5 rounded text-xs font-black bg-purple-100 border border-purple-300 text-primary">${sym}</span>`).join(' ') || '<span class="text-slate-500 font-bold">None</span>';
           const reasonText = s.deactivation_reason || (s.status === 'ACTIVE' ? 'Active session' : '---');
 
           return `
             <tr class="hover:bg-purple-50/40 transition-colors">
-              <td class="py-3 px-4 font-mono font-bold text-slate-700">#${s.id}</td>
-              <td class="py-3 px-4">${statusBadge}</td>
-              <td class="py-3 px-4 font-mono text-[11px] text-slate-600" title="ISO: ${s.activation_time}">${s.activation_time_formatted}</td>
-              <td class="py-3 px-4 font-mono text-[11px]">${deactCol}</td>
-              <td class="py-3 px-4">${durationCol}</td>
-              <td class="py-3 px-4"><div class="flex items-center gap-1">${symPills}</div></td>
-              <td class="py-3 px-4 font-mono text-slate-700">${s.lot_size || 'Dynamic'}</td>
-              <td class="py-3 px-4 text-slate-500">${s.trigger_source || 'Dashboard UI'}</td>
-              <td class="py-3 px-4 text-slate-700 text-[11px]">${reasonText}</td>
+              <td class="py-3.5 px-4 font-mono font-black text-slate-950 text-sm sm:text-base">#${s.id}</td>
+              <td class="py-3.5 px-4">${statusBadge}</td>
+              <td class="py-3.5 px-4 font-mono text-xs sm:text-sm text-slate-800 font-bold" title="ISO: ${s.activation_time}">${s.activation_time_formatted}</td>
+              <td class="py-3.5 px-4 font-mono text-xs sm:text-sm">${deactCol}</td>
+              <td class="py-3.5 px-4 text-sm sm:text-base">${durationCol}</td>
+              <td class="py-3.5 px-4"><div class="flex items-center gap-1.5">${symPills}</div></td>
+              <td class="py-3.5 px-4 font-mono text-slate-950 font-bold text-sm sm:text-base">${s.lot_size || 'Dynamic'}</td>
+              <td class="py-3.5 px-4 text-slate-700 font-extrabold text-xs sm:text-sm">${s.trigger_source || 'Dashboard UI'}</td>
+              <td class="py-3.5 px-4 text-slate-900 font-bold text-xs sm:text-sm">${reasonText}</td>
             </tr>
           `;
         }).join('');

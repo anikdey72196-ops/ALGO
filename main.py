@@ -109,7 +109,7 @@ class TradingBot:
             calendar_path=self.config.news_calendar_path,
             blackout_minutes=self.config.news_blackout_minutes,
         )
-        self.strategy = StrategyEngine(self.config.timeframes)
+        self.strategy = StrategyEngine(self.config)
         self.conflict_resolver = ConflictResolver(self.config.risk)
         self.risk_engine = RiskEngine(self.config, self.state)
         self.ai_analyst = AIAnalyst(self.config)
@@ -160,6 +160,7 @@ class TradingBot:
                 # Enabled strategies
                 if "enabled_strategies" in saved and isinstance(saved["enabled_strategies"], list):
                     self.config.enabled_strategies = saved["enabled_strategies"]
+                    self.strategy.set_enabled_strategies(self.config.enabled_strategies)
 
                 if "selected_symbols" in saved and isinstance(saved["selected_symbols"], list):
                     self.config.selected_symbols = saved["selected_symbols"]
@@ -828,6 +829,19 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     interval_seconds = 60  # Fast 1-minute scan loop
     logger.info(f"Scheduling tick every {interval_seconds}s (1-minute continuous scan)")
 
+    # In standalone CLI terminal mode, activate trading session by default
+    bot.is_active = True
+    session_id = bot.state.record_activation(
+        symbols=bot.config.selected_symbols,
+        lot_size=f"P1:{bot.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot.config.pair2.fixed_lot_size or 'Dyn'}",
+        trigger_source="Laptop Terminal",
+    )
+    bot.log(
+        f"🟢 BOT ACTIVATED via Laptop Terminal (Session #{session_id}). "
+        f"Monitoring pairs: [{', '.join(bot.config.selected_symbols)}] | "
+        f"Active Strategies: {bot.config.enabled_strategies}"
+    )
+
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
         bot.tick,
@@ -868,6 +882,9 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     finally:
         labeler_task.cancel()
         scheduler.shutdown(wait=False)
+        if bot.is_active:
+            bot.state.record_deactivation("Laptop Terminal Stop")
+            bot.is_active = False
         bot.shutdown()
 
 

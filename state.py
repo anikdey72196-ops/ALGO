@@ -42,6 +42,23 @@ class BotSessionRecord:
     status: str  # 'ACTIVE', 'COMPLETED', 'INTERRUPTED'
 
 
+def normalize_strategy_display_name(name: str | None) -> str:
+    """Map internal IDs, ticker suffixes, and legacy string variants to standard UI display names."""
+    if not name:
+        return "SMC Swing"
+    s = str(name).strip()
+    u = s.upper()
+    if "FLOW" in u or "DELTA" in u or "ORDER_FLOW" in u or "ABSORPTION" in u:
+        return "Order Flow Engine"
+    elif "SCALP" in u or "5M" in u:
+        return "5M Scalp"
+    elif "ICT" in u:
+        return "ICT Institutional"
+    elif "SWING" in u or "SMC" in u:
+        return "SMC Swing"
+    return s
+
+
 class StateManager:
     """Persistent state backed by SQLite and automatic CSV file export."""
     
@@ -607,7 +624,8 @@ class StateManager:
         by_strat: dict[str, dict] = {}
         by_pair: dict[str, dict] = {}
         for r in closed_rows:
-            strat = r['strategy_name'] if ('strategy_name' in r.keys() and r['strategy_name']) else "SMC"
+            raw_strat = r['strategy_name'] if ('strategy_name' in r.keys() and r['strategy_name']) else "SMC"
+            strat = normalize_strategy_display_name(raw_strat)
             sym = r['symbol'] if ('symbol' in r.keys() and r['symbol']) else "UNKNOWN"
             pnl = float(r['realized_pnl'] or 0.0)
             is_win = (r['status'] == 'CLOSED_TP' or pnl > 0)

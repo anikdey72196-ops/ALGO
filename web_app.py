@@ -395,6 +395,7 @@ async def update_configuration(payload: BotConfigUpdate):
                 detail="Strategy configuration is LOCKED during activation! Deactivate the bot first to toggle strategies."
             )
         bot_instance.config.enabled_strategies = valid_strats
+        bot_instance.strategy.set_enabled_strategies(valid_strats)
 
     # Handle selected_symbols (Multi-Pair Concurrent Scanning)
     if payload.selected_symbols is not None:
