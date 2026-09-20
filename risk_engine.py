@@ -70,9 +70,9 @@ class RiskEngine:
         if self.state.is_circuit_breaker_active():
             return True, 'Circuit breaker active: daily loss limit reached'
 
-        # Check maximum concurrent open positions (default 6)
+        # Check maximum concurrent open positions (default 15)
         open_positions = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 6)
+        max_open = getattr(self.config.risk, 'max_open_positions', 15)
         if len(open_positions) >= max_open:
             return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
 

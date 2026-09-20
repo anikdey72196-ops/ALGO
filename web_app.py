@@ -66,7 +66,7 @@ class BotStateResponse(BaseModel):
     strategy_type: str
     fixed_lot_size: Optional[float]
     fixed_sl_pips: Optional[float]
-    max_open_positions: int = 6
+    max_open_positions: int = 15
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
     equity: float
@@ -237,14 +237,14 @@ async def get_bot_state():
 
     return BotStateResponse(
         is_active=bot_instance.is_active,
-        selected_symbols=bot_instance.config.selected_symbols[:2],
+        selected_symbols=bot_instance.config.selected_symbols,
         pair1=pair1_data,
         pair2=pair2_data,
         enabled_strategies=bot_instance.config.enabled_strategies,
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
-        max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 6),
+        max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 15),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         equity=round(equity, 2),
@@ -279,12 +279,12 @@ async def activate_bot():
 
     bot_instance.is_active = True
     session_id = bot_instance.state.record_activation(
-        symbols=bot_instance.config.selected_symbols[:2],
+        symbols=bot_instance.config.selected_symbols,
         lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'}",
         trigger_source="Web Dashboard",
     )
     bot_instance.log(
-        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring: "
+        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring pairs: [{', '.join(bot_instance.config.selected_symbols)}] | "
         f"Pair 1 ({bot_instance.config.pair1.symbol}, lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
         f"Pair 2 ({bot_instance.config.pair2.symbol}, lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
         f"Active Strategies: {bot_instance.config.enabled_strategies}"
@@ -396,33 +396,31 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.enabled_strategies = valid_strats
 
-    # Backward compatibility with selected_symbols
-    if payload.selected_symbols is not None and not payload.pair1 and not payload.pair2:
+    # Handle selected_symbols (Multi-Pair Concurrent Scanning)
+    if payload.selected_symbols is not None:
         valid_symbols = [s.strip().upper() for s in payload.selected_symbols if s and s != "NONE"]
         if valid_symbols:
-            curr_symbols = [bot_instance.config.pair1.symbol, bot_instance.config.pair2.symbol]
-            new_p1 = valid_symbols[0] if len(valid_symbols) >= 1 else bot_instance.config.pair1.symbol
-            new_p2 = valid_symbols[1] if len(valid_symbols) >= 2 else ""
-            if bot_instance.is_active and (new_p1 != bot_instance.config.pair1.symbol or (len(valid_symbols) >= 2 and new_p2 != bot_instance.config.pair2.symbol)):
+            if bot_instance.is_active and set(valid_symbols) != set(bot_instance.config.selected_symbols):
                 raise HTTPException(
                     status_code=400,
                     detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch symbols."
                 )
-            bot_instance.config.pair1.symbol = new_p1
-            bot_instance.config.pair1.enabled = True
-            if len(valid_symbols) >= 2:
-                bot_instance.config.pair2.symbol = valid_symbols[1]
-                bot_instance.config.pair2.enabled = True
-            else:
-                bot_instance.config.pair2.enabled = False
             bot_instance.config.selected_symbols = valid_symbols
+            if not payload.pair1 and not payload.pair2:
+                bot_instance.config.pair1.symbol = valid_symbols[0]
+                bot_instance.config.pair1.enabled = True
+                if len(valid_symbols) >= 2:
+                    bot_instance.config.pair2.symbol = valid_symbols[1]
+                    bot_instance.config.pair2.enabled = True
+                else:
+                    bot_instance.config.pair2.enabled = False
         else:
             bot_instance.config.selected_symbols = []
     else:
-        active_syms = []
-        if bot_instance.config.pair1.enabled and bot_instance.config.pair1.symbol:
+        active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
+        if bot_instance.config.pair1.enabled and bot_instance.config.pair1.symbol and bot_instance.config.pair1.symbol not in active_syms:
             active_syms.append(bot_instance.config.pair1.symbol)
-        if bot_instance.config.pair2.enabled and bot_instance.config.pair2.symbol:
+        if bot_instance.config.pair2.enabled and bot_instance.config.pair2.symbol and bot_instance.config.pair2.symbol not in active_syms:
             active_syms.append(bot_instance.config.pair2.symbol)
         bot_instance.config.selected_symbols = active_syms
 

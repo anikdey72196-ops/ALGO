@@ -206,9 +206,9 @@ class RiskConfig(BaseModel):
         description="Minimum risk-to-reward ratio to accept a trade.",
     )
     max_open_positions: int = Field(
-        default=6,
+        default=15,
         ge=1,
-        le=20,
+        le=50,
         description="Maximum concurrent open positions allowed across all pairs/strategies.",
     )
     max_open_per_symbol: int = Field(
@@ -400,8 +400,8 @@ class TradingConfig(BaseModel):
         description="Whether to restrict scalping to London/NY sessions (False = active 24/7 in all sessions).",
     )
     selected_symbols: List[str] = Field(
-        default_factory=lambda: ["XAUUSD", "EURUSD"],
-        description="List of up to 2 active symbols to analyze concurrently.",
+        default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD"],
+        description="List of active symbols to analyze concurrently.",
     )
 
 

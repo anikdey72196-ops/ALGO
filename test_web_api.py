@@ -164,7 +164,7 @@ def test_api_workflow():
 
     print("\n11. Testing Persistence to bot_settings.json (167 pips SL, SMC_SCALP_5M strategy)...")
     res = client.post("/api/configure", json={
-        "selected_symbols": ["XAUUSD", "EURUSD"],
+        "selected_symbols": ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD"],
         "strategy_type": "SMC_SCALP_5M",
         "fixed_lot_size": 0.05,
         "fixed_sl_pips": 167.0,

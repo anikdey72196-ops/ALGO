@@ -205,7 +205,7 @@ class TradingBot:
                     "enabled": self.config.pair2.enabled,
                 },
                 "enabled_strategies": self.config.enabled_strategies,
-                "selected_symbols": [self.config.pair1.symbol, self.config.pair2.symbol],
+                "selected_symbols": self.config.selected_symbols,
                 "strategy_type": self.config.strategy_type,
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
@@ -356,9 +356,9 @@ class TradingBot:
         self._check_day_rollover()
         self._sync_open_positions()
 
-        # Step 1b: Max concurrent open positions guard (e.g. max 6 open trades)
+        # Step 1b: Max concurrent open positions guard (e.g. max 15 open trades across all pairs)
         open_trades = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 6)
+        max_open = getattr(self.config.risk, 'max_open_positions', 15)
         if len(open_trades) >= max_open:
             self.log(
                 f"⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
@@ -367,30 +367,59 @@ class TradingBot:
             )
             return
 
-        # Build independent pair targets
-        active_pairs = []
+        # Build active pairs list for concurrent multi-pair scanning
+        target_symbols: list[str] = []
+        if self.config.selected_symbols:
+            for s in self.config.selected_symbols:
+                s_clean = s.strip().upper()
+                if s_clean and s_clean != "NONE" and s_clean not in target_symbols:
+                    target_symbols.append(s_clean)
+        else:
+            target_symbols = [inst.symbol for inst in self.config.instruments]
+
+        # Ensure pair1 and pair2 are included if enabled
         if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol:
-            active_pairs.append({
-                "pair_num": 1,
-                "symbol": self.config.pair1.symbol,
-                "fixed_lot_size": self.config.pair1.fixed_lot_size,
-                "fixed_sl_pips": self.config.pair1.fixed_sl_pips,
-            })
+            p1_s = self.config.pair1.symbol.strip().upper()
+            if p1_s and p1_s != "NONE" and p1_s not in target_symbols:
+                target_symbols.insert(0, p1_s)
         if getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol:
+            p2_s = self.config.pair2.symbol.strip().upper()
+            if p2_s and p2_s != "NONE" and p2_s not in target_symbols:
+                target_symbols.append(p2_s)
+
+        # Exclude pair if explicitly disabled in pair1 / pair2 configuration
+        if getattr(self.config, 'pair1', None) and not self.config.pair1.enabled and self.config.pair1.symbol:
+            p1_s = self.config.pair1.symbol.strip().upper()
+            if p1_s in target_symbols and not (getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == p1_s):
+                target_symbols.remove(p1_s)
+        if getattr(self.config, 'pair2', None) and not self.config.pair2.enabled and self.config.pair2.symbol:
+            p2_s = self.config.pair2.symbol.strip().upper()
+            if p2_s in target_symbols and not (getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == p2_s):
+                target_symbols.remove(p2_s)
+
+        active_pairs = []
+        for i, sym in enumerate(target_symbols, start=1):
+            pair_lot = self.config.fixed_lot_size
+            pair_sl = self.config.fixed_sl_pips
+
+            # Custom override from pair1 / pair2 if symbol matches
+            if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym:
+                if self.config.pair1.fixed_lot_size is not None:
+                    pair_lot = self.config.pair1.fixed_lot_size
+                if self.config.pair1.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair1.fixed_sl_pips
+            elif getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == sym:
+                if self.config.pair2.fixed_lot_size is not None:
+                    pair_lot = self.config.pair2.fixed_lot_size
+                if self.config.pair2.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair2.fixed_sl_pips
+
             active_pairs.append({
-                "pair_num": 2,
-                "symbol": self.config.pair2.symbol,
-                "fixed_lot_size": self.config.pair2.fixed_lot_size,
-                "fixed_sl_pips": self.config.pair2.fixed_sl_pips,
+                "pair_num": i,
+                "symbol": sym,
+                "fixed_lot_size": pair_lot,
+                "fixed_sl_pips": pair_sl,
             })
-        if not active_pairs:
-            for i, sym in enumerate(self.config.selected_symbols[:2], start=1):
-                active_pairs.append({
-                    "pair_num": i,
-                    "symbol": sym,
-                    "fixed_lot_size": self.config.fixed_lot_size,
-                    "fixed_sl_pips": self.config.fixed_sl_pips,
-                })
 
         strats_str = ", ".join(self.config.enabled_strategies)
         pairs_str = ", ".join(f"Pair {p['pair_num']}: {p['symbol']}" for p in active_pairs)
@@ -402,10 +431,10 @@ class TradingBot:
             pair_lot = pair_info["fixed_lot_size"]
             pair_sl = pair_info["fixed_sl_pips"]
 
-            # Dynamic check: Re-fetch open positions so that if Pair 1 executed a trade,
-            # Pair 2 immediately sees the updated open count within the exact same scan cycle!
+            # Dynamic check: Re-fetch open positions so that as trades execute on earlier pairs,
+            # subsequent pairs immediately see the updated open count within the exact same scan cycle!
             open_trades = self.state.get_open_positions()
-            max_open = getattr(self.config.risk, 'max_open_positions', 6)
+            max_open = getattr(self.config.risk, 'max_open_positions', 15)
             if len(open_trades) >= max_open:
                 self.log(
                     f"  ⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "

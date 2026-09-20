@@ -433,6 +433,7 @@ class TestMultiStrategyConcurrency(unittest.TestCase):
         self.temp_db.close()
         self.state = StateManager(db_path=self.temp_db.name)
         self.config = TradingConfig()
+        self.config.risk.max_open_positions = 6
         self.risk_engine = RiskEngine(self.config, self.state)
 
     def tearDown(self):
