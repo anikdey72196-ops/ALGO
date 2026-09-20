@@ -131,6 +131,9 @@ class StateManager:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log (timestamp)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_sessions_status ON bot_sessions (status)")
 
+            # Auto-close any orphaned mock test trade IDs left over from automated tests
+            self.conn.execute("UPDATE trade_log SET status = 'CLOSED_TEST' WHERE status = 'OPEN' AND id >= 9000 AND id <= 9999")
+
         logger.info(f"Database schema initialized at {self.db_path}")
     
     def _ensure_daily_row(self, today: date) -> None:

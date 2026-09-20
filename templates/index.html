@@ -101,8 +101,8 @@
     <!-- Daily Trade Count -->
     <div class="bg-cardbg border border-gray-800 rounded-2xl p-5 shadow-lg">
       <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Trades Today</div>
-      <div id="kpiTrades" class="text-2xl md:text-3xl font-bold mt-2 text-white">0 / 2</div>
-      <div class="text-xs text-gray-500 mt-1">Daily Trade Cap</div>
+      <div id="kpiTrades" class="text-2xl md:text-3xl font-bold mt-2 text-white">0</div>
+      <div class="text-xs text-gray-500 mt-1">Unlimited Daily Trades</div>
     </div>
 
     <!-- Circuit Breaker Status -->
@@ -1216,7 +1216,7 @@
 
         const kpiTrades = document.getElementById('kpiTrades');
         if (kpiTrades) {
-          kpiTrades.innerText = `${data.trades_today} (Live Mode)`;
+          kpiTrades.innerText = data.trades_today !== undefined ? data.trades_today : 0;
         }
 
         const cbEl = document.getElementById('kpiBreaker');

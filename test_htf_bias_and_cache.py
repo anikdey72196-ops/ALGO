@@ -2,7 +2,7 @@
 test_htf_bias_and_cache.py — Unit tests for:
 1. HTFAnalyzer macro EMA + swing structure bias resolution.
 2. TradingBot per-tick candle cache clearing.
-3. RiskEngine unlimited daily trade execution when max_daily_trades is None.
+3. RiskEngine unlimited daily trade execution (no daily max trade limit).
 """
 
 import unittest
@@ -67,7 +67,7 @@ class TestHTFBiasAndCache(unittest.TestCase):
         self.assertGreaterEqual(analysis.trend_clarity_score, 20.0)
 
     def test_risk_engine_unlimited_daily_trades(self):
-        """Ensure RiskEngine does not block trades on daily count when max_daily_trades is None."""
+        """Ensure RiskEngine does not block trades on daily trade count."""
         import tempfile
         from pathlib import Path
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -75,7 +75,6 @@ class TestHTFBiasAndCache(unittest.TestCase):
 
         try:
             cfg = TradingConfig()
-            cfg.risk.max_daily_trades = None
             cfg.db_path = temp_db
 
             state = StateManager(db_path=temp_db)

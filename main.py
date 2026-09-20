@@ -246,7 +246,6 @@ class TradingBot:
         logger.info(f"  Fixed Lot Size: {self.config.fixed_lot_size}")
         logger.info(f"  Max daily drawdown: {self.config.account.max_daily_drawdown_pct*100:.1f}%")
         logger.info(f"  Min R:R ratio: {self.config.risk.min_rr_ratio}")
-        logger.info(f"  Max trades/day: {self.config.risk.max_daily_trades}")
         logger.info(f"  HTF: {self.config.timeframes.htf} | LTF: {self.config.timeframes.ltf}")
         logger.info(f"  News blackout: ±{self.config.news_blackout_minutes} min")
         logger.info(f"  Mock broker: {self.config.use_mock_broker}")
@@ -312,6 +311,18 @@ class TradingBot:
                             f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
                             f"Realized PnL: ${pnl:+.2f}"
                         )
+                    else:
+                        self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
+                        self.log(
+                            f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
+                            level="INFO"
+                        )
+                else:
+                    self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
+                    self.log(
+                        f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
+                        level="INFO"
+                    )
         except Exception as e:
             logger.error(f"Error syncing open positions: {e}")
 

@@ -63,8 +63,7 @@ class RiskEngine:
         """
         Check all circuit breaker conditions:
         1. Is circuit breaker already activated for today? -> blocked
-        2. Has daily trade count reached max? -> blocked
-        3. Has daily realized PnL exceeded max drawdown? -> activate breaker, blocked
+        2. Has daily realized PnL exceeded max drawdown? -> activate breaker, blocked
         
         Returns (is_blocked: bool, reason: str | None).
         """
@@ -76,13 +75,6 @@ class RiskEngine:
         max_open = getattr(self.config.risk, 'max_open_positions', 6)
         if len(open_positions) >= max_open:
             return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
-
-        # Daily trade limit check disabled per user request (unlimited trades allowed)
-        # max_trades = getattr(self.config.risk, 'max_daily_trades', None)
-        # if max_trades is not None and max_trades > 0:
-        #     daily_trades = self.state.get_trade_count()
-        #     if daily_trades >= max_trades:
-        #         return True, f"Max daily trades limit reached ({daily_trades}/{max_trades} today)"
 
         pnl = self.state.get_daily_pnl()
         limit = equity * self.config.account.max_daily_drawdown_pct
