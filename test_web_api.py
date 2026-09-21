@@ -5,7 +5,7 @@ test_web_api.py — Automated test script to verify FastAPI endpoints and lock e
 import sys
 import asyncio
 from fastapi.testclient import TestClient
-from web_app import app
+from web_app import app, bot_instance
 
 def test_api_workflow():
     client = TestClient(app)
@@ -92,7 +92,7 @@ def test_api_workflow():
     res = client.post("/api/configure", json={
         "pair2": {
             "symbol": "BTCUSD",
-            "fixed_lot_size": 0.02,
+            "fixed_lot_size": bot_instance.config.pair2.fixed_lot_size,
             "fixed_sl_pips": 99.0,
             "enabled": True
         }

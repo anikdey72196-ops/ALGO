@@ -87,6 +87,7 @@ class BotStateResponse(BaseModel):
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
     ml_trap_detector: dict = {}
+    open_positions_by_strategy: dict = {}
 
 
 
@@ -235,6 +236,16 @@ async def get_bot_state():
         except Exception as e:
             trap_stats = {"error": str(e)}
 
+    # Open positions breakdown by strategy
+    open_positions_by_strategy = {"SMC": 0, "SMC_SCALP_5M": 0, "ICT": 0, "ORDER_FLOW": 0}
+    try:
+        open_trades = bot_instance.state.get_open_positions()
+        for t in open_trades:
+            strat_name = getattr(t, "strategy_name", None) or "SMC"
+            open_positions_by_strategy[strat_name] = open_positions_by_strategy.get(strat_name, 0) + 1
+    except Exception as e:
+        logger.warning(f"Failed to fetch open positions by strategy: {e}")
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols,
@@ -265,6 +276,7 @@ async def get_bot_state():
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
         ml_trap_detector=trap_stats,
+        open_positions_by_strategy=open_positions_by_strategy,
     )
 
 
