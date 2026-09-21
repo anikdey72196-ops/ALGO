@@ -53,6 +53,31 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, field_validator
 
+try:
+    from config import normalize_strategy_key
+except ImportError:
+    def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> str:
+        if magic == 124456:
+            return "SMC"
+        elif magic == 125456:
+            return "SMC_SCALP_5M"
+        elif magic == 126456:
+            return "ICT"
+        elif magic == 127456:
+            return "ORDER_FLOW"
+        if not strat_name:
+            return "SMC"
+        s = str(strat_name).upper().strip()
+        if "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
+            return "ORDER_FLOW"
+        elif "SCALP" in s or "5M" in s:
+            return "SMC_SCALP_5M"
+        elif "ICT" in s:
+            return "ICT"
+        elif "SWING" in s or "SMC" in s:
+            return "SMC"
+        return s
+
 logger = logging.getLogger("algo.ml.trap_detector")
 
 
@@ -119,6 +144,7 @@ class EventRecord(BaseModel):
     timeframe: str
     kind: EventKind
     direction: Direction
+    strategy: str = "SMC"
 
     entry: float
     stop: float
@@ -400,7 +426,8 @@ CREATE TABLE IF NOT EXISTS ml_events (
     label_ts      TEXT,
     p_genuine     REAL,
     model_version TEXT,
-    allowed       INTEGER
+    allowed       INTEGER,
+    strategy      TEXT NOT NULL DEFAULT 'SMC'
 );
 CREATE INDEX IF NOT EXISTS ix_ml_events_pending ON ml_events(label, ts);
 CREATE INDEX IF NOT EXISTS ix_ml_events_symbol  ON ml_events(symbol, timeframe);
@@ -416,13 +443,26 @@ class EventStore:
             self._conn = sqlite3.connect(db_path, check_same_thread=False)
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(_DDL)
+
+            # Auto-migration: ensure 'strategy' column and index exist in pre-existing tables
+            cur = self._conn.execute("PRAGMA table_info(ml_events)")
+            cols = [row[1] for row in cur.fetchall()]
+            if "strategy" not in cols:
+                self._conn.execute("ALTER TABLE ml_events ADD COLUMN strategy TEXT NOT NULL DEFAULT 'SMC'")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS ix_ml_events_strategy ON ml_events(strategy)")
+
             self._conn.commit()
 
     def upsert(self, ev: EventRecord) -> None:
         with self._lock:
+            strat = normalize_strategy_key(getattr(ev, "strategy", "SMC"))
             self._conn.execute(
                 """
-                INSERT INTO ml_events VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO ml_events (
+                    event_id, ts, symbol, timeframe, kind, direction, entry, stop, target,
+                    features, label, outcome, r_multiple, label_ts, p_genuine, model_version,
+                    allowed, strategy
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(event_id) DO UPDATE SET
                     label=excluded.label,
                     outcome=excluded.outcome,
@@ -430,7 +470,8 @@ class EventStore:
                     label_ts=excluded.label_ts,
                     p_genuine=excluded.p_genuine,
                     model_version=excluded.model_version,
-                    allowed=excluded.allowed
+                    allowed=excluded.allowed,
+                    strategy=excluded.strategy
                 """,
                 (
                     ev.event_id, ev.ts.isoformat(), ev.symbol, ev.timeframe,
@@ -439,30 +480,52 @@ class EventStore:
                     ev.label_ts.isoformat() if ev.label_ts else None,
                     ev.p_genuine, ev.model_version,
                     int(ev.allowed) if ev.allowed is not None else None,
+                    strat,
                 ),
             )
             self._conn.commit()
 
-    def pending_labels(self, older_than: datetime) -> list[EventRecord]:
+    def pending_labels(self, older_than: datetime, strategy: Optional[str] = None) -> list[EventRecord]:
         with self._lock:
-            cur = self._conn.execute(
-                "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? ORDER BY ts ASC",
-                (older_than.isoformat(),),
-            )
+            if strategy:
+                strat = normalize_strategy_key(strategy)
+                cur = self._conn.execute(
+                    "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? AND strategy = ? ORDER BY ts ASC",
+                    (older_than.isoformat(), strat),
+                )
+            else:
+                cur = self._conn.execute(
+                    "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? ORDER BY ts ASC",
+                    (older_than.isoformat(),),
+                )
             return [self._row(r) for r in cur.fetchall()]
 
-    def labeled(self) -> list[EventRecord]:
+    def labeled(self, strategy: Optional[str] = None) -> list[EventRecord]:
         with self._lock:
-            cur = self._conn.execute(
-                "SELECT * FROM ml_events WHERE label IS NOT NULL ORDER BY ts ASC"
-            )
+            if strategy:
+                strat = normalize_strategy_key(strategy)
+                cur = self._conn.execute(
+                    "SELECT * FROM ml_events WHERE label IS NOT NULL AND strategy = ? ORDER BY ts ASC",
+                    (strat,),
+                )
+            else:
+                cur = self._conn.execute(
+                    "SELECT * FROM ml_events WHERE label IS NOT NULL ORDER BY ts ASC"
+                )
             return [self._row(r) for r in cur.fetchall()]
 
-    def stats(self) -> dict[str, int]:
+    def stats(self, strategy: Optional[str] = None) -> dict[str, int]:
         with self._lock:
-            cur = self._conn.execute(
-                "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events"
-            )
+            if strategy:
+                strat = normalize_strategy_key(strategy)
+                cur = self._conn.execute(
+                    "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events WHERE strategy = ?",
+                    (strat,),
+                )
+            else:
+                cur = self._conn.execute(
+                    "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events"
+                )
             total, labeled, traps, genuine = cur.fetchone()
         return {
             "total":   int(total or 0),
@@ -471,12 +534,33 @@ class EventStore:
             "genuine": int(genuine or 0),
         }
 
+    def stats_by_strategy(self) -> dict[str, dict[str, int]]:
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT strategy, COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1)
+                FROM ml_events
+                GROUP BY strategy
+                """
+            )
+            res: dict[str, dict[str, int]] = {}
+            for row in cur.fetchall():
+                strat = str(row[0] or "SMC")
+                res[strat] = {
+                    "total":   int(row[1] or 0),
+                    "labeled": int(row[2] or 0),
+                    "traps":   int(row[3] or 0),
+                    "genuine": int(row[4] or 0),
+                }
+            return res
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
 
     @staticmethod
     def _row(r: tuple[Any, ...]) -> EventRecord:
+        strat = r[17] if len(r) > 17 and r[17] is not None else "SMC"
         return EventRecord(
             event_id=r[0],
             ts=datetime.fromisoformat(r[1]),
@@ -495,6 +579,7 @@ class EventStore:
             p_genuine=r[14],
             model_version=r[15],
             allowed=bool(r[16]) if r[16] is not None else None,
+            strategy=strat,
         )
 
 
@@ -663,35 +748,76 @@ class TrapGate:
 
     The gate CANNOT change sizing, direction, or override the Risk Engine.
     It either lets a setup through (allow=True) or vetoes it (allow=False).
+    Routes evaluation to the strategy-specific model so that SMC traps only
+    evaluate SMC setups, ICT traps only evaluate ICT setups, etc.
     """
 
-    def __init__(self, model: TrapModel, cfg: TrapDetectorConfig):
-        self.model = model
+    def __init__(self, model_source: Any, cfg: TrapDetectorConfig):
+        self.model_source = model_source
         self.cfg = cfg
 
-    def evaluate(self, kind: EventKind, features: dict[str, float]) -> GateDecision:
-        # Shadow mode only if explicitly configured with shadow_until_samples > 0 and model unfitted
-        if self.cfg.shadow_until_samples > 0 and self.model.n_samples < self.cfg.shadow_until_samples and not self.model._sgd_fitted and self.model.lgbm is None:
+    def get_model(self, strategy: str = "SMC") -> TrapModel:
+        strat = normalize_strategy_key(strategy)
+        if isinstance(self.model_source, TrapModel):
+            return self.model_source
+        if hasattr(self.model_source, "get_model"):
+            return self.model_source.get_model(strat)
+        if isinstance(self.model_source, dict):
+            return self.model_source.get(strat) or self.model_source.get("SMC")
+        return getattr(self.model_source, "model", self.model_source)
+
+    @property
+    def model(self) -> TrapModel:
+        return self.get_model("SMC")
+
+    @model.setter
+    def model(self, new_model: TrapModel) -> None:
+        if isinstance(self.model_source, TrapModel):
+            self.model_source = new_model
+        elif hasattr(self.model_source, "models") and isinstance(self.model_source.models, dict):
+            self.model_source.models["SMC"] = new_model
+        elif isinstance(self.model_source, dict):
+            self.model_source["SMC"] = new_model
+        else:
+            self.model_source = new_model
+
+    def evaluate(
+        self,
+        kind: EventKind,
+        features: dict[str, float],
+        strategy: str = "SMC",
+    ) -> GateDecision:
+        strat = normalize_strategy_key(strategy)
+        model = self.get_model(strat)
+        version_str = model.version if isinstance(self.model_source, TrapModel) else f"{strat}:{model.version}"
+
+        # Shadow mode check
+        if (
+            self.cfg.shadow_until_samples > 0
+            and model.n_samples < self.cfg.shadow_until_samples
+            and not model._sgd_fitted
+            and model.lgbm is None
+        ):
             return GateDecision(
                 allow=True,
                 p_genuine=0.5,
                 mode="shadow",
-                model_version=self.model.version,
-                reason=f"shadow mode ({self.model.n_samples}/{self.cfg.shadow_until_samples})",
+                model_version=version_str,
+                reason=f"shadow mode [{strat}] ({model.n_samples}/{self.cfg.shadow_until_samples})",
             )
 
         x = np.array([[features.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
 
         try:
-            p = float(self.model.predict_proba_genuine(x)[0])
+            p = float(model.predict_proba_genuine(x)[0])
         except Exception as exc:
-            logger.exception("TrapGate inference failed: %s", exc)
+            logger.exception("TrapGate inference failed for %s: %s", strat, exc)
             return GateDecision(
                 allow=self.cfg.fail_open_on_error,
                 p_genuine=0.5,
                 mode="error",
-                model_version=self.model.version,
-                reason=f"inference error: {exc}",
+                model_version=version_str,
+                reason=f"inference error [{strat}]: {exc}",
             )
 
         p_sl = 1.0 - p
@@ -703,7 +829,7 @@ class TrapGate:
             allow=allow,
             p_genuine=p,
             mode="gated",
-            model_version=self.model.version,
+            model_version=version_str,
             reason="passed" if allow else f"High SL probability: P(SL)={p_sl*100:.1f}% > {effective_max_sl*100:.1f}% (P(TP)={p*100:.1f}%)",
         )
 
@@ -714,33 +840,50 @@ class TrapGate:
 
 class TrapDetectorService:
     """
-    Facade wiring store, model, and gate. One instance per ALGO process.
+    Facade wiring store, strategy-isolated models, and gate. One instance per ALGO process.
 
-    Typical use:
-
-        svc = TrapDetectorService(cfg)
-        # In strategy, when an FVG confirms:
-        svc.observe_event(symbol, tf, kind, direction, entry, stop, target,
-                          df=df, bar_index=i)
-
-        # Right before dispatching to ai_analyst / risk_engine:
-        decision = svc.gate(kind, features)
-        if not decision.allow:
-            return
-
-    A background task (`run_labeler`) must be scheduled (e.g. via asyncio.gather
-    alongside your existing jobs) to back-fill labels.
+    Each strategy (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW) maintains its own independent
+    dataset and dedicated model so that trap detection is isolated without confusion.
     """
 
     def __init__(self, cfg: TrapDetectorConfig):
         self.cfg = cfg
         self.store = EventStore(cfg.db_path)
-        self.model = TrapModel(
-            cfg.model_path,
-            lgbm_min_samples=cfg.lgbm_min_samples,
-            half_life_days=cfg.lgbm_half_life_days,
-        )
-        self.gate = TrapGate(self.model, cfg)
+        self.models: dict[str, TrapModel] = {}
+        # Pre-initialize core strategy models
+        for s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"):
+            self.get_model(s)
+        self.gate = TrapGate(self, cfg)
+
+    def _model_path_for_strategy(self, strategy: str) -> str:
+        base = Path(self.cfg.model_path)
+        strat_key = normalize_strategy_key(strategy)
+        filename = f"{base.stem}_{strat_key}{base.suffix}"
+        return str(base.parent / filename)
+
+    def get_model(self, strategy: str = "SMC") -> TrapModel:
+        strat_key = normalize_strategy_key(strategy)
+        if strat_key not in self.models:
+            strat_path = self._model_path_for_strategy(strat_key)
+            # Backward compatibility: reuse legacy model file if present and requesting SMC
+            if strat_key == "SMC" and not Path(strat_path).exists() and Path(self.cfg.model_path).exists():
+                strat_path = self.cfg.model_path
+            self.models[strat_key] = TrapModel(
+                strat_path,
+                lgbm_min_samples=self.cfg.lgbm_min_samples,
+                half_life_days=self.cfg.lgbm_half_life_days,
+            )
+        return self.models[strat_key]
+
+    @property
+    def model(self) -> TrapModel:
+        """Backward compatibility: primary strategy (SMC) model."""
+        return self.get_model("SMC")
+
+    @model.setter
+    def model(self, new_model: TrapModel) -> None:
+        strat_key = normalize_strategy_key("SMC")
+        self.models[strat_key] = new_model
 
     # -- observation ---------------------------------------------------------
     def observe_event(
@@ -755,8 +898,10 @@ class TrapDetectorService:
         target: float,
         df: pd.DataFrame,
         bar_index: int,
+        strategy: str = "SMC",
     ) -> EventRecord:
-        """Record a candidate setup and its causal features. No label yet."""
+        """Record a candidate setup and its causal features for a specific strategy."""
+        strat = normalize_strategy_key(strategy)
         features = extract_features(df, bar_index, kind, self.cfg)
         if isinstance(df.index, pd.DatetimeIndex):
             event_ts = df.index[bar_index].to_pydatetime()
@@ -778,9 +923,10 @@ class TrapDetectorService:
             stop=float(stop),
             target=float(target),
             features=features,
+            strategy=strat,
         )
 
-        decision = self.gate.evaluate(kind, features)
+        decision = self.gate.evaluate(kind, features, strategy=strat)
         ev.p_genuine = decision.p_genuine
         ev.model_version = decision.model_version
         ev.allowed = decision.allow
@@ -788,8 +934,8 @@ class TrapDetectorService:
 
         if not decision.allow:
             logger.info(
-                "TrapGate veto | %s %s %s | p=%.3f | %s",
-                symbol, timeframe, kind.value, decision.p_genuine, decision.reason,
+                "TrapGate veto [%s] | %s %s %s | p=%.3f | %s",
+                strat, symbol, timeframe, kind.value, decision.p_genuine, decision.reason,
             )
         return ev
 
@@ -835,41 +981,54 @@ class TrapDetectorService:
                 ev.label_ts = datetime.now(timezone.utc)
                 self.store.upsert(ev)
 
+                # Online SGD learning: update ONLY the specific strategy's model!
+                strat = normalize_strategy_key(getattr(ev, "strategy", "SMC"))
+                strat_model = self.get_model(strat)
                 x = ev.feature_vector(ALL_FEATURES)
-                self.model.partial_fit(x, np.array([label]))
+                strat_model.partial_fit(x, np.array([label]))
                 labeled += 1
             except Exception:
                 logger.exception("Failed to label event %s", ev.event_id)
 
         if labeled:
-            logger.info("Labeled %d new events | model=%s", labeled, self.model.version)
+            logger.info("Labeled %d new events across isolated strategy models", labeled)
         return labeled
 
-    def retrain_if_ready(self) -> bool:
-        """Retrain LightGBM on the full labeled corpus. Call nightly / on schedule."""
-        rows = self.store.labeled()
-        if len(rows) < self.cfg.lgbm_min_samples:
-            return False
-
-        # Guard against class collapse — LightGBM needs both classes present.
-        labels = {r.label for r in rows}
-        if labels != {0, 1}:
-            logger.warning("Retrain skipped: only labels %s present", labels)
-            return False
-
-        # Group by kind so each kind gets its own column layout — concatenate
-        # feature vectors with a union schema; missing -> 0.0. Keeps one model
-        # but preserves per-kind signal via the presence mask.
-        union: list[str] = ALL_FEATURES
-        X = np.array(
-            [[r.features.get(k, 0.0) for k in union] for r in rows], dtype=float
+    def retrain_if_ready(self, strategy: Optional[str] = None) -> bool:
+        """Retrain LightGBM per strategy on its own labeled corpus. Returns True if any model was swapped."""
+        strategies = [normalize_strategy_key(strategy)] if strategy else sorted(
+            {"SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"} | {
+                normalize_strategy_key(r.strategy) for r in self.store.labeled() if getattr(r, "strategy", None)
+            }
         )
-        y = np.array([r.label for r in rows], dtype=int)
-        ts = [r.ts.replace(tzinfo=r.ts.tzinfo or timezone.utc) for r in rows]
+        any_swapped = False
+        all_labeled = self.store.labeled()
 
-        # Persist the union column order so inference uses the same shape.
-        self._save_union(union)
-        return self.model.retrain_lightgbm(X, y, ts)
+        for strat in strategies:
+            strat_rows = [r for r in all_labeled if normalize_strategy_key(getattr(r, "strategy", "SMC")) == strat]
+            if len(strat_rows) < self.cfg.lgbm_min_samples:
+                continue
+
+            labels = {r.label for r in strat_rows}
+            if labels != {0, 1}:
+                logger.warning("[%s] LightGBM retrain skipped: only labels %s present", strat, labels)
+                continue
+
+            union: list[str] = ALL_FEATURES
+            X = np.array(
+                [[r.features.get(k, 0.0) for k in union] for r in strat_rows], dtype=float
+            )
+            y = np.array([r.label for r in strat_rows], dtype=int)
+            ts = [r.ts.replace(tzinfo=r.ts.tzinfo or timezone.utc) for r in strat_rows]
+
+            self._save_union(union)
+            strat_model = self.get_model(strat)
+            swapped = strat_model.retrain_lightgbm(X, y, ts)
+            if swapped:
+                any_swapped = True
+                logger.info("[%s] LightGBM swapped: version=%s samples=%d", strat, strat_model.version, len(strat_rows))
+
+        return any_swapped
 
     def _save_union(self, union: list[str]) -> None:
         p = Path(self.cfg.model_path).with_suffix(".columns.json")
@@ -933,6 +1092,13 @@ def _self_test() -> None:
         index=idx,
     )
 
+    # Clean any prior self-test artifacts
+    for p in Path("ml/artifacts").glob("_selftest*"):
+        try:
+            p.unlink()
+        except Exception:
+            pass
+
     cfg = TrapDetectorConfig(db_path=":memory:", model_path="ml/artifacts/_selftest.joblib")
 
     # --- causality: identical features with and without future bars ---------
@@ -965,17 +1131,47 @@ def _self_test() -> None:
     print("[ok] labeler SL-first")
 
     # --- model: multi-kind partial_fit invariant ---------------------------
-    model = TrapModel(path="ml/artifacts/_selftest.joblib")
+    model_standalone = TrapModel(path="ml/artifacts/_selftest_standalone.joblib")
     f_fvg = extract_features(df, 30, EventKind.FVG_BULL, cfg)
     f_sweep = extract_features(df, 30, EventKind.SWEEP_BSL, cfg)
     x_fvg = np.array([[f_fvg.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
     x_sweep = np.array([[f_sweep.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
-    model.partial_fit(x_fvg, np.array([1]))
-    model.partial_fit(x_sweep, np.array([0]))
-    p_fvg = model.predict_proba_genuine(x_fvg)
-    p_sweep = model.predict_proba_genuine(x_sweep)
+    model_standalone.partial_fit(x_fvg, np.array([1]))
+    model_standalone.partial_fit(x_sweep, np.array([0]))
+    p_fvg = model_standalone.predict_proba_genuine(x_fvg)
+    p_sweep = model_standalone.predict_proba_genuine(x_sweep)
     assert len(p_fvg) == 1 and len(p_sweep) == 1
     print("[ok] multi-kind partial_fit invariant")
+
+    # --- strategy isolation invariant ---------------------------------------
+    svc = TrapDetectorService(cfg)
+    ev_smc = svc.observe_event(
+        symbol="EURUSD", timeframe="15m", kind=EventKind.FVG_BULL, direction="long",
+        entry=entry, stop=stop, target=target, df=df, bar_index=50, strategy="SMC",
+    )
+    ev_ict = svc.observe_event(
+        symbol="EURUSD", timeframe="15m", kind=EventKind.SWEEP_SSL, direction="long",
+        entry=entry, stop=stop, target=target, df=df, bar_index=50, strategy="ICT",
+    )
+    assert ev_smc.strategy == "SMC"
+    assert ev_ict.strategy == "ICT"
+    assert "SMC:" in ev_smc.model_version
+    assert "ICT:" in ev_ict.model_version
+
+    smc_initial_samples = svc.get_model("SMC").n_samples
+    ict_initial_samples = svc.get_model("ICT").n_samples
+    # Simulate labeling an SMC event
+    svc.get_model("SMC").partial_fit(x_fvg, np.array([1]))
+    assert svc.get_model("SMC").n_samples == smc_initial_samples + 1
+    assert svc.get_model("ICT").n_samples == ict_initial_samples  # ICT model must remain untouched!
+    print("[ok] strategy isolation invariant")
+
+    # Clean up test files
+    for p in Path("ml/artifacts").glob("_selftest*"):
+        try:
+            p.unlink()
+        except Exception:
+            pass
 
     print("All self-tests passed.")
 

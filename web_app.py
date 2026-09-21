@@ -226,12 +226,25 @@ async def get_bot_state():
     if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
         try:
             store_stats = bot_instance.trap_svc.store.stats()
+            strat_stats = bot_instance.trap_svc.store.stats_by_strategy() if hasattr(bot_instance.trap_svc.store, "stats_by_strategy") else {}
             is_shadow = (
                 bot_instance.trap_svc.cfg.shadow_until_samples > 0
                 and bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples
                 and not bot_instance.trap_svc.model._sgd_fitted
                 and bot_instance.trap_svc.model.lgbm is None
             )
+            strategy_models = {}
+            if hasattr(bot_instance.trap_svc, "models"):
+                for s_name, m in bot_instance.trap_svc.models.items():
+                    s_stat = strat_stats.get(s_name, {})
+                    strategy_models[s_name] = {
+                        "model_version": m.version,
+                        "n_samples": m.n_samples,
+                        "total_events": s_stat.get("total", 0),
+                        "labeled_events": s_stat.get("labeled", 0),
+                        "traps_caught": s_stat.get("traps", 0),
+                        "genuine_setups": s_stat.get("genuine", 0),
+                    }
             trap_stats = {
                 "model_version": bot_instance.trap_svc.model.version,
                 "n_samples": bot_instance.trap_svc.model.n_samples,
@@ -244,6 +257,7 @@ async def get_bot_state():
                 "traps_caught": store_stats.get("traps", 0),
                 "genuine_setups": store_stats.get("genuine", 0),
                 "gating_enabled": getattr(bot_instance.config, "ml_gating_enabled", True),
+                "strategies": strategy_models,
             }
         except Exception as e:
             trap_stats = {"error": str(e)}

@@ -608,6 +608,7 @@ class TradingBot:
                         try:
                             trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
                             ml_df = self._prepare_df_for_trap_detector(ltf_data)
+                            strat_key = normalize_strategy_key(best_signal.strategy_name)
                             trap_ev = self.trap_svc.observe_event(
                                 symbol=symbol,
                                 timeframe=ltf_tf,
@@ -618,6 +619,7 @@ class TradingBot:
                                 target=best_signal.take_profit,
                                 df=ml_df,
                                 bar_index=len(ml_df) - 1,
+                                strategy=strat_key,
                             )
                             p_tp = trap_ev.p_genuine if trap_ev.p_genuine is not None else 0.50
                             p_sl = 1.0 - p_tp
@@ -627,12 +629,12 @@ class TradingBot:
                                 self.log(
                                     f"  🪤 [ML DECISION OVERRIDE] Trade SKIPPED: High chance of Stop Loss "
                                     f"(P(SL)={p_sl*100:.1f}% > {max_sl_thr*100:.1f}%, P(TP)={p_tp*100:.1f}%) "
-                                    f"| Strategy '{best_signal.strategy_name}' on {symbol} vetoed by ML Model ({trap_ev.model_version})",
+                                    f"| Strategy '{best_signal.strategy_name}' [{strat_key}] on {symbol} vetoed by ML Model ({trap_ev.model_version})",
                                     level="WARNING",
                                 )
                                 continue
                             self.log(
-                                f"  🔬 [ML MODEL APPROVED] Setup verified genuine (P(TP)={p_tp*100:.1f}%, "
+                                f"  🔬 [ML MODEL APPROVED] Setup verified genuine [{strat_key}] (P(TP)={p_tp*100:.1f}%, "
                                 f"P(SL)={p_sl*100:.1f}% <= {max_sl_thr*100:.1f}%) | "
                                 f"Model={trap_ev.model_version} | Proceeding to AI & Risk validation"
                             )
