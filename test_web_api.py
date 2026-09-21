@@ -21,6 +21,8 @@ def test_api_workflow():
     assert "available_strategies" in state, "available_strategies must be in BotStateResponse"
     assert "SMC_SCALP_5M" in state['available_strategies'], "SMC_SCALP_5M must be in available_strategies"
 
+    assert "pair1" in state and "pair2" in state and "pair3" in state, "pair1, pair2, and pair3 must all be in BotStateResponse"
+
     print("\n2. Testing POST /api/configure (set symbols to XAUUSD + BTCUSD, strategy_type to SMC_SCALP_5M and lot size to 0.10)...")
     res = client.post("/api/configure", json={
         "selected_symbols": ["XAUUSD", "BTCUSD"],
@@ -77,7 +79,7 @@ def test_api_workflow():
     assert "Stop Loss (SL) is LOCKED" in res.json().get("detail", "")
     print("   [PASSED] Global SL lock enforcement verified.")
 
-    print("\n4e. Testing STRICT LOCK: attempting to change Pair 1 & Pair 2 lot size / SL while ACTIVE (must fail with 400)...")
+    print("\n4e. Testing STRICT LOCK: attempting to change Pair 1, Pair 2 & Pair 3 lot size / SL while ACTIVE (must fail with 400)...")
     res = client.post("/api/configure", json={
         "pair1": {
             "symbol": "XAUUSD",
@@ -99,7 +101,18 @@ def test_api_workflow():
     })
     assert res.status_code == 400, "Should reject Pair 2 SL change while active!"
     assert "Pair 2 Stop Loss (SL) is LOCKED" in res.json().get("detail", "")
-    print("   [PASSED] Per-pair lot and SL lock enforcement verified.")
+
+    res = client.post("/api/configure", json={
+        "pair3": {
+            "symbol": bot_instance.config.pair3.symbol,
+            "fixed_lot_size": 0.88,
+            "fixed_sl_pips": 20.0,
+            "enabled": True
+        }
+    })
+    assert res.status_code == 400, "Should reject Pair 3 lot change while active!"
+    assert "Pair 3 lot size is LOCKED" in res.json().get("detail", "")
+    print("   [PASSED] Per-pair lot and SL lock enforcement verified for Pair 1, 2, and 3.")
 
     print("\n4f. Testing STRICT LOCK: attempting to change max_open_positions while ACTIVE (must fail with 400)...")
     res = client.post("/api/configure", json={

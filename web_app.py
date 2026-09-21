@@ -48,6 +48,7 @@ class PairConfigItem(BaseModel):
 class BotConfigUpdate(BaseModel):
     pair1: Optional[PairConfigItem] = None
     pair2: Optional[PairConfigItem] = None
+    pair3: Optional[PairConfigItem] = None
     enabled_strategies: Optional[List[str]] = None
     selected_symbols: Optional[List[str]] = None
     strategy_type: Optional[str] = None
@@ -64,6 +65,7 @@ class BotStateResponse(BaseModel):
     selected_symbols: List[str]
     pair1: dict
     pair2: dict
+    pair3: dict
     enabled_strategies: List[str]
     strategy_type: str
     fixed_lot_size: Optional[float]
@@ -220,6 +222,12 @@ async def get_bot_state():
         "fixed_sl_pips": bot_instance.config.pair2.fixed_sl_pips,
         "enabled": bot_instance.config.pair2.enabled,
     }
+    pair3_data = {
+        "symbol": bot_instance.config.pair3.symbol,
+        "fixed_lot_size": bot_instance.config.pair3.fixed_lot_size,
+        "fixed_sl_pips": bot_instance.config.pair3.fixed_sl_pips,
+        "enabled": bot_instance.config.pair3.enabled,
+    }
 
     # ML Trap Detector status & statistics
     trap_stats = {}
@@ -277,6 +285,7 @@ async def get_bot_state():
         selected_symbols=bot_instance.config.selected_symbols,
         pair1=pair1_data,
         pair2=pair2_data,
+        pair3=pair3_data,
         enabled_strategies=bot_instance.config.enabled_strategies,
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
@@ -320,13 +329,14 @@ async def activate_bot():
     bot_instance.is_active = True
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols,
-        lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'}",
+        lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'} | P3:{bot_instance.config.pair3.fixed_lot_size or 'Dyn'}",
         trigger_source="Web Dashboard",
     )
     bot_instance.log(
         f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring pairs: [{', '.join(bot_instance.config.selected_symbols)}] | "
         f"Pair 1 ({bot_instance.config.pair1.symbol}, lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
         f"Pair 2 ({bot_instance.config.pair2.symbol}, lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
+        f"Pair 3 ({bot_instance.config.pair3.symbol}, lot={bot_instance.config.pair3.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair3.fixed_sl_pips or 'Dyn'}) | "
         f"Active Strategies: {bot_instance.config.enabled_strategies}"
     )
 
@@ -424,6 +434,34 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.pair2.fixed_sl_pips = payload.pair2.fixed_sl_pips
         bot_instance.config.pair2.enabled = payload.pair2.enabled
 
+    if payload.pair3 is not None:
+        p3_sym = payload.pair3.symbol.strip().upper()
+        if bot_instance.is_active:
+            if p3_sym != bot_instance.config.pair3.symbol:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 3."
+                )
+            if payload.pair3.fixed_lot_size != bot_instance.config.pair3.fixed_lot_size:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 3 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+                )
+            if payload.pair3.fixed_sl_pips != bot_instance.config.pair3.fixed_sl_pips:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 3 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+                )
+            if payload.pair3.enabled != bot_instance.config.pair3.enabled:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Pair 3 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+                )
+        bot_instance.config.pair3.symbol = p3_sym
+        bot_instance.config.pair3.fixed_lot_size = payload.pair3.fixed_lot_size
+        bot_instance.config.pair3.fixed_sl_pips = payload.pair3.fixed_sl_pips
+        bot_instance.config.pair3.enabled = payload.pair3.enabled
+
     # Handle enabled strategies update
     if payload.enabled_strategies is not None:
         valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW")]
@@ -447,7 +485,7 @@ async def update_configuration(payload: BotConfigUpdate):
                     detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch symbols."
                 )
             bot_instance.config.selected_symbols = valid_symbols
-            if not payload.pair1 and not payload.pair2:
+            if not payload.pair1 and not payload.pair2 and not payload.pair3:
                 bot_instance.config.pair1.symbol = valid_symbols[0]
                 bot_instance.config.pair1.enabled = True
                 if len(valid_symbols) >= 2:
@@ -455,6 +493,11 @@ async def update_configuration(payload: BotConfigUpdate):
                     bot_instance.config.pair2.enabled = True
                 else:
                     bot_instance.config.pair2.enabled = False
+                if len(valid_symbols) >= 3:
+                    bot_instance.config.pair3.symbol = valid_symbols[2]
+                    bot_instance.config.pair3.enabled = True
+                else:
+                    bot_instance.config.pair3.enabled = False
         else:
             bot_instance.config.selected_symbols = []
     else:
@@ -463,6 +506,8 @@ async def update_configuration(payload: BotConfigUpdate):
             active_syms.append(bot_instance.config.pair1.symbol)
         if bot_instance.config.pair2.enabled and bot_instance.config.pair2.symbol and bot_instance.config.pair2.symbol not in active_syms:
             active_syms.append(bot_instance.config.pair2.symbol)
+        if bot_instance.config.pair3.enabled and bot_instance.config.pair3.symbol and bot_instance.config.pair3.symbol not in active_syms:
+            active_syms.append(bot_instance.config.pair3.symbol)
         bot_instance.config.selected_symbols = active_syms
 
     if payload.strategy_type is not None:
@@ -532,6 +577,7 @@ async def update_configuration(payload: BotConfigUpdate):
         f"⚙️ Configuration updated: "
         f"Pair 1={bot_instance.config.pair1.symbol} (lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
         f"Pair 2={bot_instance.config.pair2.symbol} (lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
+        f"Pair 3={bot_instance.config.pair3.symbol} (lot={bot_instance.config.pair3.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair3.fixed_sl_pips or 'Dyn'}) | "
         f"Strategies={bot_instance.config.enabled_strategies} | "
         f"Max Open Positions={bot_instance.config.risk.max_open_positions} | "
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'} | "
@@ -542,6 +588,7 @@ async def update_configuration(payload: BotConfigUpdate):
         "status": "success",
         "pair1": bot_instance.config.pair1.model_dump(),
         "pair2": bot_instance.config.pair2.model_dump(),
+        "pair3": bot_instance.config.pair3.model_dump(),
         "enabled_strategies": bot_instance.config.enabled_strategies,
         "selected_symbols": bot_instance.config.selected_symbols,
         "strategy_type": bot_instance.config.strategy_type,

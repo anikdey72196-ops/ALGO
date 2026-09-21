@@ -281,6 +281,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         bot.config.pair1.symbol = "EURUSD"
         bot.config.pair1.enabled = True
         bot.config.pair2.enabled = False
+        bot.config.pair3.enabled = False
         bot.config.selected_symbols = ["EURUSD"]
         bot.state.is_circuit_breaker_active = MagicMock(return_value=False)
         bot.news_filter.is_blackout = MagicMock(return_value=(False, "No blackout"))

@@ -158,6 +158,13 @@ class TradingBot:
                     self.config.pair2.fixed_sl_pips = p2.get("fixed_sl_pips")
                     self.config.pair2.enabled = p2.get("enabled", True)
 
+                if "pair3" in saved and isinstance(saved["pair3"], dict):
+                    p3 = saved["pair3"]
+                    self.config.pair3.symbol = p3.get("symbol", self.config.pair3.symbol)
+                    self.config.pair3.fixed_lot_size = p3.get("fixed_lot_size")
+                    self.config.pair3.fixed_sl_pips = p3.get("fixed_sl_pips")
+                    self.config.pair3.enabled = p3.get("enabled", True)
+
                 # Enabled strategies
                 if "enabled_strategies" in saved and isinstance(saved["enabled_strategies"], list):
                     self.config.enabled_strategies = saved["enabled_strategies"]
@@ -166,7 +173,7 @@ class TradingBot:
                 if "selected_symbols" in saved and isinstance(saved["selected_symbols"], list):
                     self.config.selected_symbols = saved["selected_symbols"]
                 else:
-                    self.config.selected_symbols = [self.config.pair1.symbol, self.config.pair2.symbol]
+                    self.config.selected_symbols = [self.config.pair1.symbol, self.config.pair2.symbol, self.config.pair3.symbol]
 
                 if "strategy_type" in saved and isinstance(saved["strategy_type"], str):
                     self.config.strategy_type = saved["strategy_type"]
@@ -192,6 +199,7 @@ class TradingBot:
                     f"MaxOpen={self.config.risk.max_open_positions} | "
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
+                    f"Pair3={self.config.pair3.symbol} (lot={self.config.pair3.fixed_lot_size}, sl={self.config.pair3.fixed_sl_pips}) | "
                     f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f})"
                 )
             except Exception as e:
@@ -213,6 +221,12 @@ class TradingBot:
                     "fixed_lot_size": self.config.pair2.fixed_lot_size,
                     "fixed_sl_pips": self.config.pair2.fixed_sl_pips,
                     "enabled": self.config.pair2.enabled,
+                },
+                "pair3": {
+                    "symbol": self.config.pair3.symbol,
+                    "fixed_lot_size": self.config.pair3.fixed_lot_size,
+                    "fixed_sl_pips": self.config.pair3.fixed_sl_pips,
+                    "enabled": self.config.pair3.enabled,
                 },
                 "enabled_strategies": self.config.enabled_strategies,
                 "selected_symbols": self.config.selected_symbols,
@@ -389,7 +403,7 @@ class TradingBot:
         else:
             target_symbols = [inst.symbol for inst in self.config.instruments]
 
-        # Ensure pair1 and pair2 are included if enabled
+        # Ensure pair1, pair2, and pair3 are included if enabled
         if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol:
             p1_s = self.config.pair1.symbol.strip().upper()
             if p1_s and p1_s != "NONE" and p1_s not in target_symbols:
@@ -398,23 +412,33 @@ class TradingBot:
             p2_s = self.config.pair2.symbol.strip().upper()
             if p2_s and p2_s != "NONE" and p2_s not in target_symbols:
                 target_symbols.append(p2_s)
+        if getattr(self.config, 'pair3', None) and self.config.pair3.enabled and self.config.pair3.symbol:
+            p3_s = self.config.pair3.symbol.strip().upper()
+            if p3_s and p3_s != "NONE" and p3_s not in target_symbols:
+                target_symbols.append(p3_s)
 
-        # Exclude pair if explicitly disabled in pair1 / pair2 configuration
-        if getattr(self.config, 'pair1', None) and not self.config.pair1.enabled and self.config.pair1.symbol:
-            p1_s = self.config.pair1.symbol.strip().upper()
-            if p1_s in target_symbols and not (getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == p1_s):
-                target_symbols.remove(p1_s)
-        if getattr(self.config, 'pair2', None) and not self.config.pair2.enabled and self.config.pair2.symbol:
-            p2_s = self.config.pair2.symbol.strip().upper()
-            if p2_s in target_symbols and not (getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == p2_s):
-                target_symbols.remove(p2_s)
+        # Exclude pair if explicitly disabled in pair1 / pair2 / pair3 configuration
+        enabled_pair_symbols = set()
+        for p_name in ('pair1', 'pair2', 'pair3'):
+            p_cfg = getattr(self.config, p_name, None)
+            if p_cfg and p_cfg.enabled and p_cfg.symbol:
+                s_name = p_cfg.symbol.strip().upper()
+                if s_name and s_name != "NONE":
+                    enabled_pair_symbols.add(s_name)
+
+        for p_name in ('pair1', 'pair2', 'pair3'):
+            p_cfg = getattr(self.config, p_name, None)
+            if p_cfg and not p_cfg.enabled and p_cfg.symbol:
+                p_s = p_cfg.symbol.strip().upper()
+                if p_s in target_symbols and p_s not in enabled_pair_symbols:
+                    target_symbols.remove(p_s)
 
         active_pairs = []
         for i, sym in enumerate(target_symbols, start=1):
             pair_lot = self.config.fixed_lot_size
             pair_sl = self.config.fixed_sl_pips
 
-            # Custom override from pair1 / pair2 if symbol matches
+            # Custom override from pair1 / pair2 / pair3 if symbol matches
             if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym:
                 if self.config.pair1.fixed_lot_size is not None:
                     pair_lot = self.config.pair1.fixed_lot_size
@@ -425,6 +449,11 @@ class TradingBot:
                     pair_lot = self.config.pair2.fixed_lot_size
                 if self.config.pair2.fixed_sl_pips is not None:
                     pair_sl = self.config.pair2.fixed_sl_pips
+            elif getattr(self.config, 'pair3', None) and self.config.pair3.enabled and self.config.pair3.symbol.strip().upper() == sym:
+                if self.config.pair3.fixed_lot_size is not None:
+                    pair_lot = self.config.pair3.fixed_lot_size
+                if self.config.pair3.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair3.fixed_sl_pips
 
             active_pairs.append({
                 "pair_num": i,
@@ -853,7 +882,7 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
     bot.is_active = True
     session_id = bot.state.record_activation(
         symbols=bot.config.selected_symbols,
-        lot_size=f"P1:{bot.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot.config.pair2.fixed_lot_size or 'Dyn'}",
+        lot_size=f"P1:{bot.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot.config.pair2.fixed_lot_size or 'Dyn'} | P3:{bot.config.pair3.fixed_lot_size or 'Dyn'}",
         trigger_source="Laptop Terminal",
     )
     bot.log(

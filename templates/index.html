@@ -593,7 +593,7 @@
             <span class="px-4 py-2 rounded-full bg-purple-100 text-primary border border-purple-300 font-mono text-sm sm:text-base font-black hidden sm:inline-block">INDEPENDENT SIZING & SL</span>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <!-- Pair 1 (Primary) -->
             <div class="bg-purple-50/50 border border-purple-200 rounded-xl p-5 space-y-3.5">
               <div class="flex items-center justify-between pb-2.5 border-b border-purple-200">
@@ -678,6 +678,50 @@
                     <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=Dynamic)</span>
                   </label>
                   <input type="number" step="1" min="1" max="1000" id="pair2Sl" placeholder="e.g. 15" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                </div>
+              </div>
+            </div>
+
+            <!-- Pair 3 (Tertiary) -->
+            <div class="bg-purple-50/50 border border-purple-200 rounded-xl p-5 space-y-3.5">
+              <div class="flex items-center justify-between pb-2.5 border-b border-purple-200">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-3 h-3 rounded-full bg-cyan-500 shadow-sm"></span>
+                  <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 3 (Tertiary Instrument)</h4>
+                </div>
+                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
+                  <span>Enable Pair 3</span>
+                  <input type="checkbox" id="pair3Enabled" checked class="w-5 h-5 text-cyan-600 bg-white border-purple-300 rounded focus:ring-cyan-500 cursor-pointer" onchange="triggerAutoSave(0)">
+                </label>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label for="chart3Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
+                  <select id="chart3Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                    <option value="GBPUSD">GBPUSD (Forex)</option>
+                    <option value="XAUUSD">XAUUSD (Gold)</option>
+                    <option value="EURUSD">EURUSD (Forex)</option>
+                    <option value="BTCUSD">BTCUSD (Crypto)</option>
+                    <option value="ETHUSD">ETHUSD (Crypto)</option>
+                    <option value="NONE">None (Disabled)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="pair3Lot" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5 flex justify-between">
+                    <span>Fixed Lot</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=0.5%)</span>
+                  </label>
+                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair3Lot" placeholder="e.g. 0.05" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                </div>
+
+                <div>
+                  <label for="pair3Sl" class="block font-label-sm text-sm sm:text-base font-black text-cyan-900 mb-1.5 flex justify-between">
+                    <span>Fixed SL (Pips)</span>
+                    <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=Dynamic)</span>
+                  </label>
+                  <input type="number" step="1" min="1" max="1000" id="pair3Sl" placeholder="e.g. 20" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
               </div>
             </div>
@@ -1439,12 +1483,16 @@
 
         const c1 = document.getElementById('chart1Select');
         const c2 = document.getElementById('chart2Select');
+        const c3 = document.getElementById('chart3Select');
         const p1Enabled = document.getElementById('pair1Enabled');
         const p1Lot = document.getElementById('pair1Lot');
         const p1Sl = document.getElementById('pair1Sl');
         const p2Enabled = document.getElementById('pair2Enabled');
         const p2Lot = document.getElementById('pair2Lot');
         const p2Sl = document.getElementById('pair2Sl');
+        const p3Enabled = document.getElementById('pair3Enabled');
+        const p3Lot = document.getElementById('pair3Lot');
+        const p3Sl = document.getElementById('pair3Sl');
 
         const stratSMC = document.getElementById('stratSMC');
         const stratScalp = document.getElementById('stratScalp');
@@ -1455,7 +1503,7 @@
         const tickBtn = document.getElementById('tickBtn');
         const aiCb = document.getElementById('aiToggleCheckbox');
 
-        const formElements = [c1, c2, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, stratSMC, stratScalp, stratICT, stratOF, aiCb];
+        const formElements = [c1, c2, c3, p1Enabled, p1Lot, p1Sl, p2Enabled, p2Lot, p2Sl, p3Enabled, p3Lot, p3Sl, stratSMC, stratScalp, stratICT, stratOF, aiCb];
 
         if (isBotActive) {
           if (dot) dot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-ping";
@@ -1496,6 +1544,8 @@
         const isEditingP1Sl = document.activeElement === p1Sl;
         const isEditingP2Lot = document.activeElement === p2Lot;
         const isEditingP2Sl = document.activeElement === p2Sl;
+        const isEditingP3Lot = document.activeElement === p3Lot;
+        const isEditingP3Sl = document.activeElement === p3Sl;
 
         if (isBotActive || !hasLoadedInitialConfig || forceFormSync) {
           // Sync strategy checkboxes
@@ -1531,6 +1581,16 @@
             if (!isEditingP2Sl && p2Sl) p2Sl.value = data.pair2.fixed_sl_pips !== null && data.pair2.fixed_sl_pips !== undefined ? data.pair2.fixed_sl_pips : "";
           } else if (data.selected_symbols && data.selected_symbols.length > 1) {
             if (c2) c2.value = data.selected_symbols[1] || "EURUSD";
+          }
+
+          // Sync Pair 3
+          if (data.pair3) {
+            if (c3) c3.value = data.pair3.symbol || "GBPUSD";
+            if (p3Enabled) p3Enabled.checked = data.pair3.enabled;
+            if (!isEditingP3Lot && p3Lot) p3Lot.value = data.pair3.fixed_lot_size !== null && data.pair3.fixed_lot_size !== undefined ? data.pair3.fixed_lot_size : "";
+            if (!isEditingP3Sl && p3Sl) p3Sl.value = data.pair3.fixed_sl_pips !== null && data.pair3.fixed_sl_pips !== undefined ? data.pair3.fixed_sl_pips : "";
+          } else if (data.selected_symbols && data.selected_symbols.length > 2) {
+            if (c3) c3.value = data.selected_symbols[2] || "GBPUSD";
           }
 
           if (data.ai_confirmation_enabled !== undefined && aiCb && document.activeElement !== aiCb) {
@@ -1681,13 +1741,17 @@
     async function saveConfig(showNotification = true) {
       const c1 = document.getElementById('chart1Select').value;
       const c2 = document.getElementById('chart2Select').value;
+      const c3 = document.getElementById('chart3Select').value;
       const p1Enabled = document.getElementById('pair1Enabled').checked;
       const p2Enabled = document.getElementById('pair2Enabled').checked;
+      const p3Enabled = document.getElementById('pair3Enabled').checked;
 
       const p1LotVal = document.getElementById('pair1Lot').value.trim();
       const p1SlVal = document.getElementById('pair1Sl').value.trim();
       const p2LotVal = document.getElementById('pair2Lot').value.trim();
       const p2SlVal = document.getElementById('pair2Sl').value.trim();
+      const p3LotVal = document.getElementById('pair3Lot').value.trim();
+      const p3SlVal = document.getElementById('pair3Sl').value.trim();
 
       const stratSMC = document.getElementById('stratSMC').checked;
       const stratScalp = document.getElementById('stratScalp').checked;
@@ -1719,13 +1783,22 @@
         fixed_sl_pips: (p2SlVal && !isNaN(parseFloat(p2SlVal))) ? parseFloat(p2SlVal) : null
       };
 
-      if (!pair1Config.enabled && !pair2Config.enabled) {
+      const pair3Config = {
+        symbol: c3,
+        enabled: p3Enabled && c3 !== "NONE",
+        fixed_lot_size: (p3LotVal && !isNaN(parseFloat(p3LotVal))) ? parseFloat(p3LotVal) : null,
+        fixed_sl_pips: (p3SlVal && !isNaN(parseFloat(p3SlVal))) ? parseFloat(p3SlVal) : null
+      };
+
+      if (!pair1Config.enabled && !pair2Config.enabled && !pair3Config.enabled) {
         if (showNotification) showToast("Please enable at least 1 chart pair.", true);
         return false;
       }
 
-      if (pair1Config.enabled && pair2Config.enabled && pair1Config.symbol === pair2Config.symbol) {
-        if (showNotification) showToast("Pair 1 and Pair 2 cannot both use the same symbol.", true);
+      const activeConfigs = [pair1Config, pair2Config, pair3Config].filter(p => p.enabled);
+      const activeSymbols = activeConfigs.map(p => p.symbol);
+      if (new Set(activeSymbols).size !== activeSymbols.length) {
+        if (showNotification) showToast("Enabled chart pairs cannot share the same symbol.", true);
         return false;
       }
 
@@ -1743,12 +1816,15 @@
       } else {
         selectedPairs.push("XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD");
       }
-      // Ensure pair1 & pair2 symbols are included if enabled and not NONE
+      // Ensure pair1, pair2, & pair3 symbols are included if enabled and not NONE
       if (pair1Config.enabled && c1 && c1 !== 'NONE' && !selectedPairs.includes(c1)) {
         selectedPairs.unshift(c1);
       }
       if (pair2Config.enabled && c2 && c2 !== 'NONE' && !selectedPairs.includes(c2)) {
         selectedPairs.push(c2);
+      }
+      if (pair3Config.enabled && c3 && c3 !== 'NONE' && !selectedPairs.includes(c3)) {
+        selectedPairs.push(c3);
       }
       if (selectedPairs.length === 0) {
         if (showNotification) showToast("Please select at least 1 market pair to scan.", true);
@@ -1758,6 +1834,7 @@
       const payload = {
         pair1: pair1Config,
         pair2: pair2Config,
+        pair3: pair3Config,
         enabled_strategies: enabledStrats,
         ai_confirmation_enabled: aiEnabled,
         selected_symbols: selectedPairs,

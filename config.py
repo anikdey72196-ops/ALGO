@@ -353,7 +353,7 @@ class TradingConfig(BaseModel):
         description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW).",
     )
     
-    # Dual Independent Pair Configurations
+    # Independent Primary Pair Configurations (3 Pairs)
     pair1: PairSettings = Field(
         default_factory=lambda: PairSettings(symbol="XAUUSD", fixed_lot_size=0.05, fixed_sl_pips=25.0, enabled=True),
         description="Pair 1 configuration with independent lot size and SL.",
@@ -361,6 +361,10 @@ class TradingConfig(BaseModel):
     pair2: PairSettings = Field(
         default_factory=lambda: PairSettings(symbol="EURUSD", fixed_lot_size=0.10, fixed_sl_pips=15.0, enabled=True),
         description="Pair 2 configuration with independent lot size and SL.",
+    )
+    pair3: PairSettings = Field(
+        default_factory=lambda: PairSettings(symbol="GBPUSD", fixed_lot_size=0.05, fixed_sl_pips=20.0, enabled=True),
+        description="Pair 3 configuration with independent lot size and SL.",
     )
 
     # Legacy compatibility fields
