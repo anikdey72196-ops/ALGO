@@ -65,7 +65,21 @@
       background-color: #e4e9f3 !important;
     }
     #terminalContainer {
-      background-color: #e2e8f1 !important;
+      background-color: #0b0f19 !important;
+      color: #e2e8f0 !important;
+    }
+    #terminalContainer::-webkit-scrollbar {
+      width: 6px;
+    }
+    #terminalContainer::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+    #terminalContainer::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    #terminalContainer::-webkit-scrollbar-thumb:hover {
+      background: #475569;
     }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -690,8 +704,24 @@
           </div>
 
           <!-- Telemetry Log Sub-View Window -->
-          <div class="w-full h-[320px] bg-[#fbfaff] rounded-xl p-4 font-mono text-sm sm:text-base font-bold leading-relaxed text-slate-900 overflow-y-auto space-y-2.5 border border-purple-200 shadow-inner" id="terminalContainer">
-            <div class="text-slate-500 font-semibold">Connecting to trading engine log stream...</div>
+          <div class="w-full rounded-xl bg-[#0b0f19] border border-slate-800 shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-2 bg-[#111827] border-b border-slate-800/90 text-xs font-mono">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block"></span>
+                <span class="ml-2 font-semibold text-slate-300">algo-terminal@telemetry: ~</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="text-slate-400 hidden sm:inline">UTF-8</span>
+                <span class="inline-flex items-center gap-1.5 text-emerald-400 font-semibold">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> STREAMING
+                </span>
+              </div>
+            </div>
+            <div class="w-full h-[330px] bg-[#0b0f19] p-4 font-mono text-sm sm:text-base font-medium leading-relaxed text-slate-200 overflow-y-auto space-y-1.5" id="terminalContainer">
+              <div class="text-slate-400 font-medium">Connecting to trading engine log stream...</div>
+            </div>
           </div>
 
           <div class="flex items-center justify-between pt-3 mt-3 font-mono text-sm sm:text-base text-slate-800 font-black border-t border-purple-100">
@@ -1589,11 +1619,25 @@
         const term = document.getElementById('terminalContainer');
         if (term && data.recent_logs && data.recent_logs.length > 0) {
           term.innerHTML = data.recent_logs.map(log => {
-            let color = "text-slate-800 font-bold";
-            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) color = "text-emerald-800 font-black";
-            if (log.includes("⛔") || log.includes("🚫") || log.includes("DEACTIVATED")) color = "text-amber-800 font-black";
-            if (log.includes("❌") || log.includes("🛑") || log.includes("ERROR") || log.includes("FAILED")) color = "text-rose-700 font-black";
-            return `<div class="${color}">${log}</div>`;
+            let color = "text-slate-200 font-medium";
+            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) {
+              color = "text-emerald-400 font-bold";
+            } else if (log.includes("🪤") || log.includes("DECISION OVERRIDE") || log.includes("SKIPPED") || log.includes("vetoed")) {
+              color = "text-amber-300 font-bold";
+            } else if (log.includes("⛔") || log.includes("🚫") || log.includes("DEACTIVATED") || log.includes("⏸️")) {
+              color = "text-amber-400 font-semibold";
+            } else if (log.includes("❌") || log.includes("🛑") || log.includes("ERROR") || log.includes("FAILED")) {
+              color = "text-rose-400 font-bold";
+            } else if (log.includes("🔬") || log.includes("ML MODEL APPROVED")) {
+              color = "text-cyan-300 font-bold";
+            } else if (log.includes("🤖") || log.includes("AI CONFIRMED")) {
+              color = "text-indigo-300 font-medium";
+            } else if (log.includes("─── TICK")) {
+              color = "text-purple-300 font-semibold";
+            } else if (log.includes("💰 AUTHORIZED")) {
+              color = "text-emerald-300 font-medium";
+            }
+            return `<div class="${color} hover:bg-slate-800/50 px-1.5 py-0.5 rounded transition-colors tracking-wide break-words">${log}</div>`;
           }).join('');
           term.scrollTop = term.scrollHeight;
         }
