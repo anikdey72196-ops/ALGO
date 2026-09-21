@@ -423,6 +423,22 @@ class TradingConfig(BaseModel):
         default=True,
         description="Enable AI (Gemini) second-opinion confirmation before trade execution.",
     )
+    # Machine Learning Trap & SL Gate Settings
+    ml_gating_enabled: bool = Field(
+        default=True,
+        description="When enabled, ML model predicts probability of hitting SL; skips trade if P(SL) is high.",
+    )
+    ml_max_sl_probability: float = Field(
+        default=0.50,
+        ge=0.10,
+        le=0.90,
+        description="Maximum allowed probability of hitting Stop Loss before ML vetoes the trade (e.g. 0.50 = 50%).",
+    )
+    ml_shadow_until_samples: int = Field(
+        default=0,
+        ge=0,
+        description="Number of samples before active gating begins (0 = immediate active protection).",
+    )
     gemini_api_key: str | None = Field(
         default=None,
         description="Google Gemini API key. If None, checks GEMINI_API_KEY environment variable.",

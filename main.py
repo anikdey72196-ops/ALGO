@@ -115,12 +115,13 @@ class TradingBot:
         self.ai_analyst = AIAnalyst(self.config)
         self.broker = create_broker(self.config)
 
-        # ML Trap Detector — veto gate for FVG / Sweep setups
+        # ML Trap Detector — veto gate for high Stop Loss risk and retail traps
         trap_cfg = TrapDetectorConfig(
             db_path=self.config.db_path,
             model_path="ml/artifacts/trap_detector.joblib",
-            p_genuine_threshold=0.55,
-            shadow_until_samples=200,
+            p_genuine_threshold=1.0 - getattr(self.config, 'ml_max_sl_probability', 0.50),
+            max_sl_probability=getattr(self.config, 'ml_max_sl_probability', 0.50),
+            shadow_until_samples=getattr(self.config, 'ml_shadow_until_samples', 0),
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
 
@@ -177,13 +178,21 @@ class TradingBot:
                     self.config.risk.max_open_positions = saved["max_open_positions"]
                 if "ai_confirmation_enabled" in saved:
                     self.config.ai_confirmation_enabled = bool(saved["ai_confirmation_enabled"])
+                if "ml_gating_enabled" in saved:
+                    self.config.ml_gating_enabled = bool(saved["ml_gating_enabled"])
+                if "ml_max_sl_probability" in saved and isinstance(saved["ml_max_sl_probability"], (int, float)):
+                    self.config.ml_max_sl_probability = float(saved["ml_max_sl_probability"])
+                    if hasattr(self, "trap_svc") and self.trap_svc:
+                        self.trap_svc.cfg.max_sl_probability = self.config.ml_max_sl_probability
+                        self.trap_svc.cfg.p_genuine_threshold = 1.0 - self.config.ml_max_sl_probability
 
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
                     f"Strategies={self.config.enabled_strategies} | "
                     f"MaxOpen={self.config.risk.max_open_positions} | "
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
-                    f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips})"
+                    f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
+                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f})"
                 )
             except Exception as e:
                 logger.warning(f"Failed to load bot_settings.json: {e}")
@@ -212,6 +221,8 @@ class TradingBot:
                 "fixed_sl_pips": self.config.fixed_sl_pips,
                 "max_open_positions": self.config.risk.max_open_positions,
                 "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
+                "ml_gating_enabled": getattr(self.config, "ml_gating_enabled", True),
+                "ml_max_sl_probability": getattr(self.config, "ml_max_sl_probability", 0.50),
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
@@ -590,36 +601,43 @@ class TradingBot:
                     f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
                 )
 
-                # ── Step 2c-1.5: ML Trap Detector Gate (FVG / Sweep veto) ──
-                trap_kind = self._signal_to_trap_kind(best_signal)
-                if trap_kind is not None and ltf_data is not None:
-                    try:
-                        trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
-                        ml_df = self._prepare_df_for_trap_detector(ltf_data)
-                        trap_ev = self.trap_svc.observe_event(
-                            symbol=symbol,
-                            timeframe=ltf_tf,
-                            kind=trap_kind,
-                            direction=trap_dir,
-                            entry=best_signal.entry_price,
-                            stop=best_signal.stop_loss,
-                            target=best_signal.take_profit,
-                            df=ml_df,
-                            bar_index=len(ml_df) - 1,
-                        )
-                        if not trap_ev.allowed:
-                            self.log(
-                                f"  🪤 TRAP GATE VETO | p_genuine={trap_ev.p_genuine:.3f} "
-                                f"| {trap_kind.value} | model={trap_ev.model_version}",
-                                level="WARNING",
+                # ── Step 2c-1.5: ML Trap Detector Gate (High Stop Loss Risk Veto) ──
+                if getattr(self.config, 'ml_gating_enabled', True):
+                    trap_kind = self._signal_to_trap_kind(best_signal)
+                    if trap_kind is not None and ltf_data is not None:
+                        try:
+                            trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
+                            ml_df = self._prepare_df_for_trap_detector(ltf_data)
+                            trap_ev = self.trap_svc.observe_event(
+                                symbol=symbol,
+                                timeframe=ltf_tf,
+                                kind=trap_kind,
+                                direction=trap_dir,
+                                entry=best_signal.entry_price,
+                                stop=best_signal.stop_loss,
+                                target=best_signal.take_profit,
+                                df=ml_df,
+                                bar_index=len(ml_df) - 1,
                             )
-                            continue
-                        self.log(
-                            f"  🔬 Trap Gate: p_genuine={trap_ev.p_genuine:.3f} "
-                            f"| {trap_kind.value} | mode={'shadow' if trap_ev.model_version == 'cold' else 'gated'}"
-                        )
-                    except Exception as e:
-                        self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
+                            p_tp = trap_ev.p_genuine if trap_ev.p_genuine is not None else 0.50
+                            p_sl = 1.0 - p_tp
+                            max_sl_thr = getattr(self.trap_svc.cfg, 'max_sl_probability', 0.50)
+
+                            if not trap_ev.allowed:
+                                self.log(
+                                    f"  🪤 [ML DECISION OVERRIDE] Trade SKIPPED: High chance of Stop Loss "
+                                    f"(P(SL)={p_sl*100:.1f}% > {max_sl_thr*100:.1f}%, P(TP)={p_tp*100:.1f}%) "
+                                    f"| Strategy '{best_signal.strategy_name}' on {symbol} vetoed by ML Model ({trap_ev.model_version})",
+                                    level="WARNING",
+                                )
+                                continue
+                            self.log(
+                                f"  🔬 [ML MODEL APPROVED] Setup verified genuine (P(TP)={p_tp*100:.1f}%, "
+                                f"P(SL)={p_sl*100:.1f}% <= {max_sl_thr*100:.1f}%) | "
+                                f"Model={trap_ev.model_version} | Proceeding to AI & Risk validation"
+                            )
+                        except Exception as e:
+                            self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
 
                 # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
                 ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
@@ -773,30 +791,30 @@ class TradingBot:
 
     # ── Trap Detector helpers ──
 
-    _TRAP_KIND_MAP: dict[str, EventKind] = {
-        "FVG_MITIGATION":    EventKind.FVG_BULL,   # direction resolved at call site
-        "OB_PLUS_FVG":       EventKind.FVG_BULL,
-        "ICT_KILLZONE_FVG":  EventKind.FVG_BULL,
-        "LIQUIDITY_SWEEP":   EventKind.SWEEP_BSL,  # direction resolved at call site
-        "OF_LIQUIDITY_TRAP": EventKind.SWEEP_BSL,
+    _SWEEP_CONFIRMATIONS = {
+        "LIQUIDITY_SWEEP",
+        "OF_LIQUIDITY_TRAP",
+        "ICT_JUDAS_SWING",
+        "OF_ABSORPTION",
+        "OF_DELTA_DIVERGENCE",
     }
 
-    def _signal_to_trap_kind(self, sig: TradeSignal) -> EventKind | None:
-        """Map a TradeSignal's LTF confirmation to a TrapDetector EventKind.
+    def _signal_to_trap_kind(self, sig: TradeSignal) -> EventKind:
+        """Map any TradeSignal's LTF confirmation to a TrapDetector EventKind.
 
-        Returns None for confirmation types that don't correspond to an FVG or
-        sweep pattern (OB-only, scalps, etc.) — those pass through unfiltered.
+        Ensures 100% of strategy setups (SMC Swing, 5M Scalp, ICT Institutional,
+        and Order Flow) are evaluated by the ML model.
         """
-        base = self._TRAP_KIND_MAP.get(sig.ltf_confirmation.value)
-        if base is None:
-            return None
-        # Resolve directional variant
-        if base in (EventKind.FVG_BULL, EventKind.FVG_BEAR):
-            return EventKind.FVG_BULL if sig.direction == Direction.BUY else EventKind.FVG_BEAR
-        # Sweeps: BSL taken → potential short; SSL taken → potential long
-        if sig.direction == Direction.BUY:
-            return EventKind.SWEEP_SSL
-        return EventKind.SWEEP_BSL
+        conf_val = getattr(sig.ltf_confirmation, "value", str(sig.ltf_confirmation))
+        is_buy = (sig.direction == Direction.BUY)
+
+        if conf_val in self._SWEEP_CONFIRMATIONS:
+            # Sweeps: SSL taken (liquidity swept below) -> potential long;
+            # BSL taken (liquidity swept above) -> potential short
+            return EventKind.SWEEP_SSL if is_buy else EventKind.SWEEP_BSL
+
+        # Zone, FVG, Retest, Scalp, and Structural Setups:
+        return EventKind.FVG_BULL if is_buy else EventKind.FVG_BEAR
 
     def set_data(self, symbol: str, timeframe: str, df) -> None:
         """Manually inject OHLCV data (useful for backtesting)."""

@@ -67,9 +67,10 @@ class TrapDetectorConfig(BaseModel):
     model_path: str = "ml/artifacts/trap_detector.joblib"
 
     # Gate behavior
-    p_genuine_threshold: float = 0.55       # block if P(genuine) < threshold
-    shadow_until_samples: int = 200         # first N samples never block
-    fail_open_on_error: bool = True         # inference error -> allow? (shadow only)
+    p_genuine_threshold: float = 0.50       # block if P(genuine) < threshold
+    max_sl_probability: float = 0.50        # block if P(SL) > max_sl_probability
+    shadow_until_samples: int = 0           # 0 = immediate active gating
+    fail_open_on_error: bool = False        # inference error -> allow? (fail closed in production)
 
     # Labeling
     label_max_bars: int = 30                # triple-barrier horizon (bars)
@@ -86,11 +87,11 @@ class TrapDetectorConfig(BaseModel):
     pd_lookback: int = 100                  # premium/discount window
     eq_lookback: int = 50                   # equal-highs/lows window
 
-    @field_validator("p_genuine_threshold")
+    @field_validator("p_genuine_threshold", "max_sl_probability")
     @classmethod
     def _thr(cls, v: float) -> float:
         if not 0.0 < v < 1.0:
-            raise ValueError("p_genuine_threshold must be in (0, 1)")
+            raise ValueError("probability thresholds must be in (0, 1)")
         return v
 
 
@@ -669,8 +670,8 @@ class TrapGate:
         self.cfg = cfg
 
     def evaluate(self, kind: EventKind, features: dict[str, float]) -> GateDecision:
-        # Shadow mode: log everything, block nothing.
-        if self.model.n_samples < self.cfg.shadow_until_samples:
+        # Shadow mode only if explicitly configured with shadow_until_samples > 0 and model unfitted
+        if self.cfg.shadow_until_samples > 0 and self.model.n_samples < self.cfg.shadow_until_samples and not self.model._sgd_fitted and self.model.lgbm is None:
             return GateDecision(
                 allow=True,
                 p_genuine=0.5,
@@ -686,20 +687,24 @@ class TrapGate:
         except Exception as exc:
             logger.exception("TrapGate inference failed: %s", exc)
             return GateDecision(
-                allow=self.cfg.fail_open_on_error and self.model.n_samples < self.cfg.shadow_until_samples,
+                allow=self.cfg.fail_open_on_error,
                 p_genuine=0.5,
                 mode="error",
                 model_version=self.model.version,
                 reason=f"inference error: {exc}",
             )
 
-        allow = p >= self.cfg.p_genuine_threshold
+        p_sl = 1.0 - p
+        effective_max_sl = getattr(self.cfg, "max_sl_probability", 1.0 - self.cfg.p_genuine_threshold)
+        is_sl_high = (p_sl > effective_max_sl) or (p < self.cfg.p_genuine_threshold)
+        allow = not is_sl_high
+
         return GateDecision(
             allow=allow,
             p_genuine=p,
             mode="gated",
             model_version=self.model.version,
-            reason="passed" if allow else f"p_genuine={p:.3f} < {self.cfg.p_genuine_threshold}",
+            reason="passed" if allow else f"High SL probability: P(SL)={p_sl*100:.1f}% > {effective_max_sl*100:.1f}% (P(TP)={p*100:.1f}%)",
         )
 
 

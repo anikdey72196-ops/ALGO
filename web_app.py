@@ -55,6 +55,8 @@ class BotConfigUpdate(BaseModel):
     fixed_sl_pips: Optional[float] = None
     ai_confirmation_enabled: Optional[bool] = None
     max_open_positions: Optional[int] = None
+    ml_gating_enabled: Optional[bool] = None
+    ml_max_sl_probability: Optional[float] = None
 
 
 class BotStateResponse(BaseModel):
@@ -69,6 +71,8 @@ class BotStateResponse(BaseModel):
     max_open_positions: int = 15
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
+    ml_gating_enabled: bool = True
+    ml_max_sl_probability: float = 0.50
     equity: float
     daily_pnl: float
     trades_today: int
@@ -222,16 +226,24 @@ async def get_bot_state():
     if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
         try:
             store_stats = bot_instance.trap_svc.store.stats()
+            is_shadow = (
+                bot_instance.trap_svc.cfg.shadow_until_samples > 0
+                and bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples
+                and not bot_instance.trap_svc.model._sgd_fitted
+                and bot_instance.trap_svc.model.lgbm is None
+            )
             trap_stats = {
                 "model_version": bot_instance.trap_svc.model.version,
                 "n_samples": bot_instance.trap_svc.model.n_samples,
                 "shadow_until": bot_instance.trap_svc.cfg.shadow_until_samples,
-                "mode": "shadow" if bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples else "gated",
-                "threshold": bot_instance.trap_svc.cfg.p_genuine_threshold,
+                "mode": "shadow" if is_shadow else "gated",
+                "threshold": getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50),
+                "max_sl_probability": getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50),
                 "total_events": store_stats.get("total", 0),
                 "labeled_events": store_stats.get("labeled", 0),
                 "traps_caught": store_stats.get("traps", 0),
                 "genuine_setups": store_stats.get("genuine", 0),
+                "gating_enabled": getattr(bot_instance.config, "ml_gating_enabled", True),
             }
         except Exception as e:
             trap_stats = {"error": str(e)}
@@ -258,6 +270,8 @@ async def get_bot_state():
         max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 15),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
+        ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
+        ml_max_sl_probability=getattr(bot_instance.config, "ml_max_sl_probability", 0.50),
         equity=round(equity, 2),
         daily_pnl=round(daily_pnl, 2),
         trades_today=trade_count,
@@ -478,6 +492,25 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.ai_confirmation_enabled = payload.ai_confirmation_enabled
 
+    if payload.ml_gating_enabled is not None:
+        if bot_instance.is_active and payload.ml_gating_enabled != getattr(bot_instance.config, 'ml_gating_enabled', True):
+            raise HTTPException(
+                status_code=400,
+                detail="ML Trap Gate setting is LOCKED during activation! Deactivate the bot first to toggle ML filter."
+            )
+        bot_instance.config.ml_gating_enabled = payload.ml_gating_enabled
+
+    if payload.ml_max_sl_probability is not None:
+        if bot_instance.is_active and payload.ml_max_sl_probability != getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):
+            raise HTTPException(
+                status_code=400,
+                detail="ML Max Stop Loss Risk threshold is LOCKED during activation! Deactivate the bot first to modify threshold."
+            )
+        bot_instance.config.ml_max_sl_probability = payload.ml_max_sl_probability
+        if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+            bot_instance.trap_svc.cfg.max_sl_probability = payload.ml_max_sl_probability
+            bot_instance.trap_svc.cfg.p_genuine_threshold = 1.0 - payload.ml_max_sl_probability
+
     # Persist updated configuration to bot_settings.json
     bot_instance.save_settings()
 
@@ -487,7 +520,8 @@ async def update_configuration(payload: BotConfigUpdate):
         f"Pair 2={bot_instance.config.pair2.symbol} (lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
         f"Strategies={bot_instance.config.enabled_strategies} | "
         f"Max Open Positions={bot_instance.config.risk.max_open_positions} | "
-        f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'}"
+        f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'} | "
+        f"ML Trap Filter={'ON' if getattr(bot_instance.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):.2f})"
     )
 
     return {
