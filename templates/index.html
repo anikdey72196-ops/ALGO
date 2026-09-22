@@ -610,7 +610,7 @@
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label for="chart1Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
-                  <select id="chart1Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                  <select id="chart1Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="handlePairSelectChange(1)">
                     <option value="XAUUSD">XAUUSD (Gold)</option>
                     <option value="EURUSD">EURUSD (Forex)</option>
                     <option value="GBPUSD">GBPUSD (Forex)</option>
@@ -654,7 +654,7 @@
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label for="chart2Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
-                  <select id="chart2Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                  <select id="chart2Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="handlePairSelectChange(2)">
                     <option value="EURUSD">EURUSD (Forex)</option>
                     <option value="XAUUSD">XAUUSD (Gold)</option>
                     <option value="GBPUSD">GBPUSD (Forex)</option>
@@ -698,7 +698,7 @@
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label for="chart3Select" class="block font-label-sm text-sm sm:text-base font-black text-slate-950 mb-1.5">Symbol</label>
-                  <select id="chart3Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="triggerAutoSave(0)">
+                  <select id="chart3Select" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" onchange="handlePairSelectChange(3)">
                     <option value="GBPUSD">GBPUSD (Forex)</option>
                     <option value="XAUUSD">XAUUSD (Gold)</option>
                     <option value="EURUSD">EURUSD (Forex)</option>
@@ -713,7 +713,7 @@
                     <span>Fixed Lot</span>
                     <span class="text-slate-600 font-black text-xs sm:text-sm">(Blank=0.5%)</span>
                   </label>
-                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair3Lot" placeholder="e.g. 0.05" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
+                  <input type="number" step="0.01" min="0.01" max="100.0" id="pair3Lot" placeholder="e.g. 0.12" class="w-full bg-white border border-purple-300 rounded-xl px-4 py-3 text-base sm:text-lg font-black font-mono text-slate-950 focus:outline-none focus:border-primary transition-all disabled:opacity-60 shadow-sm" oninput="triggerAutoSave(600)">
                 </div>
 
                 <div>
@@ -1546,6 +1546,9 @@
         const isEditingP2Sl = document.activeElement === p2Sl;
         const isEditingP3Lot = document.activeElement === p3Lot;
         const isEditingP3Sl = document.activeElement === p3Sl;
+        const isEditingC1 = document.activeElement === c1;
+        const isEditingC2 = document.activeElement === c2;
+        const isEditingC3 = document.activeElement === c3;
 
         if (isBotActive || !hasLoadedInitialConfig || forceFormSync) {
           // Sync strategy checkboxes
@@ -1563,34 +1566,40 @@
 
           // Sync Pair 1
           if (data.pair1) {
-            if (c1) c1.value = data.pair1.symbol || "XAUUSD";
+            if (!isEditingC1 && c1) c1.value = data.pair1.symbol || "XAUUSD";
             if (p1Enabled) p1Enabled.checked = data.pair1.enabled;
             if (!isEditingP1Lot && p1Lot) p1Lot.value = data.pair1.fixed_lot_size !== null && data.pair1.fixed_lot_size !== undefined ? data.pair1.fixed_lot_size : "";
             if (!isEditingP1Sl && p1Sl) p1Sl.value = data.pair1.fixed_sl_pips !== null && data.pair1.fixed_sl_pips !== undefined ? data.pair1.fixed_sl_pips : "";
           } else if (data.selected_symbols && data.selected_symbols.length > 0) {
-            if (c1) c1.value = data.selected_symbols[0] || "XAUUSD";
+            if (!isEditingC1 && c1) c1.value = data.selected_symbols[0] || "XAUUSD";
             if (!isEditingP1Lot && p1Lot && data.fixed_lot_size !== undefined) p1Lot.value = data.fixed_lot_size || "";
             if (!isEditingP1Sl && p1Sl && data.fixed_sl_pips !== undefined) p1Sl.value = data.fixed_sl_pips || "";
           }
 
           // Sync Pair 2
           if (data.pair2) {
-            if (c2) c2.value = data.pair2.symbol || "EURUSD";
+            if (!isEditingC2 && c2) c2.value = data.pair2.symbol || "EURUSD";
             if (p2Enabled) p2Enabled.checked = data.pair2.enabled;
             if (!isEditingP2Lot && p2Lot) p2Lot.value = data.pair2.fixed_lot_size !== null && data.pair2.fixed_lot_size !== undefined ? data.pair2.fixed_lot_size : "";
             if (!isEditingP2Sl && p2Sl) p2Sl.value = data.pair2.fixed_sl_pips !== null && data.pair2.fixed_sl_pips !== undefined ? data.pair2.fixed_sl_pips : "";
           } else if (data.selected_symbols && data.selected_symbols.length > 1) {
-            if (c2) c2.value = data.selected_symbols[1] || "EURUSD";
+            if (!isEditingC2 && c2) c2.value = data.selected_symbols[1] || "EURUSD";
           }
 
           // Sync Pair 3
           if (data.pair3) {
-            if (c3) c3.value = data.pair3.symbol || "GBPUSD";
+            if (!isEditingC3 && c3) c3.value = data.pair3.symbol || "GBPUSD";
             if (p3Enabled) p3Enabled.checked = data.pair3.enabled;
             if (!isEditingP3Lot && p3Lot) p3Lot.value = data.pair3.fixed_lot_size !== null && data.pair3.fixed_lot_size !== undefined ? data.pair3.fixed_lot_size : "";
             if (!isEditingP3Sl && p3Sl) p3Sl.value = data.pair3.fixed_sl_pips !== null && data.pair3.fixed_sl_pips !== undefined ? data.pair3.fixed_sl_pips : "";
           } else if (data.selected_symbols && data.selected_symbols.length > 2) {
-            if (c3) c3.value = data.selected_symbols[2] || "GBPUSD";
+            if (!isEditingC3 && c3) c3.value = data.selected_symbols[2] || "GBPUSD";
+          }
+
+          if (typeof prevPairSymbols !== 'undefined') {
+            if (c1) prevPairSymbols[1] = c1.value;
+            if (c2) prevPairSymbols[2] = c2.value;
+            if (c3) prevPairSymbols[3] = c3.value;
           }
 
           if (data.ai_confirmation_enabled !== undefined && aiCb && document.activeElement !== aiCb) {
@@ -1705,6 +1714,41 @@
       } catch (err) {
         console.error("Failed to fetch bot state:", err);
       }
+    }
+
+    let prevPairSymbols = {
+      1: "XAUUSD",
+      2: "EURUSD",
+      3: "GBPUSD"
+    };
+
+    function handlePairSelectChange(pairNum) {
+      const c1 = document.getElementById('chart1Select');
+      const c2 = document.getElementById('chart2Select');
+      const c3 = document.getElementById('chart3Select');
+      const selects = { 1: c1, 2: c2, 3: c3 };
+
+      const currentSelect = selects[pairNum];
+      if (!currentSelect) return;
+      const newSym = currentSelect.value;
+      const prevSym = prevPairSymbols[pairNum];
+
+      if (newSym !== "NONE") {
+        // If another pair already has this symbol, swap with this pair's previous symbol
+        for (const [otherNum, otherSelect] of Object.entries(selects)) {
+          if (parseInt(otherNum) !== pairNum && otherSelect && otherSelect.value === newSym) {
+            otherSelect.value = (prevSym && prevSym !== newSym) ? prevSym : "NONE";
+            prevPairSymbols[otherNum] = otherSelect.value;
+            break;
+          }
+        }
+      }
+
+      prevPairSymbols[1] = c1 ? c1.value : "XAUUSD";
+      prevPairSymbols[2] = c2 ? c2.value : "EURUSD";
+      prevPairSymbols[3] = c3 ? c3.value : "GBPUSD";
+
+      triggerAutoSave(0);
     }
 
     let autoSaveTimer = null;

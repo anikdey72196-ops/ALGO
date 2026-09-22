@@ -472,6 +472,11 @@ class TradingBot:
             pair_lot = pair_info["fixed_lot_size"]
             pair_sl = pair_info["fixed_sl_pips"]
 
+            htf_tf = "1H"
+            ltf_tf = "5m" if ("SMC_SCALP_5M" in self.config.enabled_strategies or "ICT" in self.config.enabled_strategies or "ORDER_FLOW" in self.config.enabled_strategies) else self.config.timeframes.ltf
+
+            self.log(f"Analyzing Pair {pair_num} ({symbol}) | Sizing: lot={pair_lot or 'Dynamic'}, SL={pair_sl or 'Dynamic'} pips | HTF: {htf_tf} | LTF: {ltf_tf}...")
+
             # Dynamic check: Re-fetch open positions so that as trades execute on earlier pairs,
             # subsequent pairs immediately see the updated open count within the exact same scan cycle!
             open_trades = self.state.get_open_positions()
@@ -499,11 +504,6 @@ class TradingBot:
                     f"Skipping new entry for Pair {pair_num}."
                 )
                 continue
-
-            htf_tf = "1H"
-            ltf_tf = "5m" if ("SMC_SCALP_5M" in self.config.enabled_strategies or "ICT" in self.config.enabled_strategies or "ORDER_FLOW" in self.config.enabled_strategies) else self.config.timeframes.ltf
-
-            self.log(f"Analyzing Pair {pair_num} ({symbol}) | Sizing: lot={pair_lot or 'Dynamic'}, SL={pair_sl or 'Dynamic'} pips | HTF: {htf_tf} | LTF: {ltf_tf}...")
 
             # ── Step 2a: Fetch current price ──
             quote = self.broker.get_current_price(symbol)

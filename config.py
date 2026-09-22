@@ -363,7 +363,7 @@ class TradingConfig(BaseModel):
         description="Pair 2 configuration with independent lot size and SL.",
     )
     pair3: PairSettings = Field(
-        default_factory=lambda: PairSettings(symbol="GBPUSD", fixed_lot_size=0.05, fixed_sl_pips=20.0, enabled=True),
+        default_factory=lambda: PairSettings(symbol="GBPUSD", fixed_lot_size=0.12, fixed_sl_pips=20.0, enabled=True),
         description="Pair 3 configuration with independent lot size and SL.",
     )
 
