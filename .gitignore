@@ -9,3 +9,5 @@ assistant.db
 bot_settings.json
 sessions_history.csv
 trades_history.csv
+.agents/
+graphify-out

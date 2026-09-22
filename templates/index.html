@@ -776,98 +776,107 @@
 
       </section>
 
-      <!-- ==================== TAB 2: PERFORMANCE ANALYTICS ==================== -->
       <section id="viewAnalytics" class="hidden space-y-6">
 
         <!-- Primary Metric Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <!-- 1. Total TP -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs sm:text-sm font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[19px]">target</span> Total Take Profit (TP)
-              </span>
-              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-emerald-50 border border-emerald-300 text-emerald-800">WINS</span>
+          <!-- 1. Total TP (Emerald Theme) -->
+          <div class="bg-gradient-to-b from-emerald-50/95 to-emerald-100/40 border border-emerald-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-[0_8px_25px_-5px_rgba(16,185,129,0.22)] hover:border-emerald-400 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center gap-1">
+                <span class="font-label-sm text-xs font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[18px] text-emerald-600">target</span> TP Hits
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100/90 border border-emerald-300 text-emerald-800">WINS</span>
+              </div>
+              <div class="flex items-baseline gap-1.5 mt-2.5">
+                <div id="analyticsTotalTP" class="text-3xl sm:text-4xl font-black text-emerald-700 font-mono">0</div>
+                <div class="text-xs text-emerald-700/80 font-bold">hits</div>
+              </div>
             </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalTP" class="text-4xl sm:text-5xl font-black text-emerald-700 font-mono">0</div>
-              <div class="text-xs sm:text-sm text-slate-500 font-bold">hits</div>
-            </div>
-            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
-              <span>Total Realized Profit:</span>
+            <div class="mt-3 pt-2.5 border-t border-emerald-200/70 flex items-center justify-between text-[11px] sm:text-xs text-emerald-900/80 font-bold">
+              <span>Realized Profit:</span>
               <span id="analyticsTPAmount" class="font-black text-emerald-700 font-mono">+$0.00</span>
             </div>
           </div>
 
-          <!-- 2. Total SL -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs sm:text-sm font-black text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[19px]">cancel</span> Total Stop Loss (SL)
-              </span>
-              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-rose-50 border border-rose-300 text-rose-800">LOSSES</span>
+          <!-- 2. Total SL (Rose Theme) -->
+          <div class="bg-gradient-to-b from-rose-50/95 to-rose-100/40 border border-rose-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-[0_8px_25px_-5px_rgba(244,63,94,0.22)] hover:border-rose-400 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center gap-1">
+                <span class="font-label-sm text-xs font-black text-rose-800 uppercase tracking-wider flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[18px] text-rose-600">cancel</span> SL Hits
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100/90 border border-rose-300 text-rose-800">LOSSES</span>
+              </div>
+              <div class="flex items-baseline gap-1.5 mt-2.5">
+                <div id="analyticsTotalSL" class="text-3xl sm:text-4xl font-black text-rose-700 font-mono">0</div>
+                <div class="text-xs text-rose-700/80 font-bold">hits</div>
+              </div>
             </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalSL" class="text-4xl sm:text-5xl font-black text-rose-700 font-mono">0</div>
-              <div class="text-xs sm:text-sm text-slate-500 font-bold">hits</div>
-            </div>
-            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
-              <span>Total Stopped Out:</span>
+            <div class="mt-3 pt-2.5 border-t border-rose-200/70 flex items-center justify-between text-[11px] sm:text-xs text-rose-900/80 font-bold">
+              <span>Stopped Out:</span>
               <span id="analyticsSLAmount" class="font-black text-rose-700 font-mono">-$0.00</span>
             </div>
           </div>
 
-          <!-- 4. Risk:Reward (R:R) -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs sm:text-sm font-black text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[19px]">balance</span> Risk : Reward (R:R)
-              </span>
-              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-indigo-50 border border-indigo-300 text-indigo-800">TARGET</span>
+          <!-- 3. Risk:Reward (R:R) (Indigo Theme) -->
+          <div class="bg-gradient-to-b from-indigo-50/95 to-indigo-100/40 border border-indigo-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-[0_8px_25px_-5px_rgba(99,102,241,0.22)] hover:border-indigo-400 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center gap-1">
+                <span class="font-label-sm text-xs font-black text-indigo-800 uppercase tracking-wider flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[18px] text-indigo-600">balance</span> Risk : Reward
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100/90 border border-indigo-300 text-indigo-800">TARGET</span>
+              </div>
+              <div class="flex items-baseline gap-1.5 mt-2.5">
+                <div id="analyticsPlannedRR" class="text-2xl sm:text-3xl font-black text-indigo-700 font-mono">1:2.50</div>
+                <div class="text-xs text-indigo-700/80 font-bold">planned</div>
+              </div>
             </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsPlannedRR" class="text-4xl sm:text-5xl font-black text-indigo-700 font-mono">1:2.50</div>
-              <div class="text-xs sm:text-sm text-slate-500 font-bold">planned</div>
-            </div>
-            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
-              <span>Realized R:R (Avg Win/Loss):</span>
+            <div class="mt-3 pt-2.5 border-t border-indigo-200/70 flex items-center justify-between text-[11px] sm:text-xs text-indigo-900/80 font-bold">
+              <span>Realized R:R:</span>
               <span id="analyticsRealizedRR" class="font-black text-indigo-800 font-mono">1:2.50</span>
             </div>
           </div>
 
-          <!-- 5. Total Trades -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs sm:text-sm font-black text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[19px]">inventory_2</span> Total Trades Executed
-              </span>
-              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-amber-50 border border-amber-300 text-amber-800">LIFETIME</span>
+          <!-- 4. Total Trades (Amber Theme) -->
+          <div class="bg-gradient-to-b from-amber-50/95 to-amber-100/40 border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-[0_8px_25px_-5px_rgba(245,158,11,0.22)] hover:border-amber-400 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center gap-1">
+                <span class="font-label-sm text-xs font-black text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[18px] text-amber-600">inventory_2</span> Total Trades
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100/90 border border-amber-300 text-amber-800">LIFETIME</span>
+              </div>
+              <div class="flex items-baseline gap-1.5 mt-2.5">
+                <div id="analyticsTotalTrades" class="text-3xl sm:text-4xl font-black text-amber-950 font-mono">0</div>
+                <div class="text-xs text-amber-800/80 font-bold">entries</div>
+              </div>
             </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsTotalTrades" class="text-4xl sm:text-5xl font-black text-slate-950 font-mono">0</div>
-              <div class="text-xs sm:text-sm text-slate-500 font-bold">total entries</div>
-            </div>
-            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
-              <span>Position Status:</span>
-              <span class="font-black text-slate-900"><span id="analyticsClosedTrades">0</span> Closed · <span id="analyticsOpenTrades">0</span> Open</span>
+            <div class="mt-3 pt-2.5 border-t border-amber-200/70 flex items-center justify-between text-[11px] sm:text-xs text-amber-900/80 font-bold">
+              <span>Status:</span>
+              <span class="font-black text-amber-950 whitespace-nowrap"><span id="analyticsClosedTrades">0</span> Closed · <span id="analyticsOpenTrades">0</span> Open</span>
             </div>
           </div>
 
-          <!-- 6. Holding Time -->
-          <div class="bg-white border border-purple-100 rounded-2xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-              <span class="font-label-sm text-xs sm:text-sm font-black text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[19px]">schedule</span> Holding Time
-              </span>
-              <span class="px-2.5 py-0.5 rounded text-xs font-black bg-blue-50 border border-blue-300 text-blue-800">DURATION</span>
+          <!-- 5. Holding Time (Sky Blue Theme) -->
+          <div class="bg-gradient-to-b from-sky-50/95 to-sky-100/40 border border-sky-200/90 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-[0_8px_25px_-5px_rgba(14,165,233,0.22)] hover:border-sky-400 transition-all flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center gap-1">
+                <span class="font-label-sm text-xs font-black text-sky-800 uppercase tracking-wider flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[18px] text-sky-600">schedule</span> Holding Time
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-sky-100/90 border border-sky-300 text-sky-800">DURATION</span>
+              </div>
+              <div class="flex items-baseline gap-1.5 mt-2.5">
+                <div id="analyticsAvgHolding" class="text-xl sm:text-2xl font-black text-sky-700 font-mono whitespace-nowrap">0s</div>
+                <div class="text-xs text-sky-700/80 font-bold">avg</div>
+              </div>
             </div>
-            <div class="flex items-baseline gap-2 mt-3">
-              <div id="analyticsAvgHolding" class="text-4xl sm:text-5xl font-black text-blue-700 font-mono">0s</div>
-              <div class="text-xs sm:text-sm text-slate-500 font-bold">avg per trade</div>
-            </div>
-            <div class="mt-2.5 pt-2.5 border-t border-purple-100 flex items-center justify-between text-xs sm:text-sm text-slate-600 font-bold">
-              <span>Total Market Exposure:</span>
-              <span id="analyticsTotalHolding" class="font-black text-blue-800 font-mono">0s</span>
+            <div class="mt-3 pt-2.5 border-t border-sky-200/70 flex items-center justify-between text-[11px] sm:text-xs text-sky-900/80 font-bold">
+              <span>Total Exposure:</span>
+              <span id="analyticsTotalHolding" class="font-black text-sky-800 font-mono whitespace-nowrap">0s</span>
             </div>
           </div>
         </div>
