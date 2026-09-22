@@ -429,9 +429,18 @@
                     <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
                     <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">SMC Swing</h3>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
+                  <label class="relative inline-flex items-center cursor-pointer select-none">
                     <input type="checkbox" id="stratSMC" value="SMC" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
                   </label>
                 </div>
                 <div class="font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl border border-purple-200 flex items-center justify-between">
@@ -450,9 +459,18 @@
                     <span class="w-3 h-3 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.6)]"></span>
                     <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">5M Scalp</h3>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
+                  <label class="relative inline-flex items-center cursor-pointer select-none">
                     <input type="checkbox" id="stratScalp" value="SMC_SCALP_5M" class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
                   </label>
                 </div>
                 <div class="font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl border border-purple-200 flex items-center justify-between">
@@ -471,9 +489,18 @@
                     <span class="w-3 h-3 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
                     <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">ICT Institutional</h3>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
+                  <label class="relative inline-flex items-center cursor-pointer select-none">
                     <input type="checkbox" id="stratICT" value="ICT" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
                   </label>
                 </div>
                 <div class="font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl border border-purple-200 flex items-center justify-between">
@@ -492,9 +519,18 @@
                     <span class="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span>
                     <h3 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Order Flow Engine</h3>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
+                  <label class="relative inline-flex items-center cursor-pointer select-none">
                     <input type="checkbox" id="stratOF" value="ORDER_FLOW" checked class="sr-only peer" onchange="triggerAutoSave(0)">
-                    <div class="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
                   </label>
                 </div>
                 <div class="font-body-sm text-sm sm:text-base bg-purple-50/80 p-3.5 rounded-xl border border-purple-200 flex items-center justify-between">
@@ -519,7 +555,7 @@
           <!-- Horizontal Instrument Strip -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5" id="multiPairSelector">
             <!-- 1. Gold XAUUSD -->
-            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm has-[:checked]:border-purple-300 has-[:checked]:bg-purple-50/90 select-none">
               <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm font-mono border border-amber-300">AU</span>
                 <div>
@@ -527,11 +563,23 @@
                   <span class="font-body-sm text-slate-700 font-extrabold block text-xs sm:text-sm">Gold Spot</span>
                 </div>
               </div>
-              <input type="checkbox" name="activeSymbol" value="XAUUSD" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" name="activeSymbol" value="XAUUSD" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                <!-- Active State Badge (✓ ACTIVE) -->
+                <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                  <span>ACTIVE</span>
+                </div>
+                <!-- Inactive State Badge (— OFF) -->
+                <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                  <span>OFF</span>
+                </div>
+              </div>
             </label>
 
             <!-- 2. Forex EURUSD -->
-            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm has-[:checked]:border-purple-300 has-[:checked]:bg-purple-50/90 select-none">
               <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-black text-sm font-mono border border-blue-300">EU</span>
                 <div>
@@ -539,11 +587,23 @@
                   <span class="font-body-sm text-slate-700 font-extrabold block text-xs sm:text-sm">Euro / Dollar</span>
                 </div>
               </div>
-              <input type="checkbox" name="activeSymbol" value="EURUSD" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" name="activeSymbol" value="EURUSD" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                <!-- Active State Badge (✓ ACTIVE) -->
+                <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                  <span>ACTIVE</span>
+                </div>
+                <!-- Inactive State Badge (— OFF) -->
+                <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                  <span>OFF</span>
+                </div>
+              </div>
             </label>
 
             <!-- 3. Forex GBPUSD -->
-            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm has-[:checked]:border-purple-300 has-[:checked]:bg-purple-50/90 select-none">
               <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center font-black text-sm font-mono border border-purple-300">GB</span>
                 <div>
@@ -551,11 +611,23 @@
                   <span class="font-body-sm text-slate-700 font-extrabold block text-xs sm:text-sm">British Pound</span>
                 </div>
               </div>
-              <input type="checkbox" name="activeSymbol" value="GBPUSD" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" name="activeSymbol" value="GBPUSD" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                <!-- Active State Badge (✓ ACTIVE) -->
+                <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                  <span>ACTIVE</span>
+                </div>
+                <!-- Inactive State Badge (— OFF) -->
+                <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                  <span>OFF</span>
+                </div>
+              </div>
             </label>
 
             <!-- 4. Crypto BTCUSD -->
-            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm has-[:checked]:border-purple-300 has-[:checked]:bg-purple-50/90 select-none">
               <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-black text-sm font-mono border border-amber-400">₿</span>
                 <div>
@@ -563,11 +635,23 @@
                   <span class="font-body-sm text-slate-700 font-extrabold block text-xs sm:text-sm">Bitcoin Spot</span>
                 </div>
               </div>
-              <input type="checkbox" name="activeSymbol" value="BTCUSD" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" name="activeSymbol" value="BTCUSD" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                <!-- Active State Badge (✓ ACTIVE) -->
+                <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                  <span>ACTIVE</span>
+                </div>
+                <!-- Inactive State Badge (— OFF) -->
+                <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                  <span>OFF</span>
+                </div>
+              </div>
             </label>
 
             <!-- 5. Crypto ETHUSD -->
-            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm">
+            <label class="bg-purple-50/60 p-4 rounded-xl flex items-center justify-between hover:bg-purple-100/70 transition-all border border-purple-200 cursor-pointer shadow-sm has-[:checked]:border-purple-300 has-[:checked]:bg-purple-50/90 select-none">
               <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-sm font-mono border border-indigo-300">Ξ</span>
                 <div>
@@ -575,7 +659,19 @@
                   <span class="font-body-sm text-slate-700 font-extrabold block text-xs sm:text-sm">Ethereum Spot</span>
                 </div>
               </div>
-              <input type="checkbox" name="activeSymbol" value="ETHUSD" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+              <div class="relative inline-flex items-center">
+                <input type="checkbox" name="activeSymbol" value="ETHUSD" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                <!-- Active State Badge (✓ ACTIVE) -->
+                <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                  <span>ACTIVE</span>
+                </div>
+                <!-- Inactive State Badge (— OFF) -->
+                <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                  <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                  <span>OFF</span>
+                </div>
+              </div>
             </label>
           </div>
         </div>
@@ -601,9 +697,21 @@
                   <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></span>
                   <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 1 (Primary Instrument)</h4>
                 </div>
-                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
+                <label class="relative inline-flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer select-none">
                   <span>Enable Pair 1</span>
-                  <input type="checkbox" id="pair1Enabled" checked class="w-5 h-5 text-emerald-600 bg-white border-purple-300 rounded focus:ring-emerald-500 cursor-pointer" onchange="triggerAutoSave(0)">
+                  <div class="relative inline-flex items-center">
+                    <input type="checkbox" id="pair1Enabled" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
+                  </div>
                 </label>
               </div>
 
@@ -645,9 +753,21 @@
                   <span class="w-3 h-3 rounded-full bg-primary shadow-sm"></span>
                   <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 2 (Secondary Instrument)</h4>
                 </div>
-                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
+                <label class="relative inline-flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer select-none">
                   <span>Enable Pair 2</span>
-                  <input type="checkbox" id="pair2Enabled" checked class="w-5 h-5 text-primary bg-white border-purple-300 rounded focus:ring-primary cursor-pointer" onchange="triggerAutoSave(0)">
+                  <div class="relative inline-flex items-center">
+                    <input type="checkbox" id="pair2Enabled" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
+                  </div>
                 </label>
               </div>
 
@@ -689,9 +809,21 @@
                   <span class="w-3 h-3 rounded-full bg-cyan-500 shadow-sm"></span>
                   <h4 class="font-headline-sm text-lg sm:text-xl font-black text-slate-950">Pair 3 (Tertiary Instrument)</h4>
                 </div>
-                <label class="flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer">
+                <label class="relative inline-flex items-center gap-2.5 text-sm sm:text-base font-black text-slate-950 cursor-pointer select-none">
                   <span>Enable Pair 3</span>
-                  <input type="checkbox" id="pair3Enabled" checked class="w-5 h-5 text-cyan-600 bg-white border-purple-300 rounded focus:ring-cyan-500 cursor-pointer" onchange="triggerAutoSave(0)">
+                  <div class="relative inline-flex items-center">
+                    <input type="checkbox" id="pair3Enabled" checked class="sr-only peer" onchange="triggerAutoSave(0)">
+                    <!-- Active State Badge (✓ ACTIVE) -->
+                    <div class="hidden peer-checked:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-700 via-primary to-indigo-700 text-white border border-purple-400 shadow-[0_0_12px_rgba(124,58,237,0.35)] text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:brightness-110 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-white/25 flex items-center justify-center text-white text-[11px] font-black leading-none shadow-sm">✓</span>
+                      <span>ACTIVE</span>
+                    </div>
+                    <!-- Inactive State Badge (— OFF) -->
+                    <div class="inline-flex peer-checked:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200/90 text-slate-600 border border-slate-300 shadow-sm text-xs sm:text-sm font-mono font-black tracking-wider transition-all duration-200 hover:bg-slate-300/80 active:scale-95 peer-disabled:opacity-60 peer-disabled:cursor-not-allowed">
+                      <span class="w-4 h-4 rounded-md bg-slate-300/80 flex items-center justify-center text-slate-500 text-[11px] font-black leading-none">—</span>
+                      <span>OFF</span>
+                    </div>
+                  </div>
                 </label>
               </div>
 
