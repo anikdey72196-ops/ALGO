@@ -152,14 +152,18 @@ def test_reconciliation_engine(tmp_path):
 
 
 def test_position_manager_breakeven(tmp_path):
-    print("Testing PositionManager +1R Breakeven...")
+    print("Testing PositionManager +1R Breakeven (Sideways vs Trending)...")
     db_file = str(tmp_path / "test_pm.db")
     state = StateManager(db_path=db_file)
     broker = MockBrokerAdapter()
     broker.connect()
 
-    # Entry = 2580.00, SL = 2570.00 (Risk = 10.00 pts)
-    trade = TradeRecord(
+    # Create synthetic trending and sideways datasets
+    trending_df = create_synthetic_candles(count=80, trend=True)
+    sideways_df = create_synthetic_candles(count=80, trend=False)
+
+    # 1. Trending Test -> Breakeven should NOT trigger
+    trade_trend = TradeRecord(
         id=777,
         timestamp=pd.Timestamp.now(tz="UTC").to_pydatetime(),
         symbol="XAUUSD",
@@ -171,19 +175,34 @@ def test_position_manager_breakeven(tmp_path):
         realized_pnl=0.0,
         status="OPEN",
     )
-    state.record_trade(trade)
-
-    pm = PositionManager(broker=broker, state=state, poll_interval_sec=100.0)
-
-    # Price moves to 2591.00 (+1.1R) -> Triggers Breakeven
+    state.record_trade(trade_trend)
+    pm_trend = PositionManager(
+        broker=broker,
+        state=state,
+        poll_interval_sec=100.0,
+        history_provider=lambda sym, tf, n: trending_df,
+        breakeven_sideways_only=True,
+    )
     broker.set_price("XAUUSD", 2591.00, 2591.25)
-    pm.process_positions()
+    pm_trend.process_positions()
+    assert 777 not in pm_trend._be_applied, "BE should NOT activate during trending market"
+    pm_trend.shutdown()
 
-    assert 777 in pm._be_applied, "Breakeven was not applied at +1.1R"
+    # 2. Sideways Test -> Breakeven MUST trigger
+    pm_side = PositionManager(
+        broker=broker,
+        state=state,
+        poll_interval_sec=100.0,
+        history_provider=lambda sym, tf, n: sideways_df,
+        breakeven_sideways_only=True,
+    )
+    pm_side.process_positions()
+    assert 777 in pm_side._be_applied, "BE MUST activate during sideways market condition"
+    pm_side.shutdown()
 
-    pm.shutdown()
     state.close()
-    print("PASS: PositionManager Breakeven")
+    print("PASS: PositionManager Sideways Breakeven")
+
 
 
 if __name__ == "__main__":

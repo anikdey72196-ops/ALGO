@@ -140,7 +140,13 @@ class TradingBot:
         self.spread_guard = DynamicSpreadGuard(window_size=300, percentile_cutoff=95.0)
         self.order_manager = OrderManager(broker=self.broker, max_retries=3, base_backoff_sec=0.5)
         self.reconciler = ReconciliationEngine(broker=self.broker, state=self.state, sync_interval_sec=30.0)
-        self.position_manager = PositionManager(broker=self.broker, state=self.state, poll_interval_sec=5.0)
+        self.position_manager = PositionManager(
+            broker=self.broker,
+            state=self.state,
+            poll_interval_sec=5.0,
+            history_provider=lambda sym, tf, n: self._get_ohlcv(sym, tf, count=n),
+            breakeven_sideways_only=True,
+        )
 
         # Price data cache (in production, fetch from broker or data provider)
         self._htf_cache: dict[str, object] = {}

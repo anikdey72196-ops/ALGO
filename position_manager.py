@@ -17,13 +17,24 @@ except ImportError:
     mt5 = None
 
 
-class PositionManager:
-    """Manages active bracket orders: +1R breakeven, ATR trails, session closing, and time stops."""
+from market_regime import MarketRegimeDetector
 
-    def __init__(self, broker: BrokerAdapter, state: StateManager, poll_interval_sec: float = 5.0):
+class PositionManager:
+    """Manages active bracket orders: +1R breakeven (specifically for sideways markets), trails, and session closes."""
+
+    def __init__(
+        self,
+        broker: BrokerAdapter,
+        state: StateManager,
+        poll_interval_sec: float = 5.0,
+        history_provider=None,
+        breakeven_sideways_only: bool = True,
+    ):
         self.broker = broker
         self.state = state
         self.poll_interval_sec = poll_interval_sec
+        self.history_provider = history_provider
+        self.breakeven_sideways_only = breakeven_sideways_only
         self._stop_event = threading.Event()
         self._be_applied: set[int] = set()
         self._partial_tp_applied: set[int] = set()
@@ -55,15 +66,29 @@ class PositionManager:
                 if risk_dist <= 0:
                     continue
 
-                # ── 1. Breakeven at +1R ──
+                # ── 1. Breakeven at +1R (Enforced ONLY during Sideways / Ranging Markets) ──
                 if trade.id not in self._be_applied:
                     r_gain = (current_price - entry) / risk_dist if trade.direction == Direction.BUY else (entry - current_price) / risk_dist
                     if r_gain >= 1.0:
-                        pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
-                        new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
-                        self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
-                        self._be_applied.add(trade.id)
-                        logger.info(f"🛡️ [BE] Position #{trade.id} ({trade.symbol}) moved to Breakeven @ {new_sl:.5f} (+{r_gain:.2f}R reached)")
+                        # Check regime if sideways_only is enabled
+                        is_sideways = not self.breakeven_sideways_only
+                        if self.breakeven_sideways_only and self.history_provider is not None:
+                            try:
+                                df = self.history_provider(trade.symbol, "5m", 100)
+                                if df is not None and len(df) >= 30:
+                                    regime = MarketRegimeDetector.analyze(df)
+                                    is_sideways = bool(regime.is_sideways)
+                            except Exception as e:
+                                logger.debug(f"Could not evaluate regime for BE on {trade.symbol}: {e}")
+
+                        if is_sideways:
+                            pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
+                            new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
+                            self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
+                            self._be_applied.add(trade.id)
+                            logger.info(f"🛡️ [SIDEWAYS BE] Position #{trade.id} ({trade.symbol}) locked in Breakeven @ {new_sl:.5f} (+{r_gain:.2f}R reached in ranging market)")
+                        else:
+                            logger.debug(f"Trending market active on {trade.symbol} (+{r_gain:.2f}R). Skipping BE lock to allow trend continuation.")
 
                 # ── 2. Session Close Guard (e.g. 21:50 UTC) ──
                 if "SCALP" in trade.strategy_name.upper() or "ICT" in trade.strategy_name.upper():
