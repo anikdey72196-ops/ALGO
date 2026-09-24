@@ -91,6 +91,7 @@ class RiskEngine:
         signal: TradeSignal,
         current_equity: float,
         fixed_lot_size: float | None = None,
+        risk_multiplier: float = 1.0,
     ) -> AuthorizationResult:
         """
         Full authorization pipeline:
@@ -157,21 +158,23 @@ class RiskEngine:
             
         target_lot = fixed_lot_size if fixed_lot_size is not None and fixed_lot_size > 0 else self.config.fixed_lot_size
         if target_lot is not None and target_lot > 0:
-            lot_size = max(instrument.min_lot, min(instrument.max_lot, target_lot))
+            effective_target = target_lot * risk_multiplier if risk_multiplier < 1.0 else target_lot
+            lot_size = max(instrument.min_lot, min(instrument.max_lot, effective_target))
             lot_size = math.floor(lot_size / instrument.lot_step) * instrument.lot_step
             lot_size = round(lot_size, 2)
-            logger.info(f"Using manual fixed lot size override: {lot_size}")
+            logger.info(f"Using fixed lot size (multiplier={risk_multiplier:.2f}): {lot_size}")
         else:
+            effective_risk_pct = self.config.account.risk_pct * risk_multiplier
             lot_size = self.calculate_lot_size(
                 equity=current_equity, 
-                risk_pct=self.config.account.risk_pct, 
+                risk_pct=effective_risk_pct, 
                 sl_distance_price=sl_distance, 
                 instrument=instrument
             )
 
         
         if lot_size < instrument.min_lot:
-            msg = 'Calculated lot size below minimum'
+            msg = f'Calculated lot size {lot_size} below minimum {instrument.min_lot}'
             logger.warning(f"Trade rejected: {msg}")
             return AuthorizationResult(
                 authorized=False, 
@@ -182,7 +185,7 @@ class RiskEngine:
         sl_distance_in_points = sl_distance / (10 ** -instrument.digits)
         risk_amount = lot_size * sl_distance_in_points * instrument.point_value
         
-        logger.info(f"Trade authorized: {signal.symbol} {signal.direction} {lot_size} lots. Risk: ${risk_amount:.2f}")
+        logger.info(f"Trade authorized: {signal.symbol} {signal.direction} {lot_size} lots (Risk Multiplier: {risk_multiplier:.2f}). Risk: ${risk_amount:.2f}")
         return AuthorizationResult(
             authorized=True,
             lot_size=lot_size,

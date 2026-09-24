@@ -33,6 +33,11 @@ from execution import (
 )
 from execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord
 from metrics_aggregator import MetricsAggregator
+from market_regime import MarketRegimeDetector, MarketRegime
+from spread_guard import DynamicSpreadGuard
+from order_manager import OrderManager, generate_idempotency_key, OrderState
+from reconciliation import ReconciliationEngine
+from position_manager import PositionManager
 
 
 # ─────────────────────────────────────────────
@@ -130,6 +135,12 @@ class TradingBot:
         # Execution Quality Metrics Subsystem
         self.eqm = ExecutionMetricsCollector(db_path=self.config.db_path)
         self.eqm_aggregator = MetricsAggregator(db_path=self.config.db_path)
+
+        # Dynamic Spread Guard, Idempotent Order Manager, Reconciler, and Position Manager
+        self.spread_guard = DynamicSpreadGuard(window_size=300, percentile_cutoff=95.0)
+        self.order_manager = OrderManager(broker=self.broker, max_retries=3, base_backoff_sec=0.5)
+        self.reconciler = ReconciliationEngine(broker=self.broker, state=self.state, sync_interval_sec=30.0)
+        self.position_manager = PositionManager(broker=self.broker, state=self.state, poll_interval_sec=5.0)
 
         # Price data cache (in production, fetch from broker or data provider)
         self._htf_cache: dict[str, object] = {}
@@ -294,6 +305,8 @@ class TradingBot:
         if self.is_active:
             self.state.record_deactivation("Server Shutdown")
             self.is_active = False
+        self.reconciler.shutdown()
+        self.position_manager.shutdown()
         self.eqm.shutdown()
         self.trap_svc.close()
         self.broker.disconnect()
@@ -541,7 +554,7 @@ class TradingBot:
                 logger.info(f"  ⛔ NEWS BLACKOUT: {news_result.reason}")
                 continue
 
-            # ── Step 2a: Spread check ──
+            # ── Step 2a: Spread check (Static Multiple + Rolling Percentile Guard) ──
             point_size = 10 ** -instrument.digits
             spread_result = NewsFilter.check_spread(
                 current_spread=current_spread,
@@ -552,12 +565,28 @@ class TradingBot:
                 self.log(f"  ⛔ SPREAD EXCESSIVE: {spread_result.reason}", level="WARNING")
                 continue
 
+            # Rolling Percentile Spread Guard
+            dyn_spread_ok, dyn_spread_msg, _ = self.spread_guard.evaluate_spread(symbol, current_spread)
+            if not dyn_spread_ok:
+                self.log(f"  ⛔ DYNAMIC SPREAD GUARD: {dyn_spread_msg}", level="WARNING")
+                continue
+
             # ── Step 2b: Fetch OHLCV data ──
             htf_data = self._get_ohlcv(symbol, htf_tf)
             ltf_data = self._get_ohlcv(symbol, ltf_tf)
             if htf_data is None or ltf_data is None:
                 logger.warning(f"  No OHLCV data for {symbol} ({htf_tf}/{ltf_tf}). Skipping.")
                 continue
+
+            # ── Market Regime Analysis (Sideways vs Trending Risk Sizing) ──
+            regime_analysis = MarketRegimeDetector.analyze(ltf_data, adx_threshold=20.0, chop_threshold=61.8, sideways_risk_multiplier=0.5)
+            if regime_analysis.is_sideways:
+                self.log(
+                    f"  🌊 [SIDEWAYS REGIME] {symbol} is Ranging/Consolidating "
+                    f"(ADX={regime_analysis.adx:.1f}, CHOP={regime_analysis.choppiness:.1f}, BBW={regime_analysis.bb_width_pct:.1f}%) "
+                    f"-> Scaling risk sizing by {regime_analysis.risk_multiplier*100:.0f}%",
+                    level="INFO"
+                )
 
             # ── Step 2b: Exclude strategies that already have an active open position for this symbol ──
             # (Every strategy can execute at most 1 trade at a time per symbol)
@@ -723,9 +752,11 @@ class TradingBot:
 
                 self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
 
-                # ── Step 2c-3: Risk authorization (Pair-specific sizing override) ──
+                # ── Step 2c-3: Risk authorization (Pair-specific sizing & Sideways Market scaling) ──
                 equity = self.broker.get_account_equity()
-                auth = self.risk_engine.authorize_trade(best_signal, equity, fixed_lot_size=pair_lot)
+                auth = self.risk_engine.authorize_trade(
+                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=regime_analysis.risk_multiplier
+                )
 
                 if not auth.authorized:
                     self.log(f"  🛑 RISK REJECTED: {auth.rejection_reason}", level="WARNING")
@@ -733,7 +764,7 @@ class TradingBot:
                     continue
 
                 self.log(
-                    f"  💰 AUTHORIZED: {auth.lot_size} lots "
+                    f"  💰 AUTHORIZED: {auth.lot_size} lots (Risk Mult: {regime_analysis.risk_multiplier:.2f}) "
                     f"| Risk: ${auth.risk_amount:.2f} "
                     f"| Equity: ${auth.account_equity:.2f}"
                 )
@@ -745,12 +776,12 @@ class TradingBot:
                     stop_loss=best_signal.stop_loss,
                     take_profit=best_signal.take_profit,
                     spread_at_submit=current_spread,
-                    risk_pct=self.config.account.risk_pct * 100.0,
+                    risk_pct=self.config.account.risk_pct * 100.0 * regime_analysis.risk_multiplier,
                     risk_amount=auth.risk_amount,
                     account_equity=equity,
                 )
 
-                # ── Step 2d: Execute bracket order with strategy Magic Number ──
+                # ── Step 2d: Idempotent order dispatch with retries ──
                 bracket = BracketOrder(
                     symbol=symbol,
                     direction=best_signal.direction,
@@ -762,11 +793,20 @@ class TradingBot:
                     comment=f"{best_signal.strategy_name[:6]}_{best_signal.direction.value}_{best_signal.ltf_confirmation.value[:8]}",
                 )
 
-                order_result = self.broker.send_bracket_order(bracket)
+                client_order_id = generate_idempotency_key(
+                    symbol=symbol,
+                    strategy=best_signal.strategy_name,
+                    direction=best_signal.direction.value,
+                    entry_price=bracket.entry_price,
+                    bar_time_iso=now_utc.isoformat()[:16],
+                    magic=best_signal.magic_number,
+                )
 
-                if order_result.success:
+                order_state, order_result = self.order_manager.submit_bracket_order(bracket, client_order_id)
+
+                if order_result and order_result.success:
                     self.log(
-                        f"  ✅ ORDER FILLED: ID={order_result.order_id} "
+                        f"  ✅ ORDER FILLED ({order_state.value}): ID={order_result.order_id} "
                         f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
                     )
                     # Record in state with strategy attribution
@@ -805,15 +845,19 @@ class TradingBot:
                         retries_used=order_result.retries_used,
                     )
                     if filled_rec:
+                        self.spread_guard.record_fill_slippage(symbol, filled_rec.slippage_pips)
                         self.log(
                             f"  📊 [EQM] Executed in {filled_rec.latency.total_latency_ms:.1f}ms "
                             f"| Slippage: {filled_rec.slippage_pips:+.2f} pips ({filled_rec.slippage_pct_atr:.1f}% ATR) "
                             f"| Retries: {filled_rec.retries_used}"
                         )
                 else:
+                    err_msg = order_result.error_message if order_result else "Order Dispatch Failed"
+                    err_code = order_result.error_code if order_result else 0
+                    retries = order_result.retries_used if order_result else 0
                     self.log(
-                        f"  ❌ ORDER FAILED: {order_result.error_message} "
-                        f"(code={order_result.error_code}, retries={order_result.retries_used})",
+                        f"  ❌ ORDER FAILED ({order_state.value}): {err_msg} "
+                        f"(code={err_code}, retries={retries})",
                         level="ERROR"
                     )
                     if order_result.t1_submit_ns:
