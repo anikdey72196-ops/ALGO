@@ -38,8 +38,41 @@ class PositionManager:
         self._stop_event = threading.Event()
         self._be_applied: set[int] = set()
         self._partial_tp_applied: set[int] = set()
+        self._reversal_shielded: set[int] = set()
         self._worker = threading.Thread(target=self._run_loop, daemon=True, name="PositionMgr")
         self._worker.start()
+
+    def protect_against_reversal(self, trade, reversal_analysis) -> bool:
+        """Shields an active position when an opposing CHoCH is confirmed in the market."""
+        if trade.id in self._reversal_shielded:
+            return False
+
+        quote = self.broker.get_current_price(trade.symbol)
+        if not quote:
+            return False
+
+        current_price = quote.bid if trade.direction == Direction.BUY else quote.ask
+        entry = trade.entry_price
+        pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
+
+        # Move SL to secure profit or lock in breakeven
+        if trade.direction == Direction.BUY:
+            new_sl = max(trade.stop_loss, entry + pip_sz)
+            if new_sl >= current_price:
+                new_sl = current_price - 2 * pip_sz
+        else:
+            new_sl = min(trade.stop_loss, entry - pip_sz)
+            if new_sl <= current_price:
+                new_sl = current_price + 2 * pip_sz
+
+        success = self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
+        if success:
+            self._reversal_shielded.add(trade.id)
+            logger.info(
+                f"🛡️ [REVERSAL SHIELD ACTIVATED] Position #{trade.id} ({trade.symbol} {trade.direction.value}) "
+                f"SL secured to {new_sl:.5f} due to {reversal_analysis.choch_type.value} CHoCH (Prob: {reversal_analysis.reversal_probability:.0f}%)"
+            )
+        return success
 
     def process_positions(self) -> None:
         """Evaluate open positions against dynamic management rules."""

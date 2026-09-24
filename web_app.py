@@ -95,6 +95,7 @@ class BotStateResponse(BaseModel):
     ml_trap_detector: dict = {}
     open_positions_by_strategy: dict = {}
     execution_summary: dict = {}
+    trend_reversal: dict = {}
 
 
 
@@ -289,6 +290,12 @@ async def get_bot_state():
         except Exception as e:
             logger.warning(f"Failed to fetch execution quality summary: {e}")
 
+    # Real-time Trend Reversal & CHoCH status
+    trend_reversal_data = {}
+    if hasattr(bot_instance, "trend_reversal_status"):
+        for sym, rev in bot_instance.trend_reversal_status.items():
+            trend_reversal_data[sym] = rev.to_dict()
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols,
@@ -324,7 +331,22 @@ async def get_bot_state():
         ml_trap_detector=trap_stats,
         open_positions_by_strategy=open_positions_by_strategy,
         execution_summary=exec_summary,
+        trend_reversal=trend_reversal_data,
     )
+
+
+@app.get("/api/trend-reversal")
+async def get_trend_reversal_status():
+    """Return real-time CHoCH & Trend Reversal analysis for all monitored pairs."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    return {
+        "status": "ok",
+        "data": {
+            sym: rev.to_dict()
+            for sym, rev in getattr(bot_instance, "trend_reversal_status", {}).items()
+        }
+    }
 
 
 @app.post("/api/activate")

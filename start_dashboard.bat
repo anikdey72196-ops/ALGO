@@ -8,6 +8,10 @@ echo   Starting ALGO Command Center...
 echo ======================================================
 
 :: 1. Check Virtual Environments
+if exist "myenv\Scripts\python.exe" (
+    set "PY_EXE=myenv\Scripts\python.exe"
+    goto :run
+)
 if exist ".venv\Scripts\python.exe" (
     set "PY_EXE=.venv\Scripts\python.exe"
     goto :run

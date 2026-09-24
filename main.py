@@ -38,6 +38,9 @@ from spread_guard import DynamicSpreadGuard
 from order_manager import OrderManager, generate_idempotency_key, OrderState
 from reconciliation import ReconciliationEngine
 from position_manager import PositionManager
+from trend_reversal import (
+    TrendReversalDetector, TrendReversalAnalysis, CHoCHType, ReversalStage
+)
 
 
 # ─────────────────────────────────────────────
@@ -147,6 +150,11 @@ class TradingBot:
             history_provider=lambda sym, tf, n: self._get_ohlcv(sym, tf, count=n),
             breakeven_sideways_only=True,
         )
+
+        # Trend Reversal & CHoCH Subsystem (1H Candlestick Analysis)
+        self.reversal_detector = TrendReversalDetector(swing_lookback=3)
+        self.trend_reversal_status: dict[str, TrendReversalAnalysis] = {}
+        self._last_analyzed_1h_bar: dict[str, str] = {}
 
         # Price data cache (in production, fetch from broker or data provider)
         self._htf_cache: dict[str, object] = {}
@@ -613,6 +621,87 @@ class TradingBot:
 
             # ── Step 2b: Generate signals across enabled strategies ──
             htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
+
+            # ── Isolate Completed/Closed 1-Hour Candles ──
+            # In live MT5 data, the final row of htf_data is often the currently-forming open hour.
+            # If current time is before bar_time + 1h, drop the forming candle so only closed bars are evaluated.
+            closed_htf_data = htf_data
+            if 'time' in htf_data.columns and len(htf_data) > 25:
+                last_bar_time = pd.to_datetime(htf_data['time'].iloc[-1], utc=True)
+                if now_utc < last_bar_time + pd.Timedelta(hours=1):
+                    closed_htf_data = htf_data.iloc[:-1]
+
+            latest_closed_1h_time = str(closed_htf_data['time'].iloc[-1]) if 'time' in closed_htf_data.columns else str(closed_htf_data.index[-1])
+            is_new_1h_candle = (
+                symbol not in self._last_analyzed_1h_bar
+                or self._last_analyzed_1h_bar[symbol] != latest_closed_1h_time
+            )
+
+            current_mid_price = (quote.bid + quote.ask) / 2.0 if quote else None
+
+            # ── Institutional 1H Trend Reversal Analysis (CHoCH & Confluence Subsystem) ──
+            # Evaluates previous 1-Hour closed candles to detect if 1H market structure is reversing
+            reversal_analysis = self.reversal_detector.analyze(
+                df=closed_htf_data,
+                trend=htf_analysis.bias,
+                symbol=symbol,
+                htf_analysis=htf_analysis,
+                timeframe="1H",
+                current_price=current_mid_price,
+            )
+            self.trend_reversal_status[symbol] = reversal_analysis
+
+            if is_new_1h_candle:
+                self.log(
+                    f"  🕐 [1H CANDLE CLOSE] {symbol}: 1-Hour candle closed @ {latest_closed_1h_time}. "
+                    f"Analyzed previous market movements: Trend={reversal_analysis.trend.value} | "
+                    f"CHoCH={reversal_analysis.choch_type.value} | Reversal Risk={reversal_analysis.reversal_risk} ({reversal_analysis.reversal_probability:.0f}%)",
+                    level="INFO"
+                )
+                self._last_analyzed_1h_bar[symbol] = latest_closed_1h_time
+
+            # ── Always Log Chart Trend Reversal Analysis ──
+            if reversal_analysis.is_trending:
+                if reversal_analysis.choch_detected:
+                    confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Pure Structural Break"
+                    self.log(
+                        f"  🚨 [1H TREND REVERSAL ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} CHoCH DETECTED! "
+                        f"Broken 1H Pivot: {reversal_analysis.key_swing_level:.5f} | Stage: {reversal_analysis.stage.value} | "
+                        f"Reversal Prob: {reversal_analysis.reversal_probability:.0f}% ({reversal_analysis.reversal_risk}) | "
+                        f"Confluence: [{confluence_str}]",
+                        level="WARNING"
+                    )
+                elif reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP:
+                    self.log(
+                        f"  ⚠️ [1H REVERSAL EARLY WARNING] {symbol} ({reversal_analysis.trend.value}): Liquidity sweep at 1H trend extreme ({reversal_analysis.trend_extreme_level:.5f})! "
+                        f"Watch for 1H CHoCH break at pivot {reversal_analysis.key_swing_level:.5f}.",
+                        level="INFO"
+                    )
+                else:
+                    self.log(
+                        f"  📈 [1H TREND HEALTHY] {symbol} ({reversal_analysis.trend.value}): 1H trend structure intact. "
+                        f"Key pivot {reversal_analysis.key_swing_level or 0.0:.5f} unviolated. Reversal Risk: LOW ({reversal_analysis.reversal_probability:.0f}%).",
+                        level="DEBUG"
+                    )
+            else:
+                self.log(
+                    f"  ⚖️ [1H MARKET NEUTRAL] {symbol}: No dominant 1H trend structure active. Ranging conditions.",
+                    level="DEBUG"
+                )
+
+            # ── Active Trade Protection Against Reversals ──
+            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
+                opposing_dir = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+                for open_t in open_symbol_trades:
+                    if open_t.direction == opposing_dir:
+                        self.log(
+                            f"  🛡️ [REVERSAL SHIELD] Active {open_t.direction.value} trade #{open_t.id} on {symbol} is vulnerable to {reversal_analysis.choch_type.value} CHoCH! "
+                            f"Securing position with Stop Loss protection.",
+                            level="WARNING"
+                        )
+                        if self.position_manager and open_t.id:
+                            self.position_manager.protect_against_reversal(open_t, reversal_analysis)
+
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
@@ -623,6 +712,18 @@ class TradingBot:
                 enabled_strategies=eval_strats,
                 htf_analysis=htf_analysis,
             )
+
+            # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability CHoCH ──
+            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 60.0:
+                blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+                prior_len = len(signals)
+                signals = [s for s in signals if s.direction != blocked_direction]
+                if len(signals) < prior_len:
+                    self.log(
+                        f"  🚫 [CHoCH REVERSAL GUARD] Blocked {prior_len - len(signals)} pro-trend signal(s) on {symbol}: "
+                        f"Trend broken by {reversal_analysis.choch_type.value} CHoCH (Prob: {reversal_analysis.reversal_probability:.0f}%).",
+                        level="INFO"
+                    )
 
             if not signals:
                 logger.info(f"  No signals generated for Pair {pair_num} ({symbol}).")

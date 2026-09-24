@@ -1830,7 +1830,15 @@
         if (term && data.recent_logs && data.recent_logs.length > 0) {
           term.innerHTML = data.recent_logs.map(log => {
             let color = "text-slate-200 font-medium";
-            if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) {
+            if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED")) {
+              color = "text-rose-300 font-extrabold bg-rose-950/50 px-2 py-0.5 rounded border border-rose-800/60 shadow-sm";
+            } else if (log.includes("⚠️") || log.includes("REVERSAL EARLY WARNING") || log.includes("PRE-REVERSAL SWEEP")) {
+              color = "text-amber-300 font-bold bg-amber-950/30 px-2 py-0.5 rounded";
+            } else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD")) {
+              color = "text-cyan-300 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/50";
+            } else if (log.includes("📈") || log.includes("TREND HEALTHY")) {
+              color = "text-emerald-300/90 font-medium";
+            } else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) {
               color = "text-emerald-400 font-bold";
             } else if (log.includes("🪤") || log.includes("DECISION OVERRIDE") || log.includes("SKIPPED") || log.includes("vetoed")) {
               color = "text-amber-300 font-bold";
