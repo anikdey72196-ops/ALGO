@@ -142,11 +142,108 @@ class StateManager:
             except sqlite3.OperationalError:
                 pass
 
+            # Execution Quality Metrics Tables
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS execution_orders (
+                    order_id TEXT PRIMARY KEY,
+                    trade_id INTEGER,
+                    symbol TEXT NOT NULL,
+                    strategy_name TEXT NOT NULL,
+                    magic_number INTEGER NOT NULL,
+                    direction TEXT NOT NULL,
+                    order_type TEXT NOT NULL,
+                    filling_mode TEXT DEFAULT 'FOK',
+                    requested_lot REAL NOT NULL,
+                    filled_lot REAL DEFAULT 0.0,
+                    requested_price REAL NOT NULL,
+                    filled_price REAL,
+                    stop_loss REAL,
+                    take_profit REAL,
+                    atr_14 REAL,
+                    slippage_points REAL,
+                    slippage_pips REAL,
+                    slippage_pct_atr REAL,
+                    spread_at_signal REAL,
+                    spread_at_submit REAL,
+                    spread_at_fill REAL,
+                    signal_time TEXT NOT NULL,
+                    submit_time TEXT,
+                    ack_time TEXT,
+                    fill_time TEXT,
+                    close_time TEXT,
+                    latency_signal_to_submit_ms REAL,
+                    latency_submit_to_ack_ms REAL,
+                    latency_ack_to_fill_ms REAL,
+                    latency_total_ms REAL,
+                    retries_used INTEGER DEFAULT 0,
+                    rejection_code INTEGER,
+                    rejection_reason TEXT,
+                    status TEXT NOT NULL,
+                    session_killzone TEXT,
+                    ml_p_tp REAL,
+                    ml_p_sl REAL,
+                    ai_conviction REAL,
+                    conflict_score REAL,
+                    risk_pct REAL,
+                    risk_amount REAL,
+                    account_equity REAL,
+                    broker_name TEXT DEFAULT 'MetaTrader 5',
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            ''')
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS execution_fills (
+                    fill_id TEXT PRIMARY KEY,
+                    order_id TEXT NOT NULL,
+                    trade_id INTEGER,
+                    deal_ticket INTEGER,
+                    fill_type TEXT NOT NULL,
+                    volume REAL NOT NULL,
+                    intended_price REAL NOT NULL,
+                    actual_price REAL NOT NULL,
+                    slippage_pips REAL NOT NULL,
+                    slippage_pct_atr REAL,
+                    commission REAL DEFAULT 0.0,
+                    swap REAL DEFAULT 0.0,
+                    fill_time TEXT NOT NULL
+                )
+            ''')
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS execution_aggregates_daily (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    dimension_type TEXT NOT NULL,
+                    dimension_value TEXT NOT NULL,
+                    total_orders INTEGER DEFAULT 0,
+                    filled_orders INTEGER DEFAULT 0,
+                    rejected_orders INTEGER DEFAULT 0,
+                    fill_rate REAL DEFAULT 0.0,
+                    avg_slippage_pips REAL DEFAULT 0.0,
+                    max_slippage_pips REAL DEFAULT 0.0,
+                    min_slippage_pips REAL DEFAULT 0.0,
+                    avg_slippage_pct_atr REAL DEFAULT 0.0,
+                    p50_latency_ms REAL DEFAULT 0.0,
+                    p95_latency_ms REAL DEFAULT 0.0,
+                    p99_latency_ms REAL DEFAULT 0.0,
+                    avg_total_latency_ms REAL DEFAULT 0.0,
+                    avg_spread_pips REAL DEFAULT 0.0,
+                    total_volume_lots REAL DEFAULT 0.0,
+                    updated_at TEXT DEFAULT (datetime('now')),
+                    UNIQUE(date, dimension_type, dimension_value)
+                )
+            ''')
+
             # Performance Indexes
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_status ON trade_log (status)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_symbol ON trade_log (symbol)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log (timestamp)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bot_sessions_status ON bot_sessions (status)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_symbol ON execution_orders(symbol)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_strat ON execution_orders(strategy_name)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_status ON execution_orders(status)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_signal_time ON execution_orders(signal_time)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_trade_id ON execution_orders(trade_id)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_fills_order_id ON execution_fills(order_id)")
 
             # Auto-close any orphaned mock test trade IDs left over from automated tests
             self.conn.execute("UPDATE trade_log SET status = 'CLOSED_TEST' WHERE status = 'OPEN' AND id >= 9000 AND id <= 9999")

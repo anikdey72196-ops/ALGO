@@ -42,13 +42,17 @@ class BracketOrder:
 
 @dataclass
 class OrderResult:
-    """Result of an order submission."""
+    """Result of an order submission with execution quality telemetry."""
     success: bool
     order_id: int | None = None
     fill_price: float | None = None
     error_code: int | None = None
     error_message: str | None = None
     retries_used: int = 0
+    t1_submit_ns: int = 0
+    t2_ack_ns: int = 0
+    t3_fill_ns: int = 0
+    filling_mode: str = "FOK"
 
 
 class BrokerAdapter(ABC):
@@ -232,10 +236,11 @@ class MT5Adapter(BrokerAdapter):
             logger.info("Disconnected from MetaTrader 5.")
 
     def send_bracket_order(self, order: BracketOrder) -> OrderResult:
+        t1_submit_ns = _time.perf_counter_ns()
         if mt5 is None:
-            return OrderResult(success=False, error_message="MT5 not installed")
+            return OrderResult(success=False, error_message="MT5 not installed", t1_submit_ns=t1_submit_ns)
         if not self.ensure_connected():
-            return OrderResult(success=False, error_message="MT5 terminal not connected or not logged in")
+            return OrderResult(success=False, error_message="MT5 terminal not connected or not logged in", t1_submit_ns=t1_submit_ns)
 
         broker_symbol = self.resolve_symbol(order.symbol)
         mt5.symbol_select(broker_symbol, True)
@@ -291,7 +296,10 @@ class MT5Adapter(BrokerAdapter):
                 "type_filling": current_filling,
             }
 
+            t2_ack_ns = _time.perf_counter_ns()
             result = mt5.order_send(request)
+            t3_fill_ns = _time.perf_counter_ns()
+
             if result is None:
                 err = mt5.last_error()
                 logger.error(f"MT5 order_send returned None on attempt {attempt+1}. Error: {err}")
@@ -302,11 +310,16 @@ class MT5Adapter(BrokerAdapter):
                 last_error_msg = f"Retcode {result.retcode} ({result.comment})"
                 if result.retcode == mt5.TRADE_RETCODE_DONE:
                     logger.info(f"✅ Order executed successfully! Order #{result.order} for {broker_symbol} @ {result.price}")
+                    filling_str = "FOK" if current_filling == getattr(mt5, 'ORDER_FILLING_FOK', 0) else ("IOC" if current_filling == getattr(mt5, 'ORDER_FILLING_IOC', 1) else "RETURN")
                     return OrderResult(
                         success=True,
                         order_id=result.order,
                         fill_price=result.price,
-                        retries_used=attempt
+                        retries_used=attempt,
+                        t1_submit_ns=t1_submit_ns,
+                        t2_ack_ns=t2_ack_ns,
+                        t3_fill_ns=t3_fill_ns,
+                        filling_mode=filling_str,
                     )
                 else:
                     logger.warning(f"Order rejected on attempt {attempt+1} (filling_mode={current_filling}): {result.comment} (retcode: {result.retcode})")
@@ -318,6 +331,9 @@ class MT5Adapter(BrokerAdapter):
             retries_used=self.max_retries,
             error_code=last_retcode,
             error_message=last_error_msg,
+            t1_submit_ns=t1_submit_ns,
+            t2_ack_ns=_time.perf_counter_ns(),
+            t3_fill_ns=_time.perf_counter_ns(),
         )
 
     def get_current_price(self, symbol: str) -> PriceQuote | None:
@@ -464,9 +480,11 @@ class MockBrokerAdapter(BrokerAdapter):
         )
         
     def send_bracket_order(self, order: BracketOrder) -> OrderResult:
+        t1_submit_ns = _time.perf_counter_ns()
         if order.symbol not in self._prices:
-            return OrderResult(success=False, error_message=f"No mock price set for symbol: {order.symbol}")
+            return OrderResult(success=False, error_message=f"No mock price set for symbol: {order.symbol}", t1_submit_ns=t1_submit_ns)
             
+        t2_ack_ns = _time.perf_counter_ns()
         # Apply simulated slippage
         slippage = random.uniform(-self.slippage_points, self.slippage_points) * self.pip_size
         actual_fill = order.entry_price + slippage
@@ -484,9 +502,18 @@ class MockBrokerAdapter(BrokerAdapter):
             "take_profit": order.take_profit,
             "comment": order.comment
         }
+        t3_fill_ns = _time.perf_counter_ns()
         
         logger.info(f"Mock execution for {order.symbol}: Order ID {order_id} filled @ {actual_fill:.5f}")
-        return OrderResult(success=True, order_id=order_id, fill_price=actual_fill)
+        return OrderResult(
+            success=True,
+            order_id=order_id,
+            fill_price=actual_fill,
+            t1_submit_ns=t1_submit_ns,
+            t2_ack_ns=t2_ack_ns,
+            t3_fill_ns=t3_fill_ns,
+            filling_mode="FOK",
+        )
         
     def simulate_close(self, order_id: int, close_price: float, point_value: float) -> float:
         """Simulate closing a position. Returns realized PnL."""

@@ -28,10 +28,11 @@ from risk_engine import RiskEngine
 from ai_analyst import AIAnalyst, AIDecision
 from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
 from execution import (
-
     BrokerAdapter, MockBrokerAdapter, MT5Adapter,
     BracketOrder, PriceQuote,
 )
+from execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord
+from metrics_aggregator import MetricsAggregator
 
 
 # ─────────────────────────────────────────────
@@ -125,6 +126,10 @@ class TradingBot:
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
 
+
+        # Execution Quality Metrics Subsystem
+        self.eqm = ExecutionMetricsCollector(db_path=self.config.db_path)
+        self.eqm_aggregator = MetricsAggregator(db_path=self.config.db_path)
 
         # Price data cache (in production, fetch from broker or data provider)
         self._htf_cache: dict[str, object] = {}
@@ -289,6 +294,7 @@ class TradingBot:
         if self.is_active:
             self.state.record_deactivation("Server Shutdown")
             self.is_active = False
+        self.eqm.shutdown()
         self.trap_svc.close()
         self.broker.disconnect()
         self.state.close()
@@ -336,6 +342,21 @@ class TradingBot:
                         self.log(
                             f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
                             f"Realized PnL: ${pnl:+.2f}"
+                        )
+                        # Record exit fill in Execution Quality Metrics
+                        try:
+                            inst = get_instrument(self.config, trade.symbol)
+                            pip_sz = 10 ** -inst.digits
+                        except Exception:
+                            pip_sz = 0.0001
+                        exit_target = trade.take_profit if status == "CLOSED_TP" else trade.stop_loss
+                        self.eqm.record_exit_fill(
+                            trade_id=trade.id,
+                            exit_type=status,
+                            intended_price=exit_target or trade.entry_price,
+                            actual_price=exit_target or trade.entry_price,
+                            volume=trade.lot_size,
+                            pip_size=pip_sz,
                         )
                     else:
                         self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
@@ -630,7 +651,24 @@ class TradingBot:
                     f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
                 )
 
+                # Initialize EQM lifecycle tracking for this candidate order
+                point_sz = 10 ** -instrument.digits
+                atr_val = getattr(best_signal, "atr_14", 0.0) or (abs(best_signal.entry_price - best_signal.stop_loss) * 0.5)
+                eqm_order = self.eqm.start_order(
+                    symbol=symbol,
+                    strategy_name=best_signal.strategy_name,
+                    direction=best_signal.direction.value,
+                    requested_price=best_signal.entry_price,
+                    atr_14=atr_val,
+                    pip_size=point_sz,
+                    session_killzone=getattr(best_signal, "session_killzone", "OFF_HOURS") or "LONDON_OPEN",
+                    conflict_score=best_signal.quality_score,
+                    spread_at_signal=current_spread,
+                    magic=best_signal.magic_number,
+                )
+
                 # ── Step 2c-1.5: ML Trap Detector Gate (High Stop Loss Risk Veto) ──
+                p_tp_val = 0.50
                 if getattr(self.config, 'ml_gating_enabled', True):
                     trap_kind = self._signal_to_trap_kind(best_signal)
                     if trap_kind is not None and ltf_data is not None:
@@ -651,8 +689,11 @@ class TradingBot:
                                 strategy=strat_key,
                             )
                             p_tp = trap_ev.p_genuine if trap_ev.p_genuine is not None else 0.50
+                            p_tp_val = p_tp
                             p_sl = 1.0 - p_tp
                             max_sl_thr = getattr(self.trap_svc.cfg, 'max_sl_probability', 0.50)
+                            eqm_order.ml_p_tp = p_tp
+                            eqm_order.ml_p_sl = p_sl
 
                             if not trap_ev.allowed:
                                 self.log(
@@ -661,6 +702,7 @@ class TradingBot:
                                     f"| Strategy '{best_signal.strategy_name}' [{strat_key}] on {symbol} vetoed by ML Model ({trap_ev.model_version})",
                                     level="WARNING",
                                 )
+                                self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4001, rejection_reason=f"ML Veto P(SL)={p_sl:.2f}")
                                 continue
                             self.log(
                                 f"  🔬 [ML MODEL APPROVED] Setup verified genuine [{strat_key}] (P(TP)={p_tp*100:.1f}%, "
@@ -672,9 +714,11 @@ class TradingBot:
 
                 # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
                 ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
+                eqm_order.ai_conviction = ai_verdict.confidence
 
                 if not ai_verdict.confirmed:
                     self.log(f"  🤖 AI GATE REJECTED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}", level="WARNING")
+                    self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4002, rejection_reason=f"AI Rejected: {ai_verdict.reason}")
                     continue
 
                 self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
@@ -685,12 +729,25 @@ class TradingBot:
 
                 if not auth.authorized:
                     self.log(f"  🛑 RISK REJECTED: {auth.rejection_reason}", level="WARNING")
+                    self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4003, rejection_reason=f"Risk Rejected: {auth.rejection_reason}")
                     continue
 
                 self.log(
                     f"  💰 AUTHORIZED: {auth.lot_size} lots "
                     f"| Risk: ${auth.risk_amount:.2f} "
                     f"| Equity: ${auth.account_equity:.2f}"
+                )
+
+                # Mark order submission in EQM
+                self.eqm.mark_submission(
+                    order_id=eqm_order.order_id,
+                    requested_lot=auth.lot_size,
+                    stop_loss=best_signal.stop_loss,
+                    take_profit=best_signal.take_profit,
+                    spread_at_submit=current_spread,
+                    risk_pct=self.config.account.risk_pct * 100.0,
+                    risk_amount=auth.risk_amount,
+                    account_equity=equity,
                 )
 
                 # ── Step 2d: Execute bracket order with strategy Magic Number ──
@@ -728,11 +785,49 @@ class TradingBot:
                         magic_number=best_signal.magic_number,
                     )
                     self.state.record_trade(trade_record)
+
+                    # Mark fill in Execution Quality Metrics
+                    if order_result.t1_submit_ns:
+                        eqm_order.latency.t1_submit_ns = order_result.t1_submit_ns
+                    if order_result.t2_ack_ns:
+                        eqm_order.latency.t2_ack_ns = order_result.t2_ack_ns
+                    if order_result.t3_fill_ns:
+                        eqm_order.latency.t3_fill_ns = order_result.t3_fill_ns
+                    if hasattr(order_result, 'filling_mode'):
+                        eqm_order.filling_mode = order_result.filling_mode
+
+                    filled_rec = self.eqm.mark_filled(
+                        order_id=eqm_order.order_id,
+                        trade_id=order_result.order_id,
+                        filled_price=order_result.fill_price or bracket.entry_price,
+                        filled_lot=bracket.lot_size,
+                        spread_at_fill=current_spread,
+                        retries_used=order_result.retries_used,
+                    )
+                    if filled_rec:
+                        self.log(
+                            f"  📊 [EQM] Executed in {filled_rec.latency.total_latency_ms:.1f}ms "
+                            f"| Slippage: {filled_rec.slippage_pips:+.2f} pips ({filled_rec.slippage_pct_atr:.1f}% ATR) "
+                            f"| Retries: {filled_rec.retries_used}"
+                        )
                 else:
                     self.log(
                         f"  ❌ ORDER FAILED: {order_result.error_message} "
                         f"(code={order_result.error_code}, retries={order_result.retries_used})",
                         level="ERROR"
+                    )
+                    if order_result.t1_submit_ns:
+                        eqm_order.latency.t1_submit_ns = order_result.t1_submit_ns
+                    if order_result.t2_ack_ns:
+                        eqm_order.latency.t2_ack_ns = order_result.t2_ack_ns
+                    if order_result.t3_fill_ns:
+                        eqm_order.latency.t3_fill_ns = order_result.t3_fill_ns
+
+                    self.eqm.mark_rejected(
+                        order_id=eqm_order.order_id,
+                        rejection_code=order_result.error_code or 0,
+                        rejection_reason=order_result.error_message or "Order Failed",
+                        retries_used=order_result.retries_used,
                     )
 
         self.log(

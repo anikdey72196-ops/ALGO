@@ -123,13 +123,66 @@ class OrderFlowConfig(BaseModel):
     cvd_divergence_bars: int = Field(default=14, ge=5, le=50, description="Lookback period to check CVD divergence against price swings.")
     min_rr: float = Field(default=1.8, ge=1.0, description="Minimum acceptable R:R ratio for Order Flow setups.")
     target_rr: float = Field(default=2.2, ge=1.0, description="Default target Risk-to-Reward ratio for Order Flow setups.")
-    enforce_htf_alignment: bool = Field(default=True, description="Only take order flow trades aligned with HTF bias.")
+class PositionManagementRuleConfig(BaseModel):
+    """Configuration for dynamic position management on open trades."""
+    # 1. Breakeven after +1R
+    breakeven_enabled: bool = Field(default=True, description="Move SL to breakeven once price moves in favor.")
+    breakeven_trigger_r: float = Field(default=1.0, ge=0.5, le=5.0, description="R multiple to trigger breakeven (e.g. 1.0 = +1R).")
+    breakeven_offset_r: float = Field(default=0.1, ge=0.0, le=1.0, description="Buffer above/below entry in R to cover costs/spread (e.g. +0.1R).")
+    breakeven_spread_buffer: bool = Field(default=True, description="Add broker live spread buffer to breakeven SL.")
+
+    # 2. Partial Take-Profit at 1R and/or 2R
+    partial_tp_enabled: bool = Field(default=True, description="Enable partial position close at target R multiples.")
+    partial_tp_stages: list[tuple[float, float]] = Field(
+        default_factory=lambda: [(1.0, 0.50), (2.0, 0.25)],
+        description="Stages of (R_trigger, pct_of_current_lot_to_close). e.g. [(1.0, 0.50), (2.0, 0.25)].",
+    )
+
+    # 3 & 4. Trailing Stop (ATR and Structure)
+    trailing_stop_mode: str = Field(default="STRUCTURE", description="Trailing stop mode: 'NONE', 'ATR', 'STRUCTURE', 'HYBRID'.")
+    trailing_activation_r: float = Field(default=1.0, ge=0.0, description="Minimum R profit before trailing stop starts ratcheting SL.")
+    # ATR-Based Trailing
+    trailing_atr_multiplier: float = Field(default=1.5, ge=0.5, le=5.0, description="ATR multiplier for trailing stop distance.")
+    trailing_atr_period: int = Field(default=14, ge=5, le=50, description="ATR period for trailing calculation.")
+    trailing_recalc_on: str = Field(default="BAR", description="Recalculate trailing stop on 'BAR' or 'TICK'.")
+    # Structure-Based Trailing
+    trailing_structure_lookback: int = Field(default=5, ge=2, le=20, description="Swing point lookback bars for LTF structure.")
+    trailing_structure_confirm_bars: int = Field(default=2, ge=1, le=5, description="Consecutive closes beyond swing level required for confirmation.")
+    trailing_structure_timeframe: str = Field(default="5m", description="Timeframe used for structure trailing (e.g. '5m' or '15m').")
+
+    # 5. Time Stop
+    time_stop_enabled: bool = Field(default=False, description="Enable time-based exit for stagnant trades.")
+    time_stop_bars: int = Field(default=24, ge=5, le=200, description="Maximum bars to hold without reaching min profit.")
+    time_stop_min_r: float = Field(default=0.5, ge=0.0, description="Minimum R profit required within time_stop_bars.")
+    stagnant_exit_bars: int = Field(default=15, ge=5, le=100, description="Exit if no new high/low made in N bars.")
+
+    # 6. Session-Close Exit
+    session_close_enabled: bool = Field(default=False, description="Force close intraday position before session end.")
+    session_close_minutes_before: int = Field(default=15, ge=1, le=60, description="Minutes before session close to exit position.")
+    session_close_hour_utc: int = Field(default=16, ge=0, le=23, description="Target session close hour in UTC (e.g. 16:00 UTC London close, 21:00 UTC NY close).")
 
 
+class PositionManagementConfig(BaseModel):
+    """Aggregate configuration for position management with strategy and instrument overrides."""
+    default_rules: PositionManagementRuleConfig = Field(default_factory=PositionManagementRuleConfig)
+    strategy_overrides: dict[str, PositionManagementRuleConfig] = Field(default_factory=dict)
+    instrument_overrides: dict[str, PositionManagementRuleConfig] = Field(default_factory=dict)
 
-# ─────────────────────────────────────────────
-#  Configuration Models
-# ─────────────────────────────────────────────
+    def get_rules(self, strategy_name: str | None = None, symbol: str | None = None) -> PositionManagementRuleConfig:
+        """Lookup hierarchy: Instrument override -> Strategy override -> Default."""
+        strat_key = normalize_strategy_key(strategy_name) if strategy_name else None
+        sym_key = symbol.strip().upper() if symbol else None
+
+        # Check instrument override first if available
+        if sym_key and sym_key in self.instrument_overrides:
+            return self.instrument_overrides[sym_key]
+
+        # Check strategy override
+        if strat_key and strat_key in self.strategy_overrides:
+            return self.strategy_overrides[strat_key]
+
+        return self.default_rules
+
 
 class AccountConfig(BaseModel):
     """Broker account parameters."""
@@ -346,6 +399,82 @@ class TradingConfig(BaseModel):
     timeframes: TimeframeConfig = Field(default_factory=TimeframeConfig)
     ict: ICTConfig = Field(default_factory=ICTConfig)
     order_flow: OrderFlowConfig = Field(default_factory=OrderFlowConfig)
+    position_management: PositionManagementConfig = Field(
+        default_factory=lambda: PositionManagementConfig(
+            default_rules=PositionManagementRuleConfig(
+                breakeven_enabled=True,
+                breakeven_trigger_r=1.0,
+                breakeven_offset_r=0.1,
+                partial_tp_enabled=True,
+                partial_tp_stages=[(1.0, 0.50), (2.0, 0.25)],
+                trailing_stop_mode="STRUCTURE",
+                trailing_activation_r=1.0,
+                trailing_structure_lookback=5,
+                trailing_structure_confirm_bars=2,
+            ),
+            strategy_overrides={
+                "SMC": PositionManagementRuleConfig(
+                    breakeven_enabled=True,
+                    breakeven_trigger_r=1.0,
+                    breakeven_offset_r=0.1,
+                    partial_tp_enabled=True,
+                    partial_tp_stages=[(2.0, 0.50)],
+                    trailing_stop_mode="STRUCTURE",
+                    trailing_activation_r=1.5,
+                    trailing_structure_lookback=5,
+                    session_close_enabled=False,
+                    time_stop_enabled=False,
+                ),
+                "SMC_SCALP_5M": PositionManagementRuleConfig(
+                    breakeven_enabled=True,
+                    breakeven_trigger_r=1.0,
+                    breakeven_offset_r=0.1,
+                    partial_tp_enabled=True,
+                    partial_tp_stages=[(1.0, 0.50)],
+                    trailing_stop_mode="ATR",
+                    trailing_activation_r=1.0,
+                    trailing_atr_multiplier=1.5,
+                    trailing_atr_period=14,
+                    session_close_enabled=True,
+                    session_close_minutes_before=15,
+                    session_close_hour_utc=16,
+                    time_stop_enabled=True,
+                    time_stop_bars=24,
+                    stagnant_exit_bars=12,
+                ),
+                "ICT": PositionManagementRuleConfig(
+                    breakeven_enabled=True,
+                    breakeven_trigger_r=1.0,
+                    breakeven_offset_r=0.1,
+                    partial_tp_enabled=True,
+                    partial_tp_stages=[(1.0, 0.50), (2.0, 0.25)],
+                    trailing_stop_mode="STRUCTURE",
+                    trailing_activation_r=1.0,
+                    trailing_structure_lookback=3,
+                    trailing_structure_confirm_bars=2,
+                    session_close_enabled=True,
+                    session_close_minutes_before=15,
+                    session_close_hour_utc=21,
+                    time_stop_enabled=False,
+                ),
+                "ORDER_FLOW": PositionManagementRuleConfig(
+                    breakeven_enabled=True,
+                    breakeven_trigger_r=1.0,
+                    breakeven_offset_r=0.1,
+                    partial_tp_enabled=True,
+                    partial_tp_stages=[(1.5, 0.50)],
+                    trailing_stop_mode="ATR",
+                    trailing_activation_r=1.0,
+                    trailing_atr_multiplier=1.5,
+                    session_close_enabled=False,
+                    time_stop_enabled=True,
+                    time_stop_bars=30,
+                ),
+            },
+        ),
+        description="Dynamic position management configuration with strategy-specific rules."
+    )
+
     
     # Multi-strategy concurrent execution
     enabled_strategies: List[str] = Field(

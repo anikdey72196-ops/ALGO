@@ -94,6 +94,7 @@ class BotStateResponse(BaseModel):
     performance_metrics: dict = {}
     ml_trap_detector: dict = {}
     open_positions_by_strategy: dict = {}
+    execution_summary: dict = {}
 
 
 
@@ -280,6 +281,14 @@ async def get_bot_state():
     except Exception as e:
         logger.warning(f"Failed to fetch open positions by strategy: {e}")
 
+    # Execution Quality summary (last 24h)
+    exec_summary = {}
+    if hasattr(bot_instance, "eqm_aggregator") and bot_instance.eqm_aggregator:
+        try:
+            exec_summary = bot_instance.eqm_aggregator.get_summary(window_hours=24)
+        except Exception as e:
+            logger.warning(f"Failed to fetch execution quality summary: {e}")
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols,
@@ -314,6 +323,7 @@ async def get_bot_state():
         performance_metrics=metrics,
         ml_trap_detector=trap_stats,
         open_positions_by_strategy=open_positions_by_strategy,
+        execution_summary=exec_summary,
     )
 
 
@@ -761,4 +771,81 @@ async def clear_activation_history():
     bot_instance.state.clear_activation_history()
     bot_instance.log("🧹 Bot activation/deactivation session history cleared.")
     return {"status": "success", "message": "Activation history cleared."}
+
+
+# ─────────────────────────────────────────────
+#  Execution Quality Metrics Endpoints
+# ─────────────────────────────────────────────
+
+@app.get("/api/execution/summary")
+async def get_execution_summary(window_hours: int = 24):
+    """Return top-level execution quality KPIs (slippage, latency, fill rate)."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    return bot_instance.eqm_aggregator.get_summary(window_hours=window_hours)
+
+
+@app.get("/api/execution/breakdowns")
+async def get_execution_breakdowns(window_hours: int = 168):
+    """Return breakdowns by symbol, strategy engine, KillZone, and reject reasons."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    return bot_instance.eqm_aggregator.get_breakdowns(window_hours=window_hours)
+
+
+@app.get("/api/execution/latency_histogram")
+async def get_execution_latency_histogram(window_hours: int = 168, bins: int = 10):
+    """Return latency histogram distribution."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    return bot_instance.eqm_aggregator.get_latency_histogram(window_hours=window_hours, bins=bins)
+
+
+@app.get("/api/execution/slippage_distribution")
+async def get_execution_slippage_distribution(window_hours: int = 168):
+    """Return slippage distribution breakdown (favorable vs adverse)."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    return bot_instance.eqm_aggregator.get_slippage_distribution(window_hours=window_hours)
+
+
+@app.get("/api/execution/orders")
+async def get_execution_orders(limit: int = 100):
+    """Return recent raw order execution records."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    with bot_instance.eqm_aggregator._get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM execution_orders
+            ORDER BY signal_time DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.get("/api/execution/export_csv")
+async def export_execution_metrics_csv():
+    """Export execution orders ledger to CSV."""
+    if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+        raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+    
+    import io
+    import csv
+    with bot_instance.eqm_aggregator._get_connection() as conn:
+        rows = conn.execute("SELECT * FROM execution_orders ORDER BY signal_time DESC").fetchall()
+    
+    if not rows:
+        return Response(content="order_id,symbol,strategy_name,status\n", media_type="text/csv", headers={"Content-Disposition": "attachment; filename=execution_metrics.csv"})
+    
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+    writer.writeheader()
+    for r in rows:
+        writer.writerow(dict(r))
+        
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=execution_metrics.csv"}
+    )
 
