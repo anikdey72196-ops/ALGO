@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Algo Trading Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#020617">
+  
+  <!-- Apple iOS Mobile Web App Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bot Terminal">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+
+  <!-- Android & Modern PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/terminal-icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+
+  <!-- Tailwind CSS & Google Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#020617',
+            terminalBg: '#030712',
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Mobile-first sleek dark scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #030712; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #020617;
+      color: #f1f5f9;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      overscroll-behavior-y: none;
+    }
+
+    .terminal-feed {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+
+    @supports (padding-top: env(safe-area-inset-top)) {
+      .safe-top { padding-top: max(12px, env(safe-area-inset-top)); }
+      .safe-bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    }
+
+    .glass-header {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    }
+
+    .pill-active {
+      background: #0ea5e9;
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.4);
+    }
+  </style>
+</head>
+<body class="bg-obsidian min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 glass-header safe-top px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-2">
+        <div class="relative w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-emerald-500 p-0.5 shadow-md shadow-cyan-900/30 flex-shrink-0">
+          <div class="w-full h-full bg-slate-950 rounded-[7px] flex items-center justify-center">
+            <span class="text-emerald-400 font-mono font-bold text-sm tracking-tighter">&gt;_</span>
+          </div>
+          <span id="connPulse" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
+          <span id="connDot" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-900"></span>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-bold text-sm tracking-tight text-white">Bot Terminal</h1>
+            <span id="botActiveBadge" class="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              IDLE
+            </span>
+          </div>
+          <p id="connStatus" class="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live Telemetry (1s)
+          </p>
+        </div>
+      </div>
+
+      <!-- Live KPI Pills -->
+      <div class="flex items-center gap-1.5 text-right font-mono">
+        <div class="bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
+          <div class="text-[9px] uppercase tracking-wider text-slate-400">Equity</div>
+          <div id="statEquity" class="text-xs font-bold text-emerald-400">$0.00</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
+          <div class="text-[9px] uppercase tracking-wider text-slate-400">Daily PnL</div>
+          <div id="statPnl" class="text-xs font-bold text-slate-200">$0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PWA Install Guide Banner (visible only if in browser, hidden when standalone) -->
+    <div id="installBanner" class="hidden mt-2 p-2 rounded-lg bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-emerald-950/80 border border-cyan-800/40 text-xs">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📲</span>
+          <div>
+            <div class="font-bold text-cyan-200 tracking-tight">Add Icon to Phone Screen</div>
+            <div id="installInstructions" class="text-[11px] text-slate-300 mt-0.5">
+              Tap <span class="font-bold text-white underline">Share</span> &rarr; <span class="font-bold text-white underline">'Add to Home Screen'</span> to open this terminal anytime like an app!
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button id="pwaInstallBtn" class="hidden px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] rounded shadow">
+            Install
+          </button>
+          <button onclick="dismissInstallBanner()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm font-bold">&times;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Pills & Search -->
+    <div class="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+      <button onclick="setFilter('ALL')" id="filterALL" class="pill-active px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all">
+        All Logs
+      </button>
+      <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="bg-slate-900 border border-slate-800 hover:border-rose-700/60 text-rose-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
+        <span>🚨</span> Reversals
+      </button>
+      <button onclick="setFilter('TRADE')" id="filterTRADE" class="bg-slate-900 border border-slate-800 hover:border-emerald-700/60 text-emerald-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
+        <span>⚡</span> Trades
+      </button>
+      <button onclick="setFilter('ML')" id="filterML" class="bg-slate-900 border border-slate-800 hover:border-cyan-700/60 text-cyan-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
+        <span>🤖</span> ML & AI
+      </button>
+      <button onclick="setFilter('WARN')" id="filterWARN" class="bg-slate-900 border border-slate-800 hover:border-amber-700/60 text-amber-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
+        <span>⚠️</span> Alerts
+      </button>
+    </div>
+
+    <!-- Quick Search & Actions Row -->
+    <div class="mt-2 flex items-center justify-between gap-2">
+      <div class="relative flex-1">
+        <input id="searchInput" type="text" placeholder="Filter symbol or keyword..." oninput="handleSearch(this.value)"
+               class="w-full bg-slate-950/80 border border-slate-800 rounded-md px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+        <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 top-1 text-slate-400 hover:text-white text-xs">&times;</button>
+      </div>
+
+      <div class="flex items-center gap-1 font-mono text-[11px]">
+        <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="bg-slate-900 border border-emerald-500/40 text-emerald-400 px-2 py-1 rounded flex items-center gap-1 font-medium">
+          <span id="scrollDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Auto
+        </button>
+        <button onclick="clearTerminal()" title="Clear screen" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-2 py-1 rounded">
+          Clear
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Terminal Display Container -->
+  <main class="flex-1 relative flex flex-col p-2 min-h-0">
+    <div id="terminalContainer" class="flex-1 overflow-y-auto terminal-feed bg-terminalBg rounded-xl border border-slate-800/80 p-2.5 shadow-inner space-y-1">
+      <div class="text-slate-500 text-center py-6 font-mono text-xs">
+        Connecting to trading bot engine...
+      </div>
+    </div>
+
+    <!-- Floating Scroll-To-Bottom Notification -->
+    <button id="scrollDownBtn" onclick="scrollToBottom(true)"
+            class="hidden absolute bottom-4 right-4 z-30 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg shadow-cyan-950/80 flex items-center gap-1.5 animate-bounce">
+      <span>&darr;</span> New Logs
+    </button>
+  </main>
+
+  <!-- Bottom Mini Footer -->
+  <footer class="safe-bottom bg-slate-950 border-t border-slate-900 px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+    <div class="flex items-center gap-2">
+      <span id="logCount">0 events</span>
+      <span class="text-slate-700">|</span>
+      <span id="monitoredSymbols">Pairs: -</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="lastUpdateTime">--:--:--</span>
+      <a href="/" class="text-cyan-400 hover:underline">Full Dashboard &rarr;</a>
+    </div>
+  </footer>
+
+  <script>
+    // State variables
+    let allLogs = [];
+    let activeFilter = 'ALL';
+    let searchQuery = '';
+    let autoScroll = true;
+    let deferredPrompt = null;
+    let lastLogHash = '';
+    let pollInterval = null;
+
+    // Check standalone mode (PWA installed)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.debug('SW reg:', err));
+      });
+    }
+
+    // Android PWA Install Event Hook
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('pwaInstallBtn');
+      if (btn) {
+        btn.classList.remove('hidden');
+        btn.onclick = async () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+              dismissInstallBanner();
+            }
+            deferredPrompt = null;
+          }
+        };
+      }
+    });
+
+    // Detect iOS and customize instructions
+    function setupInstallInstructions() {
+      if (isStandalone || localStorage.getItem('dismissTerminalBanner') === 'true') {
+        document.getElementById('installBanner').classList.add('hidden');
+        return;
+      }
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const instrEl = document.getElementById('installInstructions');
+      if (isIOS) {
+        instrEl.innerHTML = `On iPhone: Tap the <span class="font-bold text-cyan-300">Share icon</span> <svg class="inline w-3.5 h-3.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> at bottom &rarr; select <span class="font-bold text-white underline">'Add to Home Screen'</span>.`;
+      } else {
+        instrEl.innerHTML = `Tap menu <span class="font-bold text-cyan-300">⋮</span> at top right &rarr; select <span class="font-bold text-white underline">'Install App'</span> or <span class="font-bold text-white underline">'Add to Home screen'</span>.`;
+      }
+      document.getElementById('installBanner').classList.remove('hidden');
+    }
+
+    function dismissInstallBanner() {
+      localStorage.setItem('dismissTerminalBanner', 'true');
+      document.getElementById('installBanner').classList.add('hidden');
+    }
+
+    // Toggle Auto Scroll
+    function toggleAutoScroll() {
+      autoScroll = !autoScroll;
+      const btn = document.getElementById('autoScrollBtn');
+      const dot = document.getElementById('scrollDot');
+      if (autoScroll) {
+        btn.className = "bg-slate-900 border border-emerald-500/40 text-emerald-400 px-2 py-1 rounded flex items-center gap-1 font-medium";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse";
+        btn.innerHTML = `<span id="scrollDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Auto`;
+        scrollToBottom(true);
+      } else {
+        btn.className = "bg-slate-900 border border-slate-700 text-slate-400 px-2 py-1 rounded flex items-center gap-1 font-medium";
+        btn.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Paused`;
+      }
+    }
+
+    function scrollToBottom(force = false) {
+      const term = document.getElementById('terminalContainer');
+      if (term) {
+        term.scrollTop = term.scrollHeight;
+        document.getElementById('scrollDownBtn').classList.add('hidden');
+      }
+    }
+
+    // Filter selection
+    function setFilter(type) {
+      activeFilter = type;
+      ['ALL', 'REVERSAL', 'TRADE', 'ML', 'WARN'].forEach(t => {
+        const btn = document.getElementById(`filter${t}`);
+        if (!btn) return;
+        if (t === type) {
+          btn.className = "pill-active px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all";
+        } else {
+          let textCol = "text-slate-300";
+          if (t === 'REVERSAL') textCol = "text-rose-300";
+          if (t === 'TRADE') textCol = "text-emerald-300";
+          if (t === 'ML') textCol = "text-cyan-300";
+          if (t === 'WARN') textCol = "text-amber-300";
+          btn.className = `bg-slate-900 border border-slate-800 ${textCol} px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all`;
+        }
+      });
+      renderLogs();
+    }
+
+    function handleSearch(val) {
+      searchQuery = (val || '').trim().toLowerCase();
+      document.getElementById('clearSearchBtn').classList.toggle('hidden', searchQuery.length === 0);
+      renderLogs();
+    }
+
+    function clearSearch() {
+      const inp = document.getElementById('searchInput');
+      inp.value = '';
+      searchQuery = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      renderLogs();
+    }
+
+    function clearTerminal() {
+      allLogs = [];
+      renderLogs();
+    }
+
+    // Render formatted log entries
+    function renderLogs() {
+      const term = document.getElementById('terminalContainer');
+      if (!term) return;
+
+      let filtered = allLogs;
+
+      // Filter by category
+      if (activeFilter === 'REVERSAL') {
+        filtered = filtered.filter(l => l.includes('REVERSAL') || l.includes('CHoCH') || l.includes('🚨') || l.includes('🛡️') || l.includes('SWEEP'));
+      } else if (activeFilter === 'TRADE') {
+        filtered = filtered.filter(l => l.includes('ORDER') || l.includes('FILLED') || l.includes('TRADE') || l.includes('POSITION') || l.includes('✅') || l.includes('AUTHORIZED') || l.includes('SIGNAL'));
+      } else if (activeFilter === 'ML') {
+        filtered = filtered.filter(l => l.includes('ML') || l.includes('TRAP') || l.includes('AI') || l.includes('🤖') || l.includes('🔬') || l.includes('DECISION'));
+      } else if (activeFilter === 'WARN') {
+        filtered = filtered.filter(l => l.includes('⚠️') || l.includes('🚫') || l.includes('⛔') || l.includes('ERROR') || l.includes('FAILED') || l.includes('SKIPPED'));
+      }
+
+      // Filter by user search query
+      if (searchQuery) {
+        filtered = filtered.filter(l => l.toLowerCase().includes(searchQuery));
+      }
+
+      document.getElementById('logCount').innerText = `${filtered.length} / ${allLogs.length} events`;
+
+      if (filtered.length === 0) {
+        term.innerHTML = `<div class="text-slate-600 text-center py-10 font-mono text-xs italic">No log entries matching current filter.</div>`;
+        return;
+      }
+
+      term.innerHTML = filtered.map(log => {
+        let style = "text-slate-300 hover:bg-slate-900/60";
+        
+        // High visibility styling matching main app
+        if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED")) {
+          style = "text-rose-200 font-bold bg-rose-950/60 border border-rose-800/80 px-2 py-1 rounded shadow-sm";
+        } else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD")) {
+          style = "text-cyan-200 font-semibold bg-cyan-950/50 border border-cyan-700/60 px-2 py-0.5 rounded";
+        } else if (log.includes("⚠️") || log.includes("PRE-REVERSAL SWEEP") || log.includes("EARLY WARNING")) {
+          style = "text-amber-200 font-medium bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded";
+        } else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) {
+          style = "text-emerald-300 font-bold bg-emerald-950/40 px-2 py-0.5 rounded";
+        } else if (log.includes("🪤") || log.includes("TRAP") || log.includes("DECISION OVERRIDE")) {
+          style = "text-amber-300 font-medium bg-amber-950/30 px-2 py-0.5 rounded";
+        } else if (log.includes("🤖") || log.includes("AI CONFIRMED") || log.includes("🔬")) {
+          style = "text-indigo-300 font-medium bg-indigo-950/30 px-2 py-0.5 rounded";
+        } else if (log.includes("🚫") || log.includes("⛔") || log.includes("REJECTED")) {
+          style = "text-amber-400 font-normal px-1 py-0.5";
+        } else if (log.includes("❌") || log.includes("ERROR") || log.includes("FAILED")) {
+          style = "text-rose-400 font-bold px-1 py-0.5";
+        } else if (log.includes("📈") || log.includes("TREND HEALTHY")) {
+          style = "text-emerald-400/90 font-normal px-1 py-0.5";
+        } else if (log.includes("─── TICK")) {
+          style = "text-purple-400 font-semibold border-b border-purple-900/40 pb-0.5 my-1";
+        }
+
+        return `<div class="${style} rounded px-1.5 py-0.5 tracking-wide break-words transition-colors leading-relaxed">${escapeHtml(log)}</div>`;
+      }).join('');
+
+      if (autoScroll) {
+        scrollToBottom();
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Scroll listener to detect manual scroll up
+    document.getElementById('terminalContainer').addEventListener('scroll', (e) => {
+      const term = e.target;
+      const isAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 40;
+      const downBtn = document.getElementById('scrollDownBtn');
+      if (!isAtBottom) {
+        downBtn.classList.remove('hidden');
+      } else {
+        downBtn.classList.add('hidden');
+      }
+    });
+
+    // Polling API for Live State & Logs
+    async function fetchLiveTelemetry() {
+      try {
+        const res = await fetch('/api/state', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Update Connection Status
+        document.getElementById('connPulse').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping";
+        document.getElementById('connDot').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-900";
+        document.getElementById('connStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live Connected`;
+
+        // Bot Active Badge
+        const actBadge = document.getElementById('botActiveBadge');
+        if (data.is_active) {
+          actBadge.innerText = "ACTIVE";
+          actBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950";
+        } else {
+          actBadge.innerText = "IDLE";
+          actBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30";
+        }
+
+        // Equity & PnL
+        const eqEl = document.getElementById('statEquity');
+        eqEl.innerText = `$${Number(data.equity || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const pnlEl = document.getElementById('statPnl');
+        const pnl = Number(data.daily_pnl || 0);
+        pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+        pnlEl.className = pnl >= 0 ? "text-xs font-bold text-emerald-400" : "text-xs font-bold text-rose-400";
+
+        // Footer info
+        const symbols = data.selected_symbols || [];
+        document.getElementById('monitoredSymbols').innerText = symbols.length ? symbols.join(', ') : 'None';
+        document.getElementById('lastUpdateTime').innerText = new Date().toLocaleTimeString();
+
+        // Logs comparison & update
+        if (data.recent_logs && Array.isArray(data.recent_logs)) {
+          const newHash = data.recent_logs.slice(-3).join('|') + `_${data.recent_logs.length}`;
+          if (newHash !== lastLogHash) {
+            allLogs = data.recent_logs;
+            lastLogHash = newHash;
+            renderLogs();
+          }
+        }
+
+      } catch (err) {
+        document.getElementById('connPulse').className = "hidden";
+        document.getElementById('connDot').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-900";
+        document.getElementById('connStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500"></span> Disconnected`;
+      }
+    }
+
+    // Startup
+    setupInstallInstructions();
+    fetchLiveTelemetry();
+    pollInterval = setInterval(fetchLiveTelemetry, 1000);
+  </script>
+</body>
+</html>
