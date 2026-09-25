@@ -12,6 +12,7 @@ Features:
 from __future__ import annotations
 
 import os
+import socket
 import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -170,10 +171,36 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
 
-# Templates directory
+# Templates and static directories
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATES_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+def get_all_lan_ips() -> list[str]:
+    """Discover all non-loopback IPv4 addresses (Wi-Fi, Ethernet, Tailscale)."""
+    ips = set()
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ips.add(s.getsockname()[0])
+    except Exception:
+        pass
+
+    try:
+        hostname = socket.gethostname()
+        for addr_info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = addr_info[4][0]
+            if not ip.startswith("127."):
+                ips.add(ip)
+    except Exception:
+        pass
+
+    return sorted(list(ips)) if ips else ["127.0.0.1"]
 
 
 # ─────────────────────────────────────────────
@@ -184,6 +211,50 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 async def get_favicon():
     """Silence browser favicon 404 request."""
     return Response(status_code=204)
+
+
+@app.get("/manifest.json")
+async def get_manifest():
+    """Serve PWA Web App Manifest for mobile installation."""
+    manifest_path = STATIC_DIR / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="Manifest not found")
+
+
+@app.get("/sw.js")
+async def get_service_worker():
+    """Serve PWA Service Worker for mobile caching and home screen install."""
+    sw_path = STATIC_DIR / "sw.js"
+    if sw_path.exists():
+        return FileResponse(sw_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="Service worker not found")
+
+
+@app.get("/terminal", response_class=HTMLResponse)
+async def serve_terminal(request: Request):
+    """Serve the dedicated Mobile Terminal PWA web app."""
+    return templates.TemplateResponse(request=request, name="terminal.html")
+
+
+@app.get("/api/network-info")
+async def get_network_info():
+    """Return local LAN IP addresses and phone terminal URLs for QR code display."""
+    ips = get_all_lan_ips()
+    primary_ip = ips[0] if ips else "127.0.0.1"
+    port = 8000
+
+    terminal_urls = [f"http://{ip}:{port}/terminal" for ip in ips]
+    dashboard_urls = [f"http://{ip}:{port}/" for ip in ips]
+
+    return {
+        "primary_ip": primary_ip,
+        "port": port,
+        "available_ips": ips,
+        "terminal_url": terminal_urls[0] if terminal_urls else f"http://127.0.0.1:{port}/terminal",
+        "terminal_urls": terminal_urls,
+        "dashboard_urls": dashboard_urls,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)

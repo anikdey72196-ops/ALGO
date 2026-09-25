@@ -207,6 +207,49 @@ def test_api_workflow():
     print("\nAll Web API integration tests passed successfully!")
 
 
+def test_mobile_terminal_and_pwa_endpoints():
+    client = TestClient(app)
+
+    # 1. PWA Manifest
+    res = client.get("/manifest.json")
+    assert res.status_code == 200, f"Manifest status: {res.status_code}"
+    manifest = res.json()
+    assert manifest.get("start_url") == "/terminal"
+    assert manifest.get("display") == "standalone"
+    assert len(manifest.get("icons", [])) >= 2
+
+    # 2. Service Worker
+    res_sw = client.get("/sw.js")
+    assert res_sw.status_code == 200
+    assert "addEventListener" in res_sw.text
+
+    # 3. Mobile Terminal Template
+    res_term = client.get("/terminal")
+    assert res_term.status_code == 200
+    assert "Bot Terminal" in res_term.text
+    assert "/manifest.json" in res_term.text
+    assert "terminalContainer" in res_term.text
+
+    # 4. Network Info Endpoint
+    res_net = client.get("/api/network-info")
+    assert res_net.status_code == 200
+    net_data = res_net.json()
+    assert "primary_ip" in net_data
+    assert "terminal_url" in net_data
+    assert "/terminal" in net_data["terminal_url"]
+
+    # 5. Static Icons
+    res_icon = client.get("/static/icons/icon-192.png")
+    assert res_icon.status_code == 200
+    assert len(res_icon.content) > 100
+
+    res_apple = client.get("/static/icons/apple-touch-icon.png")
+    assert res_apple.status_code == 200
+
+    print("Mobile Terminal PWA tests passed successfully!")
+
+
 if __name__ == "__main__":
     test_api_workflow()
+    test_mobile_terminal_and_pwa_endpoints()
 

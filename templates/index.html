@@ -178,6 +178,15 @@
             <span class="font-body-sm text-xs sm:text-sm text-primary font-black tracking-wide uppercase" id="headerMarketScanningPill">SCANNING MARKETS</span>
           </div>
           
+          <button onclick="openPhoneAppModal()" id="headerPhoneTerminalBtn" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-cyan-500/50 hover:border-cyan-400 text-white font-label-md text-xs sm:text-sm font-black uppercase tracking-wider transition-all shadow-md shadow-cyan-950/40 flex items-center gap-2 active:scale-95 hover:shadow-cyan-500/20 group" title="Open Phone Terminal & QR Code">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+            </span>
+            <span class="material-symbols-outlined text-[19px] text-cyan-400 group-hover:scale-110 transition-transform">smartphone</span>
+            <span class="text-cyan-200">Phone Terminal</span>
+          </button>
+
           <button id="killSwitchBtn" onclick="toggleHaltModal()" class="px-5 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-300 font-label-md text-xs sm:text-sm font-black uppercase tracking-wider hover:bg-rose-600 hover:text-white transition-all shadow-sm flex items-center gap-2 active:scale-95" title="Emergency halt trading">
             <span class="material-symbols-outlined text-[17px]">power_settings_new</span>
             <span>HALT</span>
@@ -211,6 +220,12 @@
             <span>Sessions</span>
           </button>
         </nav>
+        <div class="flex items-center gap-2">
+          <button onclick="openPhoneAppModal()" class="px-4 py-2 text-xs sm:text-sm font-black rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white transition-all uppercase tracking-wider flex items-center gap-1.5 shadow-sm shadow-cyan-900/20 active:scale-95">
+            <span class="material-symbols-outlined text-[17px]">smartphone</span>
+            <span>Phone App</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -842,7 +857,10 @@
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block"></span>
                 <span class="ml-2 font-semibold text-slate-300">algo-terminal@telemetry: ~</span>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2.5">
+                <button onclick="openPhoneAppModal()" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-600/60 text-cyan-300 hover:bg-cyan-600 hover:text-white transition-all text-[11px] font-bold shadow-sm">
+                  <span>📱</span> Phone App / QR
+                </button>
                 <span class="text-slate-400 hidden sm:inline">UTF-8</span>
                 <span class="inline-flex items-center gap-1.5 text-emerald-400 font-semibold">
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> STREAMING
@@ -1213,6 +1231,89 @@
     </div>
   </div>
 
+  <!-- Phone App Installation & QR Modal -->
+  <div class="fixed inset-0 z-50 hidden bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4" id="phoneAppModal">
+    <div class="bg-slate-900 text-slate-100 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl border border-slate-700 relative overflow-hidden">
+      <!-- Glow Accents -->
+      <div class="absolute -top-16 -right-16 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-16 -left-16 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-900/30 flex-shrink-0">
+            <span class="material-symbols-outlined text-white text-[24px]">smartphone</span>
+          </div>
+          <div>
+            <h4 class="font-bold text-lg text-white tracking-tight">Add Terminal Icon to Your Phone</h4>
+            <p class="text-xs text-slate-400">Launch live bot logs directly from your home screen</p>
+          </div>
+        </div>
+        <button onclick="closePhoneAppModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+          <span class="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- QR Code and Link Area -->
+      <div class="bg-slate-950/90 rounded-2xl p-4 border border-slate-800 flex flex-col sm:flex-row items-center gap-4 mb-5">
+        <div class="p-2 bg-white rounded-xl flex-shrink-0 shadow-md">
+          <img id="phoneQrImage" src="" alt="Phone Terminal QR Code" class="w-32 h-32 object-contain" />
+        </div>
+        <div class="flex-1 text-center sm:text-left">
+          <div class="text-[11px] font-mono text-cyan-400 font-semibold uppercase tracking-wider mb-1">Step 1: Open on Phone</div>
+          <div class="text-xs text-slate-300 mb-2">Scan this QR with your iPhone or Android camera, or copy this URL to your phone:</div>
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5 font-mono text-xs">
+            <input id="phoneTerminalUrlInput" readonly class="w-full bg-transparent text-emerald-400 px-1 font-mono text-[11px] outline-none" value="" />
+            <button onclick="copyPhoneTerminalUrl()" id="copyUrlBtn" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-sans text-xs font-bold whitespace-nowrap shadow">
+              Copy
+            </button>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1.5">Phone & PC must be on the same Wi-Fi (or Tailscale).</div>
+        </div>
+      </div>
+
+      <!-- Instructions Tabs (iPhone & Android) -->
+      <div class="mb-5">
+        <div class="text-[11px] font-mono text-emerald-400 font-semibold uppercase tracking-wider mb-2">Step 2: Add Icon to Home Screen</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <!-- iPhone Card -->
+          <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/60">
+            <div class="flex items-center gap-1.5 font-bold text-slate-100 mb-1.5">
+              <span>🍎</span> iPhone (Safari)
+            </div>
+            <ol class="list-decimal list-inside space-y-1 text-slate-300 text-[11px]">
+              <li>Open link in Safari.</li>
+              <li>Tap the <span class="text-cyan-300 font-semibold">Share</span> icon (square with arrow).</li>
+              <li>Tap <span class="text-white font-bold bg-slate-700/60 px-1 py-0.5 rounded">Add to Home Screen</span>.</li>
+              <li>Tap <span class="text-emerald-400 font-bold">Add</span>. Icon appears on phone!</li>
+            </ol>
+          </div>
+
+          <!-- Android Card -->
+          <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/60">
+            <div class="flex items-center gap-1.5 font-bold text-slate-100 mb-1.5">
+              <span>🤖</span> Android (Chrome)
+            </div>
+            <ol class="list-decimal list-inside space-y-1 text-slate-300 text-[11px]">
+              <li>Open link in Chrome.</li>
+              <li>Tap the <span class="text-cyan-300 font-semibold">Install</span> banner, or menu <span class="text-cyan-300 font-bold">⋮</span>.</li>
+              <li>Tap <span class="text-white font-bold bg-slate-700/60 px-1 py-0.5 rounded">Install app</span> or <span class="text-white font-bold bg-slate-700/60 px-1 py-0.5 rounded">Add to Home screen</span>.</li>
+              <li>App icon is placed on phone screen!</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
+        <span class="text-slate-400 font-mono text-[11px]">Opens directly into live terminal</span>
+        <button type="button" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors" onclick="closePhoneAppModal()">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="w-full bg-white border-t border-purple-100 py-4 mt-8">
     <div class="w-full px-4 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 font-body-sm text-sm sm:text-base text-slate-800 font-bold">
@@ -1226,6 +1327,236 @@
       <div>Execution routing provided by Institutional Execution Desk © 2025. All quantitative models isolated.</div>
     </div>
   </footer>
+
+  <!-- ========================================================================= -->
+  <!-- PHONE TERMINAL & PWA MOBILE APP MODAL -->
+  <!-- ========================================================================= -->
+  <div id="phoneAppModal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto hidden">
+    <div class="relative w-full max-w-3xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Modal Top Accent Banner -->
+      <div class="bg-gradient-to-r from-cyan-600 via-indigo-600 to-emerald-600 px-5 py-3.5 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-slate-950/80 border border-white/20 flex items-center justify-center shadow-inner">
+            <span class="text-cyan-400 font-mono font-black text-sm">&gt;_</span>
+          </div>
+          <div>
+            <div class="font-headline-sm font-black text-sm sm:text-base tracking-tight flex items-center gap-2">
+              <span>Trading Bot Terminal on Phone</span>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 text-[10px] font-mono font-bold uppercase tracking-wider">PWA Live</span>
+            </div>
+            <div class="text-[11px] text-cyan-100 font-medium">Scan QR code or click the icon on your phone's home screen</div>
+          </div>
+        </div>
+
+        <button onclick="closePhoneAppModal()" class="w-8 h-8 rounded-lg bg-black/20 hover:bg-black/40 text-white flex items-center justify-center font-bold text-lg transition-all" title="Close (Esc)">
+          &times;
+        </button>
+      </div>
+
+      <!-- Navigation Tabs inside Modal -->
+      <div class="flex items-center border-b border-slate-800 bg-slate-950/60 px-5 pt-2">
+        <button id="modalTabInstallBtn" onclick="switchPhoneModalTab('install')" class="px-4 py-2 text-xs sm:text-sm font-black border-b-2 border-cyan-400 text-cyan-300 flex items-center gap-1.5 transition-colors">
+          <span class="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+          <span>Scan & Add Icon to Phone</span>
+        </button>
+        <button id="modalTabPreviewBtn" onclick="switchPhoneModalTab('preview')" class="px-4 py-2 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors">
+          <span class="material-symbols-outlined text-[16px]">smartphone</span>
+          <span>Live Phone Preview</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: Scan & Add Icon to Home Screen -->
+      <div id="modalContentInstall" class="p-4 sm:p-6 space-y-5">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+          
+          <!-- Left: QR Code & Connection -->
+          <div class="md:col-span-5 bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col items-center text-center space-y-3">
+            <div class="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Live Phone QR Code</span>
+            </div>
+
+            <div class="relative bg-white p-2.5 rounded-xl shadow-lg border border-slate-700/50">
+              <img id="phoneQrImage" src="" alt="Terminal QR Code" class="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg" />
+            </div>
+
+            <div class="text-[11px] text-slate-300 font-sans flex items-center justify-center gap-1 text-center">
+              <span>📷</span> Scan with iPhone or Android camera
+            </div>
+
+            <!-- Network Interface Selector (If multiple IPs detected) -->
+            <div class="w-full text-left space-y-1 pt-1">
+              <label class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Network Adapter / IP:</label>
+              <select id="phoneNetworkSelect" onchange="onPhoneNetworkChange(this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs font-mono text-cyan-300 rounded-lg px-2.5 py-1.5 focus:border-cyan-500 focus:outline-none">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+
+            <!-- Dynamic Tailscale Indicator -->
+            <div id="tailscaleNotice" class="hidden w-full bg-indigo-950/70 border border-indigo-500/40 rounded-lg p-2 text-[11px] text-indigo-200 flex items-start gap-1.5 font-sans">
+              <span class="text-sm">🌐</span>
+              <div>
+                <span class="font-bold text-white">Tailscale Detected:</span>
+                Pick Tailscale to view your terminal from anywhere in the world on phone data!
+              </div>
+            </div>
+
+            <!-- Direct URL & Copy -->
+            <div class="w-full space-y-1 text-left">
+              <label class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Direct Phone URL:</label>
+              <div class="flex items-center gap-1.5">
+                <input id="phoneTerminalUrlInput" type="text" readonly onclick="this.select()"
+                       class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] font-mono text-emerald-400 select-all focus:outline-none focus:border-cyan-500" />
+                <button id="copyUrlBtn" onclick="copyPhoneTerminalUrl()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold font-sans shadow transition-all active:scale-95 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px]">content_copy</span>
+                  <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="w-full pt-1 flex justify-center">
+              <a id="openNewTabLink" href="/terminal" target="_blank" class="text-[11px] font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1">
+                <span>Test in new browser tab</span>
+                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Right: How to Add Icon to Phone Screen -->
+          <div class="md:col-span-7 space-y-4">
+            
+            <!-- App Icon Preview Badge -->
+            <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-xl p-3 flex items-center gap-3.5 shadow-sm">
+              <div class="relative w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-500 p-0.5 shadow-md shadow-cyan-950 flex-shrink-0">
+                <img src="/static/icons/icon-192.png" alt="Bot Icon" class="w-full h-full rounded-[10px] object-cover" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-headline-sm font-black text-sm text-white tracking-tight">Bot Terminal</h4>
+                  <span class="px-1.5 py-0.2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9px] font-mono font-bold rounded uppercase">Instant Icon</span>
+                </div>
+                <p class="text-xs text-slate-300 truncate">Adds an app icon directly onto your phone home screen</p>
+              </div>
+            </div>
+
+            <!-- Steps for iOS & Android -->
+            <div class="space-y-2.5 text-xs text-slate-200">
+              <div class="font-headline-sm font-black text-xs uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">touch_app</span>
+                <span>How to Add Icon on Your Phone (2 Taps):</span>
+              </div>
+
+              <!-- iPhone Guide -->
+              <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2">
+                <div class="font-bold text-white flex items-center gap-1.5">
+                  <span class="text-sm">🍏</span>
+                  <span>iPhone / iPad (Apple Safari):</span>
+                </div>
+                <ol class="list-decimal list-inside space-y-1 text-slate-300 pl-1 font-sans">
+                  <li>Scan the QR code with your iPhone camera to open in <strong>Safari</strong>.</li>
+                  <li>Tap the <strong>Share</strong> button <span class="inline-block px-1.5 py-0.5 bg-slate-800 rounded font-mono font-bold text-cyan-300">⎋</span> at the bottom of the screen.</li>
+                  <li>Scroll down and tap <strong class="text-white">"Add to Home Screen"</strong> (<span class="font-bold text-cyan-300">+</span>).</li>
+                  <li>Tap <strong class="text-emerald-400">"Add"</strong> at the top right corner.</li>
+                </ol>
+                <div class="text-[11px] text-emerald-300 font-medium pl-1">
+                  ✨ The <strong>Bot Terminal</strong> icon will appear on your phone home screen!
+                </div>
+              </div>
+
+              <!-- Android Guide -->
+              <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2">
+                <div class="font-bold text-white flex items-center gap-1.5">
+                  <span class="text-sm">🤖</span>
+                  <span>Android (Google Chrome):</span>
+                </div>
+                <ol class="list-decimal list-inside space-y-1 text-slate-300 pl-1 font-sans">
+                  <li>Scan the QR code with your phone camera or open in <strong>Chrome</strong>.</li>
+                  <li>Tap the three dots menu <span class="inline-block px-1.5 py-0.5 bg-slate-800 rounded font-mono font-bold text-cyan-300">⋮</span> at the top right.</li>
+                  <li>Tap <strong class="text-white">"Install app"</strong> or <strong class="text-white">"Add to Home screen"</strong>.</li>
+                  <li>Confirm <strong class="text-emerald-400">"Install"</strong>.</li>
+                </ol>
+                <div class="text-[11px] text-emerald-300 font-medium pl-1">
+                  ✨ The <strong>Bot Terminal</strong> icon will appear on your phone home screen!
+                </div>
+              </div>
+            </div>
+
+            <!-- Standalone Fullscreen Notice -->
+            <div class="bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3 text-[11px] text-cyan-200 flex items-start gap-2">
+              <span class="text-base mt-0.5">🚀</span>
+              <div>
+                <strong class="text-white">Native App Experience:</strong>
+                Tapping the icon on your phone opens the trading terminal in standalone fullscreen with no browser address bars, live streaming trades, and instant reversal alerts!
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Live Phone Mockup Preview -->
+      <div id="modalContentPreview" class="p-4 sm:p-6 hidden flex flex-col items-center">
+        <div class="text-xs text-slate-400 font-mono mb-3 flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Live interactive preview of how the terminal displays on mobile screens:</span>
+        </div>
+
+        <!-- Phone Bezel Frame Mockup -->
+        <div class="relative w-[320px] sm:w-[350px] h-[540px] bg-slate-950 rounded-[36px] border-4 border-slate-700 shadow-2xl overflow-hidden p-1.5 flex flex-col">
+          <!-- Top Speaker / Notch Bar -->
+          <div class="w-full flex items-center justify-center py-1">
+            <div class="w-20 h-3.5 bg-slate-800 rounded-full flex items-center justify-center">
+              <div class="w-2 h-2 bg-slate-900 rounded-full mr-2"></div>
+              <div class="w-8 h-1 bg-slate-700 rounded-full"></div>
+            </div>
+          </div>
+          <!-- Screen Frame containing live iframe -->
+          <div class="flex-1 w-full rounded-[26px] overflow-hidden bg-black border border-slate-800">
+            <iframe id="phonePreviewIframe" src="/terminal" class="w-full h-full border-0"></iframe>
+          </div>
+          <!-- Home Indicator Pill -->
+          <div class="w-full flex items-center justify-center py-1">
+            <div class="w-24 h-1 bg-slate-700 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="bg-slate-950 px-5 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
+        <div class="flex items-center gap-2">
+          <span>Wi-Fi / LAN Mode</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-emerald-400 font-bold">PWA Ready</span>
+        </div>
+        <button onclick="closePhoneAppModal()" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-sans font-bold transition-all">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Emergency Halt Modal -->
+  <div id="haltModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="w-full max-w-md bg-white border border-rose-200 rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center gap-3 text-rose-700">
+        <span class="material-symbols-outlined text-3xl">warning</span>
+        <h3 class="font-headline-sm text-lg font-black tracking-tight">Emergency Halt Trading</h3>
+      </div>
+      <p class="text-sm text-slate-700 font-medium">Are you sure you want to deactivate the bot? This will immediately pause all automated trade generation and exit signal scanning.</p>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button onclick="toggleHaltModal()" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs uppercase hover:bg-slate-100 transition-all">Cancel</button>
+        <button onclick="confirmHalt()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-rose-600/30 transition-all">Confirm Halt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Notification -->
+  <div id="terminalToast" class="fixed bottom-6 right-6 z-50 transition-all duration-300 pointer-events-none bg-white border border-purple-300 text-slate-950 px-4 py-3 rounded-xl shadow-[0_10px_30px_rgba(124,58,237,0.2)] flex items-center gap-2.5 font-body-sm text-xs sm:text-sm font-black translate-y-20 opacity-0">
+    <span class="material-symbols-outlined text-primary text-[18px]">info</span>
+    <span id="toastMessage">Notification</span>
+  </div>
 
   <!-- Scripts -->
   <script>
@@ -1302,6 +1633,151 @@
         toast.classList.add('translate-y-20', 'opacity-0');
       }, 3500);
     }
+
+    let cachedPhoneNetworkInfo = null;
+
+    async function openPhoneAppModal() {
+      const modal = document.getElementById('phoneAppModal');
+      if (modal) modal.classList.remove('hidden');
+
+      try {
+        if (!cachedPhoneNetworkInfo) {
+          const res = await fetch('/api/network-info');
+          if (res.ok) {
+            cachedPhoneNetworkInfo = await res.json();
+          }
+        }
+
+        const ips = (cachedPhoneNetworkInfo && cachedPhoneNetworkInfo.available_ips && cachedPhoneNetworkInfo.available_ips.length)
+          ? cachedPhoneNetworkInfo.available_ips
+          : [window.location.hostname || '127.0.0.1'];
+        const port = (cachedPhoneNetworkInfo && cachedPhoneNetworkInfo.port) || window.location.port || 8000;
+        
+        // Populate network selector
+        const select = document.getElementById('phoneNetworkSelect');
+        const hasTailscale = ips.some(ip => ip.startsWith('100.'));
+        const tailscaleNotice = document.getElementById('tailscaleNotice');
+        if (tailscaleNotice) {
+          tailscaleNotice.classList.toggle('hidden', !hasTailscale);
+        }
+
+        let selectedIp = ips[0] || window.location.hostname || '127.0.0.1';
+        if (ips.includes(window.location.hostname)) {
+          selectedIp = window.location.hostname;
+        }
+
+        if (select) {
+          select.innerHTML = ips.map((ip) => {
+            let label = `${ip}:${port}`;
+            if (ip.startsWith('100.')) {
+              label = `🌐 Tailscale (Worldwide / 5G Mobile Data) - ${ip}:${port}`;
+            } else if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.')) {
+              label = `📶 Local Wi-Fi (Home / Office LAN) - ${ip}:${port}`;
+            } else if (ip.startsWith('127.')) {
+              label = `💻 Localhost (This PC only) - ${ip}:${port}`;
+            }
+            return `<option value="${ip}">${label}</option>`;
+          }).join('');
+          select.value = selectedIp;
+        }
+
+        updatePhoneTerminalDisplay(selectedIp, port);
+
+      } catch (err) {
+        console.warn('Network info error:', err);
+        const host = window.location.hostname || '127.0.0.1';
+        const port = window.location.port || '8000';
+        updatePhoneTerminalDisplay(host, port);
+      }
+    }
+
+    function onPhoneNetworkChange(ip) {
+      const port = (cachedPhoneNetworkInfo && cachedPhoneNetworkInfo.port) || window.location.port || 8000;
+      updatePhoneTerminalDisplay(ip, port);
+    }
+
+    function updatePhoneTerminalDisplay(ip, port) {
+      const termUrl = `http://${ip}:${port}/terminal`;
+      const input = document.getElementById('phoneTerminalUrlInput');
+      if (input) input.value = termUrl;
+
+      const newTabLink = document.getElementById('openNewTabLink');
+      if (newTabLink) newTabLink.href = termUrl;
+
+      const qrImg = document.getElementById('phoneQrImage');
+      if (qrImg) {
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(termUrl)}`;
+      }
+    }
+
+    function closePhoneAppModal() {
+      const modal = document.getElementById('phoneAppModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function switchPhoneModalTab(tab) {
+      const installContent = document.getElementById('modalContentInstall');
+      const previewContent = document.getElementById('modalContentPreview');
+      const installBtn = document.getElementById('modalTabInstallBtn');
+      const previewBtn = document.getElementById('modalTabPreviewBtn');
+
+      if (tab === 'install') {
+        if (installContent) installContent.classList.remove('hidden');
+        if (previewContent) previewContent.classList.add('hidden');
+        if (installBtn) installBtn.className = "px-4 py-2 text-xs sm:text-sm font-black border-b-2 border-cyan-400 text-cyan-300 flex items-center gap-1.5 transition-colors";
+        if (previewBtn) previewBtn.className = "px-4 py-2 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors";
+      } else {
+        if (installContent) installContent.classList.add('hidden');
+        if (previewContent) previewContent.classList.remove('hidden');
+        if (previewBtn) previewBtn.className = "px-4 py-2 text-xs sm:text-sm font-black border-b-2 border-cyan-400 text-cyan-300 flex items-center gap-1.5 transition-colors";
+        if (installBtn) installBtn.className = "px-4 py-2 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors";
+      }
+    }
+
+    function copyPhoneTerminalUrl() {
+      const input = document.getElementById('phoneTerminalUrlInput');
+      if (input) {
+        navigator.clipboard.writeText(input.value).then(() => {
+          const btn = document.getElementById('copyUrlBtn');
+          if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = `<span class="material-symbols-outlined text-[14px]">check</span><span>Copied!</span>`;
+            btn.className = 'px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold font-sans shadow transition-all';
+            showToast("Terminal Link Copied to Clipboard!");
+            setTimeout(() => {
+              btn.innerHTML = orig;
+              btn.className = 'px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold font-sans shadow transition-all active:scale-95 flex items-center gap-1';
+            }, 2000);
+          }
+        }).catch(() => {
+          input.select();
+          document.execCommand('copy');
+          showToast("Terminal Link Copied!");
+        });
+      }
+    }
+
+    // Modal Keyboard & Outside Click Listeners
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closePhoneAppModal();
+        const haltModal = document.getElementById('haltModal');
+        if (haltModal && !haltModal.classList.contains('hidden')) {
+          haltModal.classList.add('hidden');
+        }
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('phoneAppModal');
+      if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closePhoneAppModal();
+      }
+      const haltModal = document.getElementById('haltModal');
+      if (haltModal && !haltModal.classList.contains('hidden') && e.target === haltModal) {
+        haltModal.classList.add('hidden');
+      }
+    });
 
     function toggleHaltModal() {
       const modal = document.getElementById('haltModal');
