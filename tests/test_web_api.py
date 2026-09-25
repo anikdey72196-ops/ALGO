@@ -3,6 +3,12 @@ test_web_api.py — Automated test script to verify FastAPI endpoints and lock e
 """
 
 import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import asyncio
 from fastapi.testclient import TestClient
 from web_app import app, bot_instance

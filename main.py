@@ -19,28 +19,32 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # pyrefly: ignore [missing-import]
 from apscheduler.triggers.interval import IntervalTrigger
 
-from config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction, normalize_strategy_key
-from state import StateManager, TradeRecord
-from news_filter import NewsFilter
-from strategy import StrategyEngine, TradeSignal
-from conflict_resolver import ConflictResolver
-from risk_engine import RiskEngine
-from ai_analyst import AIAnalyst, AIDecision
-from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
-from execution import (
+from core.config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction, normalize_strategy_key
+from core.state import StateManager, TradeRecord
+from core.news_filter import NewsFilter
+from core.risk_engine import RiskEngine
+from core.conflict_resolver import ConflictResolver
+from core.ai_analyst import AIAnalyst, AIDecision
+from core.market_regime import MarketRegimeDetector, MarketRegime
+
+from strategies.strategy import StrategyEngine, TradeSignal
+from strategies.trend_reversal import (
+    TrendReversalDetector, TrendReversalAnalysis, CHoCHType, ReversalStage
+)
+
+from execution.execution import (
     BrokerAdapter, MockBrokerAdapter, MT5Adapter,
     BracketOrder, PriceQuote,
 )
-from execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord
-from metrics_aggregator import MetricsAggregator
-from market_regime import MarketRegimeDetector, MarketRegime
-from spread_guard import DynamicSpreadGuard
-from order_manager import OrderManager, generate_idempotency_key, OrderState
-from reconciliation import ReconciliationEngine
-from position_manager import PositionManager
-from trend_reversal import (
-    TrendReversalDetector, TrendReversalAnalysis, CHoCHType, ReversalStage
-)
+from execution.execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord
+from execution.metrics_aggregator import MetricsAggregator
+from execution.spread_guard import DynamicSpreadGuard
+from execution.order_manager import OrderManager, generate_idempotency_key, OrderState
+from execution.reconciliation import ReconciliationEngine
+from execution.position_manager import PositionManager
+
+from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
+from ml.temporal_analyzer import TemporalModelConfig, TemporalEdgeService, EdgeTier
 
 
 # ─────────────────────────────────────────────
@@ -133,6 +137,17 @@ class TradingBot:
             shadow_until_samples=getattr(self.config, 'ml_shadow_until_samples', 0),
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
+
+        # ML Model 2: Temporal & Session Edge Analyzer (Day/Time/Session Profitability & Hazard Gate)
+        temporal_cfg = TemporalModelConfig(
+            db_path=self.config.db_path,
+            model_path="ml/artifacts/temporal_edge_model.joblib",
+            stats_path="ml/artifacts/temporal_edge_stats.json",
+            active_gating=getattr(self.config, 'temporal_ml_enabled', True),
+            veto_toxic=getattr(self.config, 'temporal_veto_toxic', True),
+            toxic_loss_threshold=getattr(self.config, 'temporal_max_loss_probability', 0.65),
+        )
+        self.temporal_svc = TemporalEdgeService(temporal_cfg)
 
 
         # Execution Quality Metrics Subsystem
@@ -877,6 +892,43 @@ class TradingBot:
                         except Exception as e:
                             self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
 
+                # ── Step 2c-1.8: ML Model 2 — Temporal & Session Edge Analyzer ──
+                temporal_risk_mult = 1.0
+                if getattr(self.config, 'temporal_ml_enabled', True):
+                    try:
+                        strat_key = normalize_strategy_key(best_signal.strategy_name)
+                        temp_verdict = self.temporal_svc.evaluate(
+                            timestamp=getattr(best_signal, 'timestamp', None) or datetime.now(timezone.utc),
+                            symbol=symbol,
+                            strategy=strat_key,
+                            planned_rr=best_signal.rr_ratio,
+                        )
+                        temporal_risk_mult = temp_verdict.risk_multiplier
+
+                        if not temp_verdict.allowed and getattr(self.config, 'temporal_veto_toxic', False):
+                            self.log(
+                                f"  ⏰ [TEMPORAL ML VETO] Trade SKIPPED: High-hazard losing window "
+                                f"({temp_verdict.day_name} {temp_verdict.session} P(SL)={temp_verdict.p_loss*100:.1f}%) | "
+                                f"Expected Return: {temp_verdict.expected_r:+.2f}R | {temp_verdict.reason}",
+                                level="WARNING",
+                            )
+                            self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4004, rejection_reason=f"Temporal Veto {temp_verdict.edge_tier.value}")
+                            continue
+                        elif not temp_verdict.allowed:
+                            temporal_risk_mult = max(0.25, temporal_risk_mult)
+                            self.log(
+                                f"  ⚠️ [TEMPORAL HAZARD WARNING] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                f"(P(SL)={temp_verdict.p_loss*100:.1f}%). Sizing scaled down to {temporal_risk_mult:.2f}x."
+                            )
+                        else:
+                            self.log(
+                                f"  ⏰ [TEMPORAL ML APPROVED] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                f"(P(Win)={temp_verdict.p_win*100:.1f}%, Expected Return={temp_verdict.expected_r:+.2f}R) | "
+                                f"Risk Scale: {temporal_risk_mult:.2f}x"
+                            )
+                    except Exception as e:
+                        self.log(f"  ⚠️ Temporal ML Gate error (failing open): {e}", level="WARNING")
+
                 # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
                 ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
                 eqm_order.ai_conviction = ai_verdict.confidence
@@ -888,10 +940,11 @@ class TradingBot:
 
                 self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
 
-                # ── Step 2c-3: Risk authorization (Pair-specific sizing & Sideways Market scaling) ──
+                # ── Step 2c-3: Risk authorization (Pair-specific sizing, Market Regime & Temporal scaling) ──
+                combined_risk_multiplier = regime_analysis.risk_multiplier * temporal_risk_mult
                 equity = self.broker.get_account_equity()
                 auth = self.risk_engine.authorize_trade(
-                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=regime_analysis.risk_multiplier
+                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier
                 )
 
                 if not auth.authorized:

@@ -29,9 +29,9 @@ import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_instrument
+from core.config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_instrument
+from core.state import format_duration
 from main import TradingBot, parse_ltf_to_seconds
-from state import format_duration
 
 
 # ─────────────────────────────────────────────
@@ -99,6 +99,7 @@ class BotStateResponse(BaseModel):
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
     ml_trap_detector: dict = {}
+    temporal_ml_model: dict = {}
     open_positions_by_strategy: dict = {}
     execution_summary: dict = {}
     trend_reversal: dict = {}
@@ -302,6 +303,14 @@ async def get_bot_state():
         for sym, rev in bot_instance.trend_reversal_status.items():
             trend_reversal_data[sym] = rev.to_dict()
 
+    # Temporal & Session ML Model statistics
+    temporal_stats = {}
+    if hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+        try:
+            temporal_stats = bot_instance.temporal_svc.get_summary()
+        except Exception as e:
+            temporal_stats = {"error": str(e)}
+
     return BotStateResponse(
         is_active=bot_instance.is_active,
         selected_symbols=bot_instance.config.selected_symbols,
@@ -339,6 +348,7 @@ async def get_bot_state():
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
         ml_trap_detector=trap_stats,
+        temporal_ml_model=temporal_stats,
         open_positions_by_strategy=open_positions_by_strategy,
         execution_summary=exec_summary,
         trend_reversal=trend_reversal_data,
@@ -751,6 +761,33 @@ async def get_analytics_metrics():
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
     return bot_instance.state.get_performance_metrics()
+
+
+@app.get("/api/ml/temporal/summary")
+async def get_temporal_ml_summary():
+    """Return top profitable and losing days, hours, and market sessions from ML Model 2."""
+    if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+        raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+    return bot_instance.temporal_svc.get_summary()
+
+
+@app.get("/api/ml/temporal/breakdown")
+async def get_temporal_ml_breakdown():
+    """Return detailed Day, Hour, Session, and DayxSession cross-matrices."""
+    if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+        raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+    return bot_instance.temporal_svc.get_full_breakdown()
+
+
+@app.post("/api/ml/temporal/retrain")
+async def retrain_temporal_ml_model():
+    """Trigger on-demand retraining of Temporal & Session ML Model from SQLite trade database."""
+    if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+        raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+    summary = bot_instance.temporal_svc.train_and_update()
+    bot_instance.log("🧠 [TEMPORAL ML] Model retrained on latest trade records and event logs.")
+    return {"status": "success", "message": "Temporal ML model retrained successfully", "summary": summary}
+
 
 
 @app.post("/api/trades/clear")
