@@ -56,6 +56,8 @@ class BotConfigUpdate(BaseModel):
     fixed_sl_pips: Optional[float] = None
     ai_confirmation_enabled: Optional[bool] = None
     max_open_positions: Optional[int] = None
+    night_limit_enabled: Optional[bool] = None
+    night_max_open_positions: Optional[int] = None
     ml_gating_enabled: Optional[bool] = None
     ml_max_sl_probability: Optional[float] = None
 
@@ -71,6 +73,10 @@ class BotStateResponse(BaseModel):
     fixed_lot_size: Optional[float]
     fixed_sl_pips: Optional[float]
     max_open_positions: int = 15
+    effective_max_open_positions: int = 15
+    is_night_window: bool = False
+    night_limit_enabled: bool = True
+    night_max_open_positions: int = 2
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
     ml_gating_enabled: bool = True
@@ -307,6 +313,10 @@ async def get_bot_state():
         fixed_lot_size=bot_instance.config.fixed_lot_size,
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
         max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 15),
+        effective_max_open_positions=bot_instance.config.risk.get_effective_max_open_positions() if hasattr(bot_instance.config.risk, 'get_effective_max_open_positions') else getattr(bot_instance.config.risk, 'max_open_positions', 15),
+        is_night_window=bot_instance.config.risk.is_night_window() if hasattr(bot_instance.config.risk, 'is_night_window') else False,
+        night_limit_enabled=getattr(bot_instance.config.risk, 'night_limit_enabled', True),
+        night_max_open_positions=getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
@@ -575,6 +585,22 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.risk.max_open_positions = payload.max_open_positions
 
+    if payload.night_limit_enabled is not None:
+        if bot_instance.is_active and payload.night_limit_enabled != getattr(bot_instance.config.risk, 'night_limit_enabled', True):
+            raise HTTPException(
+                status_code=400,
+                detail="Night trade limit is LOCKED during activation! Deactivate the bot first to modify."
+            )
+        bot_instance.config.risk.night_limit_enabled = payload.night_limit_enabled
+
+    if payload.night_max_open_positions is not None:
+        if bot_instance.is_active and payload.night_max_open_positions != getattr(bot_instance.config.risk, 'night_max_open_positions', 2):
+            raise HTTPException(
+                status_code=400,
+                detail="Night trade limit capacity is LOCKED during activation! Deactivate the bot first to modify."
+            )
+        bot_instance.config.risk.night_max_open_positions = payload.night_max_open_positions
+
     if payload.ai_confirmation_enabled is not None:
         if bot_instance.is_active and payload.ai_confirmation_enabled != bot_instance.config.ai_confirmation_enabled:
             raise HTTPException(
@@ -627,6 +653,8 @@ async def update_configuration(payload: BotConfigUpdate):
         "fixed_lot_size": bot_instance.config.fixed_lot_size,
         "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
         "max_open_positions": bot_instance.config.risk.max_open_positions,
+        "night_limit_enabled": getattr(bot_instance.config.risk, 'night_limit_enabled', True),
+        "night_max_open_positions": getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
     }
 

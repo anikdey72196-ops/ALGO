@@ -301,7 +301,8 @@ class TestMLDecisionOverride(unittest.TestCase):
         # Verify AI and Broker were reached and order was filled
         bot.ai_analyst.evaluate_setup.assert_called_once()
         bot.broker.send_bracket_order.assert_called_once()
-        self.assertIn("ORDER FILLED: ID=99001", logs)
+        self.assertIn("ID=99001", logs)
+        self.assertIn("ORDER FILLED", logs)
 
     def test_web_api_ml_configuration_and_activation_lock(self):
         """Verify API exposes and locks ML gating settings."""

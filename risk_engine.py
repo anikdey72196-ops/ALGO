@@ -59,22 +59,30 @@ class RiskEngine:
         # Round to 2 decimal places to avoid floating point issues
         return round(lot_size, 2)
     
-    def check_circuit_breakers(self, equity: float) -> tuple[bool, str | None]:
+    def check_circuit_breakers(self, equity: float, current_time: datetime | None = None) -> tuple[bool, str | None]:
         """
         Check all circuit breaker conditions:
         1. Is circuit breaker already activated for today? -> blocked
         2. Has daily realized PnL exceeded max drawdown? -> activate breaker, blocked
+        3. Has maximum concurrent open positions limit been reached? (2 between 11 PM - 8 AM, 15 daytime)
         
         Returns (is_blocked: bool, reason: str | None).
         """
         if self.state.is_circuit_breaker_active():
             return True, 'Circuit breaker active: daily loss limit reached'
 
-        # Check maximum concurrent open positions (default 15)
+        # Check maximum concurrent open positions (default 15, auto 2 from 11 PM to 8 AM)
         open_positions = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 15)
+        if hasattr(self.config.risk, 'get_effective_max_open_positions'):
+            max_open = self.config.risk.get_effective_max_open_positions(current_time)
+            is_night = self.config.risk.is_night_window(current_time)
+        else:
+            max_open = getattr(self.config.risk, 'max_open_positions', 15)
+            is_night = False
+
         if len(open_positions) >= max_open:
-            return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
+            limit_desc = "Night Limit (11 PM - 8 AM)" if is_night else "Global Cap"
+            return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open, {limit_desc})"
 
         pnl = self.state.get_daily_pnl()
         limit = equity * self.config.account.max_daily_drawdown_pct
@@ -101,7 +109,8 @@ class RiskEngine:
         4. Validate lot size > 0 and within bounds.
         5. Return AuthorizationResult.
         """
-        is_blocked, reason = self.check_circuit_breakers(current_equity)
+        sig_time = getattr(signal, 'timestamp', None)
+        is_blocked, reason = self.check_circuit_breakers(current_equity, sig_time)
         if is_blocked:
             logger.warning(f"Trade rejected: {reason}")
             return AuthorizationResult(

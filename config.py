@@ -18,6 +18,7 @@ Deployment Notes:
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List
 
@@ -280,6 +281,72 @@ class RiskConfig(BaseModel):
         ge=1.0,
         description="Reject trade if live spread > avg_spread * this value.",
     )
+    # Automatic Night Trade Limit (11 PM - 8 AM)
+    night_limit_enabled: bool = Field(
+        default=True,
+        description="Enable automatic night trade limit between start and end hours.",
+    )
+    night_start_hour: int = Field(
+        default=23,
+        ge=0,
+        le=23,
+        description="Night trading window start hour (23 = 11:00 PM).",
+    )
+    night_end_hour: int = Field(
+        default=8,
+        ge=0,
+        le=23,
+        description="Night trading window end hour (8 = 8:00 AM).",
+    )
+    night_max_open_positions: int = Field(
+        default=2,
+        ge=1,
+        le=50,
+        description="Maximum concurrent open positions allowed during night window (11 PM - 8 AM).",
+    )
+    night_timezone_mode: str = Field(
+        default="LOCAL",
+        description="Timezone mode for night window: 'LOCAL' (system clock) or 'UTC'.",
+    )
+
+    def is_night_window(self, current_dt: datetime | None = None) -> bool:
+        """Check if current time is within the night trading limit window (e.g. 11 PM to 8 AM)."""
+        if not self.night_limit_enabled:
+            return False
+
+        if current_dt is None:
+            if self.night_timezone_mode.upper() == "UTC":
+                current_dt = datetime.now(timezone.utc)
+            else:
+                current_dt = datetime.now().astimezone()
+        else:
+            if self.night_timezone_mode.upper() == "UTC":
+                if current_dt.tzinfo is None:
+                    current_dt = current_dt.replace(tzinfo=timezone.utc)
+                else:
+                    current_dt = current_dt.astimezone(timezone.utc)
+            else:
+                if current_dt.tzinfo is not None:
+                    current_dt = current_dt.astimezone()
+
+        hour = current_dt.hour
+        if self.night_start_hour > self.night_end_hour:
+            return hour >= self.night_start_hour or hour < self.night_end_hour
+        elif self.night_start_hour < self.night_end_hour:
+            return self.night_start_hour <= hour < self.night_end_hour
+        else:
+            return False
+
+    def get_effective_max_open_positions(self, current_dt: datetime | None = None) -> int:
+        """
+        Return effective maximum open positions.
+        If night limit is enabled and current time falls between night_start_hour (11 PM / 23:00)
+        and night_end_hour (8 AM / 08:00), return night_max_open_positions (2).
+        Otherwise return max_open_positions (e.g. 15).
+        """
+        if self.is_night_window(current_dt):
+            return self.night_max_open_positions
+        return self.max_open_positions
 
 
 class TimeframeConfig(BaseModel):

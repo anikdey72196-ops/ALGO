@@ -34,26 +34,41 @@ class OrderLatencyStage:
     @property
     def signal_to_submit_ms(self) -> float:
         if self.t0_signal_ns and self.t1_submit_ns:
-            return max(0.0, (self.t1_submit_ns - self.t0_signal_ns) / 1_000_000.0)
+            try:
+                return max(0.0, float(self.t1_submit_ns - self.t0_signal_ns) / 1_000_000.0)
+            except (TypeError, ValueError):
+                return 0.0
         return 0.0
 
     @property
     def submit_to_ack_ms(self) -> float:
         if self.t1_submit_ns and self.t2_ack_ns:
-            return max(0.0, (self.t2_ack_ns - self.t1_submit_ns) / 1_000_000.0)
+            try:
+                return max(0.0, float(self.t2_ack_ns - self.t1_submit_ns) / 1_000_000.0)
+            except (TypeError, ValueError):
+                return 0.0
         return 0.0
 
     @property
     def ack_to_fill_ms(self) -> float:
         if self.t2_ack_ns and self.t3_fill_ns:
-            return max(0.0, (self.t3_fill_ns - self.t2_ack_ns) / 1_000_000.0)
+            try:
+                return max(0.0, float(self.t3_fill_ns - self.t2_ack_ns) / 1_000_000.0)
+            except (TypeError, ValueError):
+                return 0.0
         return 0.0
 
     @property
     def total_latency_ms(self) -> float:
         if self.t0_signal_ns and self.t3_fill_ns:
-            return max(0.0, (self.t3_fill_ns - self.t0_signal_ns) / 1_000_000.0)
-        return self.signal_to_submit_ms + self.submit_to_ack_ms + self.ack_to_fill_ms
+            try:
+                return max(0.0, float(self.t3_fill_ns - self.t0_signal_ns) / 1_000_000.0)
+            except (TypeError, ValueError):
+                pass
+        try:
+            return float(self.signal_to_submit_ms + self.submit_to_ack_ms + self.ack_to_fill_ms)
+        except (TypeError, ValueError):
+            return 0.0
 
 
 @dataclass

@@ -215,6 +215,16 @@ class TradingBot:
                     self.config.risk.max_open_positions = saved["max_open_positions"]
                 if "ai_confirmation_enabled" in saved:
                     self.config.ai_confirmation_enabled = bool(saved["ai_confirmation_enabled"])
+                if "night_limit_enabled" in saved:
+                    self.config.risk.night_limit_enabled = bool(saved["night_limit_enabled"])
+                if "night_start_hour" in saved and isinstance(saved["night_start_hour"], int):
+                    self.config.risk.night_start_hour = saved["night_start_hour"]
+                if "night_end_hour" in saved and isinstance(saved["night_end_hour"], int):
+                    self.config.risk.night_end_hour = saved["night_end_hour"]
+                if "night_max_open_positions" in saved and isinstance(saved["night_max_open_positions"], int):
+                    self.config.risk.night_max_open_positions = saved["night_max_open_positions"]
+                if "night_timezone_mode" in saved and isinstance(saved["night_timezone_mode"], str):
+                    self.config.risk.night_timezone_mode = saved["night_timezone_mode"]
                 if "ml_gating_enabled" in saved:
                     self.config.ml_gating_enabled = bool(saved["ml_gating_enabled"])
                 if "ml_max_sl_probability" in saved and isinstance(saved["ml_max_sl_probability"], (int, float)):
@@ -226,7 +236,7 @@ class TradingBot:
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
                     f"Strategies={self.config.enabled_strategies} | "
-                    f"MaxOpen={self.config.risk.max_open_positions} | "
+                    f"MaxOpen={self.config.risk.max_open_positions} (NightLimit={self.config.risk.night_max_open_positions if self.config.risk.night_limit_enabled else 'OFF'}) | "
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
                     f"Pair3={self.config.pair3.symbol} (lot={self.config.pair3.fixed_lot_size}, sl={self.config.pair3.fixed_sl_pips}) | "
@@ -264,6 +274,11 @@ class TradingBot:
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
                 "max_open_positions": self.config.risk.max_open_positions,
+                "night_limit_enabled": getattr(self.config.risk, "night_limit_enabled", True),
+                "night_start_hour": getattr(self.config.risk, "night_start_hour", 23),
+                "night_end_hour": getattr(self.config.risk, "night_end_hour", 8),
+                "night_max_open_positions": getattr(self.config.risk, "night_max_open_positions", 2),
+                "night_timezone_mode": getattr(self.config.risk, "night_timezone_mode", "LOCAL"),
                 "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
                 "ml_gating_enabled": getattr(self.config, "ml_gating_enabled", True),
                 "ml_max_sl_probability": getattr(self.config, "ml_max_sl_probability", 0.50),
@@ -430,12 +445,19 @@ class TradingBot:
         self._check_day_rollover()
         self._sync_open_positions()
 
-        # Step 1b: Max concurrent open positions guard (e.g. max 15 open trades across all pairs)
+        # Step 1b: Max concurrent open positions guard (auto capped to 2 between 11 PM and 8 AM, 15 daytime)
         open_trades = self.state.get_open_positions()
-        max_open = getattr(self.config.risk, 'max_open_positions', 15)
+        if hasattr(self.config.risk, 'get_effective_max_open_positions'):
+            max_open = self.config.risk.get_effective_max_open_positions(now_utc)
+            is_night = self.config.risk.is_night_window(now_utc)
+        else:
+            max_open = getattr(self.config.risk, 'max_open_positions', 15)
+            is_night = False
+
         if len(open_trades) >= max_open:
+            limit_name = "NIGHT LIMIT (11 PM - 8 AM)" if is_night else "MAX OPEN TRADES"
             self.log(
-                f"⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                f"⏸️ {limit_name} ACTIVE ({len(open_trades)}/{max_open} positions open). "
                 f"Skipping new trade execution until an existing position closes.",
                 level="INFO"
             )
@@ -528,10 +550,17 @@ class TradingBot:
             # Dynamic check: Re-fetch open positions so that as trades execute on earlier pairs,
             # subsequent pairs immediately see the updated open count within the exact same scan cycle!
             open_trades = self.state.get_open_positions()
-            max_open = getattr(self.config.risk, 'max_open_positions', 15)
+            if hasattr(self.config.risk, 'get_effective_max_open_positions'):
+                max_open = self.config.risk.get_effective_max_open_positions(now_utc)
+                is_night = self.config.risk.is_night_window(now_utc)
+            else:
+                max_open = getattr(self.config.risk, 'max_open_positions', 15)
+                is_night = False
+
             if len(open_trades) >= max_open:
+                limit_name = "NIGHT LIMIT (11 PM - 8 AM)" if is_night else "MAX OPEN TRADES"
                 self.log(
-                    f"  ⏸️ MAX OPEN TRADES ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                    f"  ⏸️ {limit_name} ACTIVE ({len(open_trades)}/{max_open} positions open). "
                     f"Skipping Pair {pair_num} ({symbol}).",
                     level="INFO"
                 )
