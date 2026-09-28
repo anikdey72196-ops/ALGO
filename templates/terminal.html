@@ -1,217 +1,337 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <title>Algo Trading Terminal</title>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#020617">
-  
-  <!-- Apple iOS Mobile Web App Tags -->
+  <title>Bot Terminal // Algorithmic Execution</title>
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="theme-color" content="#111317">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Bot Terminal">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
-
-  <!-- Android & Modern PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/static/icons/terminal-icon.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
 
-  <!-- Tailwind CSS & Google Fonts -->
+  <!-- Material Symbols for clean icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+
+  <!-- Tailwind CSS with Soft Muted Theme -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
+  <script id="tailwind-config">
     tailwind.config = {
-      darkMode: 'class',
+      darkMode: "class",
       theme: {
         extend: {
           colors: {
-            obsidian: '#020617',
-            terminalBg: '#030712',
+            "background": "#111317",
+            "surface": "#111317",
+            "surface-container": "#1e2024",
+            "surface-container-low": "#1a1c20",
+            "surface-container-lowest": "#0c0e12",
+            "surface-container-high": "#282a2e",
+            "surface-container-highest": "#333539",
+            "surface-variant": "#333539",
+            "outline": "#8e9197",
+            "outline-variant": "#43474c",
+            "on-surface": "#e2e2e8",
+            "on-surface-variant": "#c4c6cd",
+            "primary": "#b5c8e0",
+            "primary-container": "#8295ab",
+            "secondary": "#a0d2ae",
+            "secondary-container": "#215034",
+            "tertiary": "#efbd88",
+            "tertiary-container": "#b78b5a",
+            "error": "#ffb4ab",
+            "error-container": "#93000a",
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.375rem",
+            "xl": "0.5rem",
+            "full": "9999px"
           },
           fontFamily: {
-            mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', 'monospace'],
+            sans: ["Arial", "Helvetica", "sans-serif"],
+            body: ["Arial", "Helvetica", "sans-serif"],
+            "body-sm": ["Arial", "Helvetica", "sans-serif"],
+            "body-md": ["Arial", "Helvetica", "sans-serif"],
+            "body-lg": ["Arial", "Helvetica", "sans-serif"],
+            "label-sm": ["Arial", "Helvetica", "sans-serif"],
+            "label-md": ["Arial", "Helvetica", "sans-serif"],
+            "headline-md": ["Arial", "Helvetica", "sans-serif"],
+            "headline-lg": ["Arial", "Helvetica", "sans-serif"],
+            "code-stream": ["Arial", "Helvetica", "sans-serif"]
+          },
+          fontSize: {
+            "code-stream": ["0.78125rem", { lineHeight: "1.25rem", letterSpacing: "0.01em" }],
+            "body-sm": ["0.8125rem", { lineHeight: "1.25rem" }],
+            "label-sm": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.03em", fontWeight: "600" }],
+            "label-md": ["0.8125rem", { lineHeight: "1.125rem", fontWeight: "500" }],
+            "headline-md": ["1.125rem", { lineHeight: "1.5rem", fontWeight: "600" }]
           }
         }
       }
-    }
+    };
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    /* Mobile-first sleek dark scrollbars */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #030712; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    /* Strict font: Arial everywhere */
+    html, body, button, input, select, textarea, div, span, p, a, h1, h2, h3, header, main, footer {
+      font-family: Arial, Helvetica, sans-serif !important;
+    }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: #020617;
-      color: #f1f5f9;
+      background-color: #111317;
+      color: #e2e2e8;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
       overscroll-behavior-y: none;
     }
 
-    .terminal-feed {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11.5px;
-      line-height: 1.55;
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
     }
 
+    /* Clean muted scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0c0e12; }
+    ::-webkit-scrollbar-thumb { background: #282a2e; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #333539; }
+
+    /* iOS safe areas */
     @supports (padding-top: env(safe-area-inset-top)) {
-      .safe-top { padding-top: max(12px, env(safe-area-inset-top)); }
-      .safe-bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+      .safe-top { padding-top: max(10px, env(safe-area-inset-top)); }
+      .safe-bottom { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
     }
 
-    .glass-header {
-      background: rgba(15, 23, 42, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
-    }
-
-    .pill-active {
-      background: #0ea5e9;
-      color: #ffffff;
-      font-weight: 700;
-      box-shadow: 0 0 12px rgba(14, 165, 233, 0.4);
+    /* Soft pill tab active state */
+    .filter-tab-active {
+      background-color: #333539 !important;
+      color: #e2e2e8 !important;
+      border-color: #43474c !important;
     }
   </style>
 </head>
-<body class="bg-obsidian min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+<body class="bg-background text-on-surface antialiased min-h-screen flex flex-col selection:bg-surface-variant selection:text-on-surface">
 
   <!-- Header -->
-  <header class="sticky top-0 z-40 glass-header safe-top px-3 py-2.5">
-    <div class="flex items-center justify-between gap-2">
+  <header class="sticky top-0 z-40 bg-surface/95 backdrop-blur-md border-b border-outline-variant safe-top px-3 md:px-5 py-2.5">
+    <div class="max-w-[1440px] mx-auto flex items-center justify-between gap-3">
       
-      <!-- Brand & Status -->
-      <div class="flex items-center gap-2">
-        <div class="relative w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-emerald-500 p-0.5 shadow-md shadow-cyan-900/30 flex-shrink-0">
-          <div class="w-full h-full bg-slate-950 rounded-[7px] flex items-center justify-center">
-            <span class="text-emerald-400 font-mono font-bold text-sm tracking-tighter">&gt;_</span>
-          </div>
-          <span id="connPulse" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
-          <span id="connDot" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-900"></span>
+      <!-- Brand & Live Status Cluster -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="flex items-center gap-1.5 text-on-surface">
+          <span class="material-symbols-outlined text-outline text-[18px]">terminal</span>
+          <span class="font-label-md text-sm font-bold tracking-wide uppercase text-on-surface">Bot Terminal</span>
         </div>
-        <div>
-          <div class="flex items-center gap-1.5">
-            <h1 class="font-bold text-sm tracking-tight text-white">Bot Terminal</h1>
-            <span id="botActiveBadge" class="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              IDLE
-            </span>
-          </div>
-          <p id="connStatus" class="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live Telemetry (1s)
-          </p>
+        <span class="text-outline-variant font-body-sm select-none">/</span>
+        
+        <!-- Live Active / Idle Badge -->
+        <div id="botStateBadge" class="flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container border border-outline-variant">
+          <span id="botStateDot" class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+          <span id="botStateLabel" class="text-label-sm uppercase tracking-wider text-secondary">ACTIVE</span>
+        </div>
+
+        <!-- Telemetry Connection Status -->
+        <div class="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant">
+          <span id="connDot" class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+          <span id="connStatus" class="text-xs text-on-surface-variant font-medium">Connected (1s)</span>
         </div>
       </div>
 
-      <!-- Live KPI Pills -->
-      <div class="flex items-center gap-1.5 text-right font-mono">
-        <div class="bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
-          <div class="text-[9px] uppercase tracking-wider text-slate-400">Equity</div>
-          <div id="statEquity" class="text-xs font-bold text-emerald-400">$0.00</div>
-        </div>
-        <div class="bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-lg">
-          <div class="text-[9px] uppercase tracking-wider text-slate-400">Daily PnL</div>
-          <div id="statPnl" class="text-xs font-bold text-slate-200">$0.00</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PWA Install Guide Banner (visible only if in browser, hidden when standalone) -->
-    <div id="installBanner" class="hidden mt-2 p-2 rounded-lg bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-emerald-950/80 border border-cyan-800/40 text-xs">
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <span class="text-base">📲</span>
-          <div>
-            <div class="font-bold text-cyan-200 tracking-tight">Add Icon to Phone Screen</div>
-            <div id="installInstructions" class="text-[11px] text-slate-300 mt-0.5">
-              Tap <span class="font-bold text-white underline">Share</span> &rarr; <span class="font-bold text-white underline">'Add to Home Screen'</span> to open this terminal anytime like an app!
-            </div>
+      <!-- Financial Metrics & Navigation -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 divide-x divide-outline-variant border-r border-outline-variant pr-3">
+          <div class="flex flex-col text-right">
+            <span class="text-label-sm uppercase text-outline">Equity</span>
+            <span id="statEquity" class="text-xs font-bold text-on-surface tabular-nums">$0.00</span>
+          </div>
+          <div class="flex flex-col text-right pl-3">
+            <span class="text-label-sm uppercase text-outline">Daily PnL</span>
+            <span id="statPnl" class="text-xs font-bold text-secondary tabular-nums">$0.00</span>
           </div>
         </div>
-        <div class="flex items-center gap-1">
-          <button id="pwaInstallBtn" class="hidden px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] rounded shadow">
-            Install
-          </button>
-          <button onclick="dismissInstallBanner()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm font-bold">&times;</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Filter Pills & Search -->
-    <div class="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-      <button onclick="setFilter('ALL')" id="filterALL" class="pill-active px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all">
-        All Logs
-      </button>
-      <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="bg-slate-900 border border-slate-800 hover:border-rose-700/60 text-rose-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
-        <span>🚨</span> Reversals
-      </button>
-      <button onclick="setFilter('TRADE')" id="filterTRADE" class="bg-slate-900 border border-slate-800 hover:border-emerald-700/60 text-emerald-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
-        <span>⚡</span> Trades
-      </button>
-      <button onclick="setFilter('ML')" id="filterML" class="bg-slate-900 border border-slate-800 hover:border-cyan-700/60 text-cyan-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
-        <span>🤖</span> ML & AI
-      </button>
-      <button onclick="setFilter('WARN')" id="filterWARN" class="bg-slate-900 border border-slate-800 hover:border-amber-700/60 text-amber-300 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1">
-        <span>⚠️</span> Alerts
-      </button>
-    </div>
-
-    <!-- Quick Search & Actions Row -->
-    <div class="mt-2 flex items-center justify-between gap-2">
-      <div class="relative flex-1">
-        <input id="searchInput" type="text" placeholder="Filter symbol or keyword..." oninput="handleSearch(this.value)"
-               class="w-full bg-slate-950/80 border border-slate-800 rounded-md px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500">
-        <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 top-1 text-slate-400 hover:text-white text-xs">&times;</button>
-      </div>
-
-      <div class="flex items-center gap-1 font-mono text-[11px]">
-        <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="bg-slate-900 border border-emerald-500/40 text-emerald-400 px-2 py-1 rounded flex items-center gap-1 font-medium">
-          <span id="scrollDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Auto
-        </button>
-        <button onclick="clearTerminal()" title="Clear screen" class="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-2 py-1 rounded">
-          Clear
-        </button>
+        <a href="/" class="text-xs text-primary hover:text-on-surface transition-colors flex items-center gap-1 font-medium whitespace-nowrap">
+          <span>Full Dashboard</span>
+          <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+        </a>
       </div>
     </div>
   </header>
 
-  <!-- Main Terminal Display Container -->
-  <main class="flex-1 relative flex flex-col p-2 min-h-0">
-    <div id="terminalContainer" class="flex-1 overflow-y-auto terminal-feed bg-terminalBg rounded-xl border border-slate-800/80 p-2.5 shadow-inner space-y-1">
-      <div class="text-slate-500 text-center py-6 font-mono text-xs">
-        Connecting to trading bot engine...
+  <!-- Main Cockpit Area -->
+  <main class="flex-1 w-full max-w-[1440px] mx-auto px-3 md:px-5 py-3 flex flex-col gap-3">
+
+    <!-- Dismissible PWA Install Guide Banner -->
+    <div id="pwaBanner" class="hidden w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 flex items-center justify-between gap-2 transition-opacity duration-200">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="material-symbols-outlined text-outline text-[16px] flex-shrink-0">install_mobile</span>
+        <p id="pwaInstructions" class="text-xs text-on-surface-variant truncate">
+          Install as App — Tap Share <span class="text-on-surface font-semibold">⎋</span> → <span class="text-on-surface underline">Add to Home Screen</span> to open anytime.
+        </p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button id="pwaInstallBtn" class="hidden px-2.5 py-1 bg-surface-container-highest hover:bg-surface-bright text-on-surface text-xs font-semibold rounded border border-outline-variant transition-colors" type="button">
+          Install App
+        </button>
+        <button onclick="dismissPwaBanner()" class="text-outline hover:text-on-surface p-1 rounded transition-colors flex items-center justify-center" aria-label="Dismiss banner" type="button">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
       </div>
     </div>
 
-    <!-- Floating Scroll-To-Bottom Notification -->
-    <button id="scrollDownBtn" onclick="scrollToBottom(true)"
-            class="hidden absolute bottom-4 right-4 z-30 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg shadow-cyan-950/80 flex items-center gap-1.5 animate-bounce">
-      <span>&darr;</span> New Logs
-    </button>
+    <!-- Main Terminal Container -->
+    <section class="flex-1 w-full bg-surface-container rounded-xl flex flex-col overflow-hidden border border-outline-variant shadow-sm min-h-0">
+      
+      <!-- Sub-Control Bar: Filter Tabs & Search Actions -->
+      <div class="px-3 py-2 bg-surface-container-low border-b border-outline-variant flex flex-col md:flex-row md:items-center justify-between gap-2">
+        
+        <!-- Category Filter Tabs -->
+        <div class="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
+          <button onclick="setFilter('ALL')" id="filterALL" class="filter-tab-active px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-outline-variant text-on-surface" type="button">
+            All Logs
+          </button>
+          <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-transparent text-outline hover:text-on-surface hover:bg-surface-container" type="button">
+            Reversals
+          </button>
+          <button onclick="setFilter('TRADE')" id="filterTRADE" class="px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-transparent text-outline hover:text-on-surface hover:bg-surface-container" type="button">
+            Trades
+          </button>
+          <button onclick="setFilter('ML')" id="filterML" class="px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-transparent text-outline hover:text-on-surface hover:bg-surface-container" type="button">
+            ML & AI
+          </button>
+          <button onclick="setFilter('WARN')" id="filterWARN" class="px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-transparent text-outline hover:text-on-surface hover:bg-surface-container" type="button">
+            Alerts
+          </button>
+        </div>
+
+        <!-- Search Bar and Action Controls -->
+        <div class="flex items-center gap-2">
+          <div class="relative flex items-center flex-1 md:w-64">
+            <span class="material-symbols-outlined absolute left-2 text-outline text-[16px] pointer-events-none">search</span>
+            <input id="searchInput" oninput="handleSearch(this.value)" class="w-full h-7 pl-7 pr-7 bg-surface rounded text-xs text-on-surface placeholder-outline border border-outline-variant focus:outline-none focus:border-outline transition-colors" placeholder="Filter symbol or keyword..." type="text">
+            <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 text-outline hover:text-on-surface text-xs font-bold" type="button">&times;</button>
+          </div>
+          
+          <div class="flex items-center gap-1">
+            <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="h-7 px-2.5 rounded bg-surface border border-outline-variant text-secondary hover:bg-surface-container-highest text-xs font-semibold flex items-center gap-1 transition-colors" title="Toggle Auto-Scroll" type="button">
+              <span class="material-symbols-outlined text-[14px]">vertical_align_bottom</span>
+              <span id="autoScrollLabel">Auto</span>
+            </button>
+            <button onclick="clearTerminal()" class="h-7 px-2.5 rounded bg-surface border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container-highest text-xs font-semibold transition-colors" title="Clear Visible Logs" type="button">
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed Container -->
+      <div class="relative flex-1 w-full bg-surface-container-lowest min-h-[460px] flex flex-col">
+        <!-- Log Stream Body -->
+        <div id="terminalContainer" class="flex-1 overflow-y-auto p-3 flex flex-col gap-1 focus:outline-none select-text" tabindex="0">
+          <div class="text-outline text-center py-12 text-xs">
+            Connecting to trading bot engine...
+          </div>
+        </div>
+
+        <!-- Floating Scroll-to-Bottom Notification -->
+        <button id="scrollDownBtn" onclick="scrollToBottom(true)" class="hidden absolute bottom-3 right-3 bg-surface-container-highest hover:bg-surface-bright text-on-surface border border-outline-variant text-xs font-semibold px-3 py-1.5 rounded shadow-lg items-center gap-1.5 transition-all" type="button">
+          <span class="material-symbols-outlined text-[14px]">arrow_downward</span>
+          <span>New Logs</span>
+        </button>
+      </div>
+
+      <!-- Terminal Status Sub-Footer -->
+      <div class="px-3 py-1.5 bg-surface-container border-t border-outline-variant flex flex-wrap items-center justify-between gap-2 text-xs text-outline">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="logCount">0 events</span>
+          <span class="text-outline-variant">•</span>
+          <span id="monitoredSymbols">Pairs: -</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="lastUpdateTime">Sync: --:--:--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy & Live Telemetry Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <!-- Card 1: Trading Performance -->
+      <div class="bg-surface-container border border-outline-variant rounded-xl p-3 flex flex-col justify-between gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-on-surface uppercase tracking-wide">Execution Metrics</span>
+          <span id="perfStatusBadge" class="px-2 py-0.5 rounded bg-surface-container-highest text-secondary text-[11px] font-semibold">ACTIVE</span>
+        </div>
+        <div class="flex items-baseline justify-between pt-1">
+          <div class="flex flex-col">
+            <span class="text-[11px] uppercase text-outline">Win Accuracy</span>
+            <span id="statAccuracy" class="text-xs font-bold text-on-surface tabular-nums">0.0%</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[11px] uppercase text-outline">Closed Trades</span>
+            <span id="statTradeCount" class="text-xs font-bold text-secondary tabular-nums">0 trades</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: TrapShield & ML Protection -->
+      <div class="bg-surface-container border border-outline-variant rounded-xl p-3 flex flex-col justify-between gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-on-surface uppercase tracking-wide">TrapShield AI</span>
+          <span id="mlStatusBadge" class="px-2 py-0.5 rounded bg-surface-container-highest text-primary text-[11px] font-semibold">GATED</span>
+        </div>
+        <div class="flex items-baseline justify-between pt-1">
+          <div class="flex flex-col">
+            <span class="text-[11px] uppercase text-outline">Traps Caught</span>
+            <span id="statTrapsCaught" class="text-xs font-bold text-on-surface tabular-nums">0 events</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[11px] uppercase text-outline">Model Samples</span>
+            <span id="statTrapSamples" class="text-xs font-bold text-primary tabular-nums">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Watchlist & Risk Safety -->
+      <div class="bg-surface-container border border-outline-variant rounded-xl p-3 flex flex-col justify-between gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-on-surface uppercase tracking-wide">Circuit Breaker</span>
+          <span id="cbStatusBadge" class="px-2 py-0.5 rounded bg-surface-container-highest text-secondary text-[11px] font-semibold">NORMAL</span>
+        </div>
+        <div class="flex items-baseline justify-between pt-1">
+          <div class="flex flex-col">
+            <span class="text-[11px] uppercase text-outline">Primary Pair</span>
+            <span id="statPrimaryPair" class="text-xs font-bold text-on-surface">None</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-[11px] uppercase text-outline">Safety Status</span>
+            <span id="statRiskStatus" class="text-xs font-bold text-secondary">Operational</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <!-- Bottom Mini Footer -->
-  <footer class="safe-bottom bg-slate-950 border-t border-slate-900 px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-    <div class="flex items-center gap-2">
-      <span id="logCount">0 events</span>
-      <span class="text-slate-700">|</span>
-      <span id="monitoredSymbols">Pairs: -</span>
-    </div>
-    <div class="flex items-center gap-2">
-      <span id="lastUpdateTime">--:--:--</span>
-      <a href="/" class="text-cyan-400 hover:underline">Full Dashboard &rarr;</a>
+  <!-- Mini Bottom Footer -->
+  <footer class="safe-bottom w-full bg-surface-container-lowest border-t border-outline-variant py-2 px-3 md:px-5 text-xs text-outline">
+    <div class="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span>Trading Engine: <span class="text-on-surface font-semibold">Institutional v4</span></span>
+        <span class="text-outline-variant">•</span>
+        <span>Polling: <span class="text-on-surface-variant font-medium">1000ms</span></span>
+      </div>
+      <div>
+        <a href="/" class="text-primary hover:text-on-surface transition-colors font-medium">Return to Main Dashboard →</a>
+      </div>
     </div>
   </footer>
 
   <script>
-    // State variables
+    // State management
     let allLogs = [];
     let activeFilter = 'ALL';
     let searchQuery = '';
@@ -220,17 +340,17 @@
     let lastLogHash = '';
     let pollInterval = null;
 
-    // Check standalone mode (PWA installed)
+    // Check PWA Standalone Mode
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
-    // Register Service Worker
+    // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(err => console.debug('SW reg:', err));
       });
     }
 
-    // Android PWA Install Event Hook
+    // Android PWA beforeinstallprompt handler
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
@@ -242,7 +362,7 @@
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') {
-              dismissInstallBanner();
+              dismissPwaBanner();
             }
             deferredPrompt = null;
           }
@@ -250,41 +370,42 @@
       }
     });
 
-    // Detect iOS and customize instructions
-    function setupInstallInstructions() {
+    // Setup platform specific PWA install banner
+    function setupPwaBanner() {
       if (isStandalone || localStorage.getItem('dismissTerminalBanner') === 'true') {
-        document.getElementById('installBanner').classList.add('hidden');
+        document.getElementById('pwaBanner').classList.add('hidden');
         return;
       }
 
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const instrEl = document.getElementById('installInstructions');
+      const instructions = document.getElementById('pwaInstructions');
       if (isIOS) {
-        instrEl.innerHTML = `On iPhone: Tap the <span class="font-bold text-cyan-300">Share icon</span> <svg class="inline w-3.5 h-3.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> at bottom &rarr; select <span class="font-bold text-white underline">'Add to Home Screen'</span>.`;
+        instructions.innerHTML = `Install as App — Tap Share <span class="text-on-surface font-semibold">⎋</span> → <span class="text-on-surface underline">Add to Home Screen</span> to open anytime.`;
       } else {
-        instrEl.innerHTML = `Tap menu <span class="font-bold text-cyan-300">⋮</span> at top right &rarr; select <span class="font-bold text-white underline">'Install App'</span> or <span class="font-bold text-white underline">'Add to Home screen'</span>.`;
+        instructions.innerHTML = `Install as App — Tap browser menu <span class="text-on-surface font-semibold">⋮</span> → <span class="text-on-surface underline">Install App</span> for full-screen experience.`;
       }
-      document.getElementById('installBanner').classList.remove('hidden');
+      document.getElementById('pwaBanner').classList.remove('hidden');
     }
 
-    function dismissInstallBanner() {
+    function dismissPwaBanner() {
       localStorage.setItem('dismissTerminalBanner', 'true');
-      document.getElementById('installBanner').classList.add('hidden');
+      const banner = document.getElementById('pwaBanner');
+      banner.style.opacity = '0';
+      setTimeout(() => banner.classList.add('hidden'), 200);
     }
 
-    // Toggle Auto Scroll
+    // Toggle Auto-Scroll
     function toggleAutoScroll() {
       autoScroll = !autoScroll;
       const btn = document.getElementById('autoScrollBtn');
-      const dot = document.getElementById('scrollDot');
+      const label = document.getElementById('autoScrollLabel');
       if (autoScroll) {
-        btn.className = "bg-slate-900 border border-emerald-500/40 text-emerald-400 px-2 py-1 rounded flex items-center gap-1 font-medium";
-        dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse";
-        btn.innerHTML = `<span id="scrollDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Auto`;
+        label.textContent = "Auto";
+        btn.className = "h-7 px-2.5 rounded bg-surface border border-outline-variant text-secondary hover:bg-surface-container-highest text-xs font-semibold flex items-center gap-1 transition-colors";
         scrollToBottom(true);
       } else {
-        btn.className = "bg-slate-900 border border-slate-700 text-slate-400 px-2 py-1 rounded flex items-center gap-1 font-medium";
-        btn.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Paused`;
+        label.textContent = "Paused";
+        btn.className = "h-7 px-2.5 rounded bg-surface border border-outline-variant text-outline hover:bg-surface-container-highest text-xs font-semibold flex items-center gap-1 transition-colors";
       }
     }
 
@@ -296,21 +417,16 @@
       }
     }
 
-    // Filter selection
+    // Filter Selection
     function setFilter(type) {
       activeFilter = type;
       ['ALL', 'REVERSAL', 'TRADE', 'ML', 'WARN'].forEach(t => {
         const btn = document.getElementById(`filter${t}`);
         if (!btn) return;
         if (t === type) {
-          btn.className = "pill-active px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all";
+          btn.className = "filter-tab-active px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-outline-variant text-on-surface";
         } else {
-          let textCol = "text-slate-300";
-          if (t === 'REVERSAL') textCol = "text-rose-300";
-          if (t === 'TRADE') textCol = "text-emerald-300";
-          if (t === 'ML') textCol = "text-cyan-300";
-          if (t === 'WARN') textCol = "text-amber-300";
-          btn.className = `bg-slate-900 border border-slate-800 ${textCol} px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all`;
+          btn.className = "px-2.5 py-1 rounded text-xs font-semibold transition-colors border border-transparent text-outline hover:text-on-surface hover:bg-surface-container";
         }
       });
       renderLogs();
@@ -335,7 +451,12 @@
       renderLogs();
     }
 
-    // Render formatted log entries
+    // Escape helper
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Render formatted log entries matching the soft muted palette
     function renderLogs() {
       const term = document.getElementById('terminalContainer');
       if (!term) return;
@@ -346,14 +467,14 @@
       if (activeFilter === 'REVERSAL') {
         filtered = filtered.filter(l => l.includes('REVERSAL') || l.includes('CHoCH') || l.includes('🚨') || l.includes('🛡️') || l.includes('SWEEP'));
       } else if (activeFilter === 'TRADE') {
-        filtered = filtered.filter(l => l.includes('ORDER') || l.includes('FILLED') || l.includes('TRADE') || l.includes('POSITION') || l.includes('✅') || l.includes('AUTHORIZED') || l.includes('SIGNAL'));
+        filtered = filtered.filter(l => l.includes('ORDER') || l.includes('FILLED') || l.includes('TRADE') || l.includes('POSITION') || l.includes('✅') || l.includes('AUTHORIZED') || l.includes('ACTIVATED') || l.includes('SIGNAL'));
       } else if (activeFilter === 'ML') {
         filtered = filtered.filter(l => l.includes('ML') || l.includes('TRAP') || l.includes('AI') || l.includes('🤖') || l.includes('🔬') || l.includes('DECISION'));
       } else if (activeFilter === 'WARN') {
-        filtered = filtered.filter(l => l.includes('⚠️') || l.includes('🚫') || l.includes('⛔') || l.includes('ERROR') || l.includes('FAILED') || l.includes('SKIPPED'));
+        filtered = filtered.filter(l => l.includes('⚠️') || l.includes('WARN') || l.includes('🚫') || l.includes('⛔') || l.includes('ERROR') || l.includes('FAILED') || l.includes('SKIPPED') || l.includes('REJECTED'));
       }
 
-      // Filter by user search query
+      // Filter by search query
       if (searchQuery) {
         filtered = filtered.filter(l => l.toLowerCase().includes(searchQuery));
       }
@@ -361,37 +482,56 @@
       document.getElementById('logCount').innerText = `${filtered.length} / ${allLogs.length} events`;
 
       if (filtered.length === 0) {
-        term.innerHTML = `<div class="text-slate-600 text-center py-10 font-mono text-xs italic">No log entries matching current filter.</div>`;
+        term.innerHTML = `<div class="text-outline text-center py-12 text-xs italic">No log entries matching current filter.</div>`;
         return;
       }
 
       term.innerHTML = filtered.map(log => {
-        let style = "text-slate-300 hover:bg-slate-900/60";
-        
-        // High visibility styling matching main app
-        if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED")) {
-          style = "text-rose-200 font-bold bg-rose-950/60 border border-rose-800/80 px-2 py-1 rounded shadow-sm";
-        } else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD")) {
-          style = "text-cyan-200 font-semibold bg-cyan-950/50 border border-cyan-700/60 px-2 py-0.5 rounded";
-        } else if (log.includes("⚠️") || log.includes("PRE-REVERSAL SWEEP") || log.includes("EARLY WARNING")) {
-          style = "text-amber-200 font-medium bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded";
-        } else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED")) {
-          style = "text-emerald-300 font-bold bg-emerald-950/40 px-2 py-0.5 rounded";
-        } else if (log.includes("🪤") || log.includes("TRAP") || log.includes("DECISION OVERRIDE")) {
-          style = "text-amber-300 font-medium bg-amber-950/30 px-2 py-0.5 rounded";
-        } else if (log.includes("🤖") || log.includes("AI CONFIRMED") || log.includes("🔬")) {
-          style = "text-indigo-300 font-medium bg-indigo-950/30 px-2 py-0.5 rounded";
-        } else if (log.includes("🚫") || log.includes("⛔") || log.includes("REJECTED")) {
-          style = "text-amber-400 font-normal px-1 py-0.5";
-        } else if (log.includes("❌") || log.includes("ERROR") || log.includes("FAILED")) {
-          style = "text-rose-400 font-bold px-1 py-0.5";
-        } else if (log.includes("📈") || log.includes("TREND HEALTHY")) {
-          style = "text-emerald-400/90 font-normal px-1 py-0.5";
-        } else if (log.includes("─── TICK")) {
-          style = "text-purple-400 font-semibold border-b border-purple-900/40 pb-0.5 my-1";
+        // Divider row for market ticks
+        if (log.includes("─── TICK") || log.includes("─── EURUSD") || log.includes("─── GBPUSD") || log.includes("─── USDJPY")) {
+          return `<div class="my-1 px-2.5 py-0.5 bg-surface-container-high rounded text-outline text-xs flex items-center justify-between select-none">
+            <span class="text-on-surface-variant font-medium">${escapeHtml(log)}</span>
+          </div>`;
         }
 
-        return `<div class="${style} rounded px-1.5 py-0.5 tracking-wide break-words transition-colors leading-relaxed">${escapeHtml(log)}</div>`;
+        let containerClass = "bg-surface-container-low text-on-surface-variant hover:bg-surface-container";
+        let insetShadow = "shadow-[inset_2px_0_0_0_#43474c]";
+        let textClass = "text-on-surface-variant";
+
+        // Reversal / Breakdowns (Soft Terracotta)
+        if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED") || log.includes("REVERSAL")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#c97575]";
+          textClass = "text-error font-medium";
+        }
+        // Protective Shield / Sweeps (Soft Periwinkle / Slate)
+        else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD") || log.includes("SWEEP")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#8295ab]";
+          textClass = "text-primary font-medium";
+        }
+        // Trades / Order Fills / Execution (Soft Sage)
+        else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED") || log.includes("FILLED") || log.includes("TRADE")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#78a987]";
+          textClass = "text-secondary font-medium";
+        }
+        // ML / Traps / AI decisions (Soft Slate Blue / Periwinkle)
+        else if (log.includes("🤖") || log.includes("AI CONFIRMED") || log.includes("TRAP") || log.includes("DECISION OVERRIDE")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#8295ab]";
+          textClass = "text-primary font-medium";
+        }
+        // Warnings & Rejections (Soft Warm Ochre / Amber)
+        else if (log.includes("⚠️") || log.includes("WARN") || log.includes("REJECTED") || log.includes("SKIPPED") || log.includes("PAUSED")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#c89a68]";
+          textClass = "text-tertiary font-medium";
+        }
+        // Errors (Soft Rose / Coral)
+        else if (log.includes("❌") || log.includes("ERROR") || log.includes("FAILED")) {
+          insetShadow = "shadow-[inset_2px_0_0_0_#c97575]";
+          textClass = "text-error font-medium";
+        }
+
+        return `<div class="py-1 px-2.5 rounded ${containerClass} flex items-start gap-2 pl-3 ${insetShadow} text-xs transition-colors">
+          <span class="${textClass} flex-1 break-words">${escapeHtml(log)}</span>
+        </div>`;
       }).join('');
 
       if (autoScroll) {
@@ -399,59 +539,96 @@
       }
     }
 
-    function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    // Scroll listener to detect manual scroll up
+    // Scroll listener for detecting manual user scroll
     document.getElementById('terminalContainer').addEventListener('scroll', (e) => {
       const term = e.target;
       const isAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 40;
       const downBtn = document.getElementById('scrollDownBtn');
       if (!isAtBottom) {
         downBtn.classList.remove('hidden');
+        downBtn.classList.add('flex');
       } else {
         downBtn.classList.add('hidden');
+        downBtn.classList.remove('flex');
       }
     });
 
-    // Polling API for Live State & Logs
+    // Polling API for Live State & Telemetry
     async function fetchLiveTelemetry() {
       try {
         const res = await fetch('/api/state', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        // Update Connection Status
-        document.getElementById('connPulse').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping";
-        document.getElementById('connDot').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-900";
-        document.getElementById('connStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live Connected`;
+        // 1. Connection status
+        document.getElementById('connDot').className = "w-1.5 h-1.5 rounded-full bg-secondary";
+        document.getElementById('connStatus').innerText = "Connected (1s)";
 
-        // Bot Active Badge
-        const actBadge = document.getElementById('botActiveBadge');
+        // 2. Engine Active / Idle Badge
+        const stateBadge = document.getElementById('botStateBadge');
+        const stateDot = document.getElementById('botStateDot');
+        const stateLabel = document.getElementById('botStateLabel');
         if (data.is_active) {
-          actBadge.innerText = "ACTIVE";
-          actBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950";
+          stateDot.className = "w-1.5 h-1.5 rounded-full bg-secondary";
+          stateLabel.className = "text-label-sm uppercase tracking-wider text-secondary";
+          stateLabel.innerText = "ACTIVE";
+          document.getElementById('perfStatusBadge').innerText = "ACTIVE";
+          document.getElementById('perfStatusBadge').className = "px-2 py-0.5 rounded bg-surface-container-highest text-secondary text-[11px] font-semibold";
         } else {
-          actBadge.innerText = "IDLE";
-          actBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30";
+          stateDot.className = "w-1.5 h-1.5 rounded-full bg-tertiary";
+          stateLabel.className = "text-label-sm uppercase tracking-wider text-tertiary";
+          stateLabel.innerText = "IDLE";
+          document.getElementById('perfStatusBadge').innerText = "IDLE";
+          document.getElementById('perfStatusBadge').className = "px-2 py-0.5 rounded bg-surface-container-highest text-tertiary text-[11px] font-semibold";
         }
 
-        // Equity & PnL
-        const eqEl = document.getElementById('statEquity');
-        eqEl.innerText = `$${Number(data.equity || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        // 3. Financial KPIs
+        const eq = Number(data.equity || 0);
+        document.getElementById('statEquity').innerText = `$${eq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-        const pnlEl = document.getElementById('statPnl');
         const pnl = Number(data.daily_pnl || 0);
+        const pnlEl = document.getElementById('statPnl');
         pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        pnlEl.className = pnl >= 0 ? "text-xs font-bold text-emerald-400" : "text-xs font-bold text-rose-400";
+        pnlEl.className = pnl >= 0 ? "text-xs font-bold text-secondary tabular-nums" : "text-xs font-bold text-error tabular-nums";
 
-        // Footer info
+        // 4. Performance Card Metrics
+        const acc = Number(data.accuracy || 0);
+        document.getElementById('statAccuracy').innerText = `${acc.toFixed(1)}%`;
+        const totalTrades = data.total_closed_trades || data.trade_count || 0;
+        document.getElementById('statTradeCount').innerText = `${totalTrades} trades`;
+
+        // 5. TrapShield Metrics
+        if (data.trap_stats) {
+          const mode = data.trap_stats.mode || 'GATED';
+          document.getElementById('mlStatusBadge').innerText = String(mode).toUpperCase();
+          document.getElementById('statTrapsCaught').innerText = `${data.trap_stats.traps_caught || 0} events`;
+          document.getElementById('statTrapSamples').innerText = `${data.trap_stats.n_samples || 0}`;
+        }
+
+        // 6. Circuit Breaker & Watchlist Card
+        const cbActive = data.circuit_breaker_active === true;
+        const cbBadge = document.getElementById('cbStatusBadge');
+        const riskStatus = document.getElementById('statRiskStatus');
+        if (cbActive) {
+          cbBadge.innerText = "TRIPPED";
+          cbBadge.className = "px-2 py-0.5 rounded bg-surface-container-highest text-error text-[11px] font-semibold";
+          riskStatus.innerText = "Safety Lock Active";
+          riskStatus.className = "text-xs font-bold text-error";
+        } else {
+          cbBadge.innerText = "NORMAL";
+          cbBadge.className = "px-2 py-0.5 rounded bg-surface-container-highest text-secondary text-[11px] font-semibold";
+          riskStatus.innerText = "Operational";
+          riskStatus.className = "text-xs font-bold text-secondary";
+        }
+
         const symbols = data.selected_symbols || [];
-        document.getElementById('monitoredSymbols').innerText = symbols.length ? symbols.join(', ') : 'None';
-        document.getElementById('lastUpdateTime').innerText = new Date().toLocaleTimeString();
+        document.getElementById('monitoredSymbols').innerText = symbols.length ? `Pairs: ${symbols.join(', ')}` : 'Pairs: None';
+        document.getElementById('statPrimaryPair').innerText = symbols.length ? symbols[0] : 'None';
 
-        // Logs comparison & update
+        // 7. Sync Clock
+        document.getElementById('lastUpdateTime').innerText = `Sync: ${new Date().toLocaleTimeString()}`;
+
+        // 8. Log Stream Update
         if (data.recent_logs && Array.isArray(data.recent_logs)) {
           const newHash = data.recent_logs.slice(-3).join('|') + `_${data.recent_logs.length}`;
           if (newHash !== lastLogHash) {
@@ -462,14 +639,13 @@
         }
 
       } catch (err) {
-        document.getElementById('connPulse').className = "hidden";
-        document.getElementById('connDot').className = "absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-900";
-        document.getElementById('connStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500"></span> Disconnected`;
+        document.getElementById('connDot').className = "w-1.5 h-1.5 rounded-full bg-error";
+        document.getElementById('connStatus').innerText = "Disconnected";
       }
     }
 
     // Startup
-    setupInstallInstructions();
+    setupPwaBanner();
     fetchLiveTelemetry();
     pollInterval = setInterval(fetchLiveTelemetry, 1000);
   </script>
