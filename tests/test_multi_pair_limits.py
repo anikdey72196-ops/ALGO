@@ -112,6 +112,7 @@ class TestMultiPairLimitsAndSynchronization(unittest.TestCase):
         self.config.enabled_strategies = ["SMC", "SMC_SCALP_5M", "ICT"]
         self.config.risk.max_open_positions = 6
         self.config.risk.max_open_per_symbol = 3
+        self.config.ml_gating_enabled = False
         self.bot = None
 
     def tearDown(self):

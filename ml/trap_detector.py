@@ -121,6 +121,50 @@ class TrapDetectorConfig(BaseModel):
 
 
 # =============================================================================
+# 1b. STRATEGY-SPECIFIC TUNING PROFILES
+# =============================================================================
+
+STRATEGY_TUNING: dict[str, dict[str, Any]] = {
+    "SMC_SCALP_5M": {
+        "min_samples": 250,
+        "num_leaves": 15,
+        "min_child_samples": 15,
+        "n_estimators": 300,
+        "learning_rate": 0.03,
+        "p_genuine_threshold": 0.50,
+        "description": "5-Minute Scalp: quick momentum, micro-FVG fills, and spread-adjusted false sweep filters.",
+    },
+    "SMC": {
+        "min_samples": 25,
+        "num_leaves": 6,
+        "min_child_samples": 3,
+        "n_estimators": 80,
+        "learning_rate": 0.04,
+        "p_genuine_threshold": 0.48,
+        "description": "15M/1H Swing: structural liquidity, premium/discount zones, and deep Order Block retests.",
+    },
+    "ORDER_FLOW": {
+        "min_samples": 25,
+        "num_leaves": 7,
+        "min_child_samples": 4,
+        "n_estimators": 100,
+        "learning_rate": 0.04,
+        "p_genuine_threshold": 0.50,
+        "description": "Order Flow: CVD divergences, absorption wicks, and volume exhaustion.",
+    },
+    "ICT": {
+        "min_samples": 25,
+        "num_leaves": 7,
+        "min_child_samples": 4,
+        "n_estimators": 100,
+        "learning_rate": 0.04,
+        "p_genuine_threshold": 0.50,
+        "description": "ICT Institutional: KillZone Judas swings, Silver Bullet sweeps, and Optimal Trade Entry (OTE).",
+    },
+}
+
+
+# =============================================================================
 # 2. SCHEMAS
 # =============================================================================
 
@@ -635,11 +679,17 @@ class TrapModel:
         X: np.ndarray,
         y: np.ndarray,
         timestamps: Sequence[datetime],
+        num_leaves: int = 15,
+        min_child_samples: int = 20,
+        n_estimators: int = 400,
+        learning_rate: float = 0.03,
+        min_samples_override: Optional[int] = None,
     ) -> bool:
         """Retrain LightGBM with exponential time-decay weights. Returns True if swapped."""
-        if len(y) < self.lgbm_min_samples:
+        effective_min = min_samples_override if min_samples_override is not None else self.lgbm_min_samples
+        if len(y) < effective_min:
             logger.info(
-                "LightGBM retrain skipped: %d/%d samples", len(y), self.lgbm_min_samples
+                "LightGBM retrain skipped: %d/%d samples", len(y), effective_min
             )
             return False
 
@@ -655,10 +705,10 @@ class TrapModel:
         weights = np.clip(weights, 1e-3, None)
 
         model = lgb.LGBMClassifier(
-            n_estimators=400,
-            learning_rate=0.03,
-            num_leaves=15,
-            min_child_samples=20,
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            num_leaves=num_leaves,
+            min_child_samples=min_child_samples,
             subsample=0.8,
             subsample_freq=1,
             colsample_bytree=0.8,
@@ -672,7 +722,7 @@ class TrapModel:
         self.lgbm = model
         self.version = f"lgbm-{now:%Y%m%d%H%M%S}"
         self._save()
-        logger.info("LightGBM retrained: version=%s samples=%d", self.version, len(y))
+        logger.info("LightGBM retrained: version=%s samples=%d (leaves=%d, trees=%d)", self.version, len(y), num_leaves, n_estimators)
         return True
 
     # -- inference -----------------------------------------------------------
@@ -821,8 +871,10 @@ class TrapGate:
             )
 
         p_sl = 1.0 - p
-        effective_max_sl = getattr(self.cfg, "max_sl_probability", 1.0 - self.cfg.p_genuine_threshold)
-        is_sl_high = (p_sl > effective_max_sl) or (p < self.cfg.p_genuine_threshold)
+        strat_tuning = STRATEGY_TUNING.get(strat, {})
+        effective_p_thr = strat_tuning.get("p_genuine_threshold", self.cfg.p_genuine_threshold)
+        effective_max_sl = getattr(self.cfg, "max_sl_probability", 1.0 - effective_p_thr)
+        is_sl_high = (p_sl > effective_max_sl) or (p < effective_p_thr)
         allow = not is_sl_high
 
         return GateDecision(
@@ -868,9 +920,11 @@ class TrapDetectorService:
             # Backward compatibility: reuse legacy model file if present and requesting SMC
             if strat_key == "SMC" and not Path(strat_path).exists() and Path(self.cfg.model_path).exists():
                 strat_path = self.cfg.model_path
+            tuning = STRATEGY_TUNING.get(strat_key, {})
+            strat_min = tuning.get("min_samples", self.cfg.lgbm_min_samples)
             self.models[strat_key] = TrapModel(
                 strat_path,
-                lgbm_min_samples=self.cfg.lgbm_min_samples,
+                lgbm_min_samples=strat_min,
                 half_life_days=self.cfg.lgbm_half_life_days,
             )
         return self.models[strat_key]
@@ -1006,7 +1060,9 @@ class TrapDetectorService:
 
         for strat in strategies:
             strat_rows = [r for r in all_labeled if normalize_strategy_key(getattr(r, "strategy", "SMC")) == strat]
-            if len(strat_rows) < self.cfg.lgbm_min_samples:
+            strat_tuning = STRATEGY_TUNING.get(strat, {})
+            strat_min = strat_tuning.get("min_samples", self.cfg.lgbm_min_samples)
+            if len(strat_rows) < strat_min:
                 continue
 
             labels = {r.label for r in strat_rows}
@@ -1023,7 +1079,16 @@ class TrapDetectorService:
 
             self._save_union(union)
             strat_model = self.get_model(strat)
-            swapped = strat_model.retrain_lightgbm(X, y, ts)
+            swapped = strat_model.retrain_lightgbm(
+                X,
+                y,
+                ts,
+                num_leaves=strat_tuning.get("num_leaves", 15),
+                min_child_samples=strat_tuning.get("min_child_samples", 20),
+                n_estimators=strat_tuning.get("n_estimators", 400),
+                learning_rate=strat_tuning.get("learning_rate", 0.03),
+                min_samples_override=strat_min,
+            )
             if swapped:
                 any_swapped = True
                 logger.info("[%s] LightGBM swapped: version=%s samples=%d", strat, strat_model.version, len(strat_rows))
