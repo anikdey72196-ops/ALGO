@@ -59,6 +59,9 @@ class BotConfigUpdate(BaseModel):
     max_open_positions: Optional[int] = None
     night_limit_enabled: Optional[bool] = None
     night_max_open_positions: Optional[int] = None
+    night_start_hour: Optional[int] = None
+    night_end_hour: Optional[int] = None
+    night_timezone_mode: Optional[str] = None
     ml_gating_enabled: Optional[bool] = None
     ml_max_sl_probability: Optional[float] = None
 
@@ -78,6 +81,9 @@ class BotStateResponse(BaseModel):
     is_night_window: bool = False
     night_limit_enabled: bool = True
     night_max_open_positions: int = 2
+    night_start_hour: int = 23
+    night_end_hour: int = 8
+    night_timezone_mode: str = "Asia/Kolkata"
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
     ml_gating_enabled: bool = True
@@ -397,6 +403,9 @@ async def get_bot_state():
         is_night_window=bot_instance.config.risk.is_night_window() if hasattr(bot_instance.config.risk, 'is_night_window') else False,
         night_limit_enabled=getattr(bot_instance.config.risk, 'night_limit_enabled', True),
         night_max_open_positions=getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
+        night_start_hour=getattr(bot_instance.config.risk, 'night_start_hour', 23),
+        night_end_hour=getattr(bot_instance.config.risk, 'night_end_hour', 8),
+        night_timezone_mode=getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
@@ -682,6 +691,30 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.risk.night_max_open_positions = payload.night_max_open_positions
 
+    if payload.night_start_hour is not None:
+        if bot_instance.is_active and payload.night_start_hour != getattr(bot_instance.config.risk, 'night_start_hour', 23):
+            raise HTTPException(
+                status_code=400,
+                detail="Night start hour is LOCKED during activation! Deactivate the bot first to modify."
+            )
+        bot_instance.config.risk.night_start_hour = payload.night_start_hour
+
+    if payload.night_end_hour is not None:
+        if bot_instance.is_active and payload.night_end_hour != getattr(bot_instance.config.risk, 'night_end_hour', 8):
+            raise HTTPException(
+                status_code=400,
+                detail="Night end hour is LOCKED during activation! Deactivate the bot first to modify."
+            )
+        bot_instance.config.risk.night_end_hour = payload.night_end_hour
+
+    if payload.night_timezone_mode is not None:
+        if bot_instance.is_active and payload.night_timezone_mode != getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'):
+            raise HTTPException(
+                status_code=400,
+                detail="Night timezone mode is LOCKED during activation! Deactivate the bot first to modify."
+            )
+        bot_instance.config.risk.night_timezone_mode = payload.night_timezone_mode
+
     if payload.ai_confirmation_enabled is not None:
         if bot_instance.is_active and payload.ai_confirmation_enabled != bot_instance.config.ai_confirmation_enabled:
             raise HTTPException(
@@ -736,6 +769,9 @@ async def update_configuration(payload: BotConfigUpdate):
         "max_open_positions": bot_instance.config.risk.max_open_positions,
         "night_limit_enabled": getattr(bot_instance.config.risk, 'night_limit_enabled', True),
         "night_max_open_positions": getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
+        "night_start_hour": getattr(bot_instance.config.risk, 'night_start_hour', 23),
+        "night_end_hour": getattr(bot_instance.config.risk, 'night_end_hour', 8),
+        "night_timezone_mode": getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'),
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
     }
 

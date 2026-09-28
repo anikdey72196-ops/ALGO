@@ -7,8 +7,14 @@ import time
 import sqlite3
 import unittest
 from datetime import datetime, timezone
+import pytest
 from execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord, ExecutionFillRecord
 from metrics_aggregator import MetricsAggregator
+
+
+@pytest.fixture
+def temp_db(tmp_path):
+    return str(tmp_path / "test_exec.db")
 
 
 def test_order_latency_and_slippage_calculation(temp_db):

@@ -306,7 +306,11 @@ class TradingBot:
 
     def log(self, message: str, level: str = "INFO") -> None:
         """Helper to append to recent logs and send to logger."""
-        timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        try:
+            tz = self.config.risk.get_timezone()
+            timestamp = datetime.now(tz).strftime("%H:%M:%S")
+        except Exception:
+            timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         entry = f"[{timestamp}] {message}"
         self.recent_logs.append(entry)
         if len(self.recent_logs) > 200:
@@ -549,7 +553,10 @@ class TradingBot:
 
         strats_str = ", ".join(self.config.enabled_strategies)
         pairs_str = ", ".join(f"Pair {p['pair_num']}: {p['symbol']}" for p in active_pairs)
-        self.log(f"─── TICK @ {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} | Pairs: [{pairs_str}] | Active Strategies: [{strats_str}] ───")
+        tz = self.config.risk.get_timezone() if hasattr(self.config.risk, 'get_timezone') else timezone.utc
+        local_time_str = now_utc.astimezone(tz).strftime('%Y-%m-%d %H:%M:%S')
+        tz_name = getattr(self.config.risk, 'night_timezone_mode', 'IST')
+        self.log(f"─── TICK @ {local_time_str} ({tz_name}) | Pairs: [{pairs_str}] | Active Strategies: [{strats_str}] ───")
 
         for pair_info in active_pairs:
             symbol = pair_info["symbol"]

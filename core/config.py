@@ -18,7 +18,8 @@ Deployment Notes:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import List
 
@@ -250,6 +251,65 @@ class InstrumentConfig(BaseModel):
         description="Lot size increment (granularity).",
     )
 
+def resolve_timezone(tz_str: str | None = None) -> timezone:
+    """
+    Resolve a timezone string, mode, or offset into a valid timezone object.
+    Supports:
+      - 'Asia/Kolkata', 'IST', '+05:30', 'UTC', 'LOCAL', 'EST', etc.
+      - If 'LOCAL' or None on cloud servers (e.g. AWS EC2) where system clock is UTC (offset 0),
+        falls back to BOT_TIMEZONE or 'Asia/Kolkata' to prevent UTC night window miscalculations.
+    """
+    if not tz_str:
+        tz_str = os.getenv("NIGHT_TIMEZONE", os.getenv("BOT_TIMEZONE", "Asia/Kolkata"))
+    s = str(tz_str).strip()
+    if s.upper() in ("UTC", "GMT", "Z"):
+        return timezone.utc
+    if s.upper() in ("LOCAL", "SYSTEM"):
+        env_tz = os.getenv("NIGHT_TIMEZONE", os.getenv("BOT_TIMEZONE"))
+        if env_tz:
+            return resolve_timezone(env_tz)
+        sys_tz = datetime.now().astimezone().tzinfo
+        if sys_tz is not None and getattr(sys_tz, "utcoffset", lambda dt: None)(datetime.now()) != timedelta(0):
+            return sys_tz
+        return resolve_timezone("Asia/Kolkata")
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(s)
+    except Exception:
+        pass
+    clean = s.upper().replace(" ", "").replace("UTC", "").replace("GMT", "")
+    FALLBACK_MAP = {
+        "IST": timezone(timedelta(hours=5, minutes=30)),
+        "ASIA/KOLKATA": timezone(timedelta(hours=5, minutes=30)),
+        "ASIA/CALCUTTA": timezone(timedelta(hours=5, minutes=30)),
+        "EST": timezone(timedelta(hours=-5)),
+        "EDT": timezone(timedelta(hours=-4)),
+        "CST": timezone(timedelta(hours=-6)),
+        "CDT": timezone(timedelta(hours=-5)),
+        "MST": timezone(timedelta(hours=-7)),
+        "MDT": timezone(timedelta(hours=-6)),
+        "PST": timezone(timedelta(hours=-8)),
+        "PDT": timezone(timedelta(hours=-7)),
+        "BST": timezone(timedelta(hours=1)),
+        "CET": timezone(timedelta(hours=1)),
+        "CEST": timezone(timedelta(hours=2)),
+        "EET": timezone(timedelta(hours=2)),
+        "EEST": timezone(timedelta(hours=3)),
+        "JST": timezone(timedelta(hours=9)),
+        "SGT": timezone(timedelta(hours=8)),
+        "AEST": timezone(timedelta(hours=10)),
+        "AEDT": timezone(timedelta(hours=11)),
+    }
+    if clean in FALLBACK_MAP:
+        return FALLBACK_MAP[clean]
+    m = re.match(r"^([+-])?(\d{1,2})(?::?(\d{2}))?$", clean)
+    if m:
+        sign = -1 if m.group(1) == "-" else 1
+        h = int(m.group(2))
+        mins = int(m.group(3)) if m.group(3) else 0
+        return timezone(sign * timedelta(hours=h, minutes=mins))
+    return timezone(timedelta(hours=5, minutes=30))
+
 
 class RiskConfig(BaseModel):
     """Quality and risk filter parameters."""
@@ -305,33 +365,31 @@ class RiskConfig(BaseModel):
         description="Maximum concurrent open positions allowed during night window (11 PM - 8 AM).",
     )
     night_timezone_mode: str = Field(
-        default="LOCAL",
-        description="Timezone mode for night window: 'LOCAL' (system clock) or 'UTC'.",
+        default_factory=lambda: os.getenv("NIGHT_TIMEZONE", os.getenv("BOT_TIMEZONE", "Asia/Kolkata")),
+        description="Timezone mode for night window: 'Asia/Kolkata', 'IST', '+05:30', 'LOCAL', or 'UTC'.",
     )
 
+    def get_timezone(self) -> timezone:
+        """Resolve the configured night_timezone_mode into a timezone object."""
+        return resolve_timezone(self.night_timezone_mode)
+
     def is_night_window(self, current_dt: datetime | None = None) -> bool:
-        """Check if current time is within the night trading limit window (e.g. 11 PM to 8 AM)."""
+        """Check if current time is within the night trading limit window (e.g. 11 PM to 8 AM in configured timezone)."""
         if not self.night_limit_enabled:
             return False
 
         if hasattr(current_dt, 'to_pydatetime'):
             current_dt = current_dt.to_pydatetime()
 
+        target_tz = self.get_timezone()
+
         if current_dt is None:
-            if self.night_timezone_mode.upper() == "UTC":
-                current_dt = datetime.now(timezone.utc)
-            else:
-                current_dt = datetime.now().astimezone()
+            current_dt = datetime.now(target_tz)
         else:
-            if self.night_timezone_mode.upper() == "UTC":
-                if current_dt.tzinfo is None:
-                    current_dt = current_dt.replace(tzinfo=timezone.utc)
-                else:
-                    current_dt = current_dt.astimezone(timezone.utc)
+            if current_dt.tzinfo is None:
+                current_dt = current_dt.replace(tzinfo=timezone.utc).astimezone(target_tz)
             else:
-                if current_dt.tzinfo is not None:
-                    local_tz = datetime.now().astimezone().tzinfo
-                    current_dt = current_dt.astimezone(local_tz)
+                current_dt = current_dt.astimezone(target_tz)
 
         hour = current_dt.hour
         if self.night_start_hour > self.night_end_hour:
