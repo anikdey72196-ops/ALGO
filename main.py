@@ -951,7 +951,7 @@ class TradingBot:
                 combined_risk_multiplier = regime_analysis.risk_multiplier * temporal_risk_mult
                 equity = self.broker.get_account_equity()
                 auth = self.risk_engine.authorize_trade(
-                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier
+                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier, current_time=now_utc
                 )
 
                 if not auth.authorized:

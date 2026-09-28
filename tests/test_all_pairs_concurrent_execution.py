@@ -40,6 +40,7 @@ class TestAllPairsConcurrentExecution(unittest.TestCase):
         )
         self.config.risk.max_open_positions = 15
         self.config.risk.max_open_per_symbol = 3
+        self.config.risk.night_limit_enabled = False
         self.risk_engine = RiskEngine(self.config, self.state)
 
     def tearDown(self):

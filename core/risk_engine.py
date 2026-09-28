@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+from datetime import datetime, timezone
 from dataclasses import dataclass
 # pyrefly: ignore [missing-import]
 from loguru import logger
@@ -72,10 +73,11 @@ class RiskEngine:
             return True, 'Circuit breaker active: daily loss limit reached'
 
         # Check maximum concurrent open positions (default 15, auto 2 from 11 PM to 8 AM)
+        check_time = current_time or datetime.now(timezone.utc)
         open_positions = self.state.get_open_positions()
         if hasattr(self.config.risk, 'get_effective_max_open_positions'):
-            max_open = self.config.risk.get_effective_max_open_positions(current_time)
-            is_night = self.config.risk.is_night_window(current_time)
+            max_open = self.config.risk.get_effective_max_open_positions(check_time)
+            is_night = self.config.risk.is_night_window(check_time)
         else:
             max_open = getattr(self.config.risk, 'max_open_positions', 15)
             is_night = False
@@ -101,17 +103,20 @@ class RiskEngine:
         current_equity: float,
         fixed_lot_size: float | None = None,
         risk_multiplier: float = 1.0,
+        current_time: datetime | None = None,
     ) -> AuthorizationResult:
         """
         Full authorization pipeline:
-        1. Check circuit breakers.
+        1. Check circuit breakers using current execution time.
         2. Look up instrument config.
         3. Calculate lot size (supports per-pair / per-trade fixed_lot_size override).
         4. Validate lot size > 0 and within bounds.
         5. Return AuthorizationResult.
         """
-        sig_time = getattr(signal, 'timestamp', None)
-        is_blocked, reason = self.check_circuit_breakers(current_equity, sig_time)
+        # Always evaluate real-time circuit breakers / night limits using current execution time
+        # (defaulting to current UTC wall-clock time), NEVER against historical candle bar timestamps.
+        check_time = current_time or datetime.now(timezone.utc)
+        is_blocked, reason = self.check_circuit_breakers(current_equity, check_time)
         if is_blocked:
             logger.warning(f"Trade rejected: {reason}")
             return AuthorizationResult(
