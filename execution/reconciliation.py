@@ -14,10 +14,11 @@ from execution.execution import BrokerAdapter
 class ReconciliationEngine:
     """Background engine ensuring local SQLite trade state exactly mirrors MT5 terminal reality."""
 
-    def __init__(self, broker: BrokerAdapter, state: StateManager, sync_interval_sec: float = 30.0):
+    def __init__(self, broker: BrokerAdapter, state: StateManager, sync_interval_sec: float = 30.0, position_manager=None):
         self.broker = broker
         self.state = state
         self.sync_interval_sec = sync_interval_sec
+        self.position_manager = position_manager
         self._stop_event = threading.Event()
         self._worker = threading.Thread(target=self._run_loop, daemon=True, name="Reconciler")
         self._worker.start()
@@ -29,7 +30,6 @@ class ReconciliationEngine:
         try:
             local_open = self.state.get_open_positions()
             broker_positions = self.broker.get_open_positions()
-
             broker_tickets = {
                 p.get("ticket") or p.get("order_id"): p
                 for p in broker_positions
@@ -45,13 +45,19 @@ class ReconciliationEngine:
                         if deal_res:
                             pnl, status = deal_res
                             self.state.update_trade_pnl(t.id, pnl, status)
+                            if self.position_manager:
+                                self.position_manager.on_trade_closed(t, pnl, status)
                             report["closed_synced"] += 1
                             logger.info(f"[RECONCILE] Synced closed trade #{t.id} ({t.symbol}): {status} PnL=${pnl:+.2f}")
                         else:
                             self.state.update_trade_pnl(t.id, 0.0, "CLOSED")
+                            if self.position_manager:
+                                self.position_manager.on_trade_closed(t, 0.0, "CLOSED")
                             report["closed_synced"] += 1
                     else:
                         self.state.update_trade_pnl(t.id, 0.0, "CLOSED")
+                        if self.position_manager:
+                            self.position_manager.on_trade_closed(t, 0.0, "CLOSED")
                         report["closed_synced"] += 1
 
             # 2. Check for orphan broker positions not in local state

@@ -69,6 +69,7 @@ class BotConfigUpdate(BaseModel):
     night_timezone_mode: Optional[str] = None
     ml_gating_enabled: Optional[bool] = None
     ml_max_sl_probability: Optional[float] = None
+    temporal_ml_enabled: Optional[bool] = None
 
 
 class BotStateResponse(BaseModel):
@@ -93,6 +94,7 @@ class BotStateResponse(BaseModel):
     ai_confidence_threshold: float
     ml_gating_enabled: bool = True
     ml_max_sl_probability: float = 0.50
+    temporal_ml_enabled: bool = True
     equity: float
     daily_pnl: float
     trades_today: int
@@ -421,6 +423,7 @@ async def get_bot_state():
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
         ml_max_sl_probability=getattr(bot_instance.config, "ml_max_sl_probability", 0.50),
+        temporal_ml_enabled=getattr(bot_instance.config, "temporal_ml_enabled", True),
         equity=round(equity, 2),
         daily_pnl=round(daily_pnl, 2),
         trades_today=trade_count,
@@ -798,6 +801,16 @@ async def update_configuration(payload: BotConfigUpdate):
             bot_instance.trap_svc.cfg.max_sl_probability = payload.ml_max_sl_probability
             bot_instance.trap_svc.cfg.p_genuine_threshold = 1.0 - payload.ml_max_sl_probability
 
+    if payload.temporal_ml_enabled is not None:
+        if bot_instance.is_active and payload.temporal_ml_enabled != getattr(bot_instance.config, 'temporal_ml_enabled', True):
+            raise HTTPException(
+                status_code=400,
+                detail="Temporal ML setting is LOCKED during activation! Deactivate the bot first to toggle Temporal ML filter."
+            )
+        bot_instance.config.temporal_ml_enabled = payload.temporal_ml_enabled
+        if hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+            bot_instance.temporal_svc.cfg.active_gating = payload.temporal_ml_enabled
+
     # Persist updated configuration to bot_settings.json
     bot_instance.save_settings()
 
@@ -809,7 +822,8 @@ async def update_configuration(payload: BotConfigUpdate):
         f"Strategies={bot_instance.config.enabled_strategies} | "
         f"Max Open Positions={bot_instance.config.risk.max_open_positions} | "
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'} | "
-        f"ML Trap Filter={'ON' if getattr(bot_instance.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):.2f})"
+        f"ML Trap Filter={'ON' if getattr(bot_instance.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):.2f}) | "
+        f"Temporal ML={'ON' if getattr(bot_instance.config, 'temporal_ml_enabled', True) else 'OFF'}"
     )
 
     return {

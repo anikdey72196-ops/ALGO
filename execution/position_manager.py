@@ -50,6 +50,7 @@ class PositionManager:
         self._stop_event = threading.Event()
         self._be_applied: set[int] = set()
         self._partial_tp_applied: set[int] = set()
+        self._trade_features: dict[int, dict] = {}
         self._remaining_lots: dict[int, float] = {}
         self._last_partial_time: dict[int, float] = {}
         self._partial_stages_taken: dict[int, int] = {}
@@ -195,6 +196,8 @@ class PositionManager:
                         reversal_threshold=getattr(rules, "smart_partial_tp_reversal_threshold", 0.60) if rules else 0.60,
                         runner_threshold=getattr(rules, "smart_partial_tp_runner_threshold", 0.65) if rules else 0.65,
                     )
+                    if verdict and hasattr(verdict, "features") and verdict.features:
+                        self._trade_features[trade.id] = verdict.features
 
                     if verdict.action == "PARTIAL_CLOSE" and verdict.close_pct > 0.0:
                         raw_close = remaining_lot * verdict.close_pct
@@ -334,7 +337,67 @@ class PositionManager:
             if not self._stop_event.is_set():
                 self.process_positions()
 
+    def on_trade_closed(self, trade, pnl: float, status: str) -> None:
+        """Feed completed trade back into SmartPartialTPService for continuous self-learning."""
+        if not self.smart_partial_tp_service:
+            return
+        try:
+            features = self._trade_features.get(trade.id)
+            last_ev = None
+            if not features and hasattr(self.state, "get_latest_partial_tp_event") and trade.id is not None:
+                last_ev = self.state.get_latest_partial_tp_event(trade.id)
+                if last_ev and last_ev.get("features_json"):
+                    try:
+                        features = json.loads(last_ev["features_json"])
+                    except Exception:
+                        features = None
+
+            entry = float(getattr(trade, "entry_price", 0.0) or 0.0)
+            sl = float(getattr(trade, "stop_loss", 0.0) or 0.0)
+            sl_dist = abs(entry - sl)
+
+            if sl_dist > 0:
+                exit_price = trade.take_profit if status == "CLOSED_TP" else trade.stop_loss
+                if exit_price:
+                    price_diff = (exit_price - entry) if trade.direction == Direction.BUY else (entry - exit_price)
+                    final_r = price_diff / sl_dist
+                else:
+                    final_r = 1.0 if status == "CLOSED_TP" else -1.0
+            else:
+                final_r = 1.0 if status == "CLOSED_TP" else -1.0
+
+            hit_tp = (status == "CLOSED_TP") or (final_r >= 1.5)
+
+            if features:
+                self.smart_partial_tp_service.record_trade_outcome(
+                    features=features,
+                    hit_tp=hit_tp,
+                    final_r=round(final_r, 2),
+                )
+                logger.info(
+                    f"🧠 [MODEL 3 SELF-LEARNING] SmartPartialTP learned Trade #{trade.id} outcome: "
+                    f"Status={status}, final_r={final_r:+.2f}R, hit_tp={hit_tp}"
+                )
+                if last_ev and "id" in last_ev and hasattr(self.state, "update_partial_tp_outcome"):
+                    self.state.update_partial_tp_outcome(
+                        last_ev["id"],
+                        realized_max_r=round(final_r, 2),
+                        outcome_label="FULL_TP" if hit_tp else "REVERSED",
+                    )
+
+            if trade.id is not None:
+                self._trade_features.pop(trade.id, None)
+                self._remaining_lots.pop(trade.id, None)
+                self._partial_stages_taken.pop(trade.id, None)
+                self._last_partial_time.pop(trade.id, None)
+                self._partial_tp_applied.discard(trade.id)
+                self._be_applied.discard(trade.id)
+                self._reversal_shielded.discard(trade.id)
+        except Exception as e:
+            logger.debug(f"Failed to record trade outcome in PositionManager: {e}")
+
     def shutdown(self) -> None:
         self._stop_event.set()
         if self._worker.is_alive():
             self._worker.join(timeout=2.0)
+

@@ -10,7 +10,7 @@ def test_activation_history_flow():
     client = TestClient(app)
 
     print("1. Testing GET /api/activation_history initially...")
-    res = client.get("/api/activation_history")
+    res = client.get("/api/activation_history?limit=1000")
     assert res.status_code == 200
     data = res.json()
     assert "sessions" in data
@@ -40,7 +40,7 @@ def test_activation_history_flow():
     time.sleep(1.5)
 
     print("\n4. Verifying /api/activation_history shows the active session...")
-    hist_res = client.get("/api/activation_history")
+    hist_res = client.get("/api/activation_history?limit=1000")
     assert hist_res.status_code == 200
     hist_data = hist_res.json()
     assert len(hist_data["sessions"]) == initial_session_count + 1
@@ -58,7 +58,7 @@ def test_activation_history_flow():
     print(f"   Deactivated session ID: {deact_data.get('session_id')}")
 
     print("\n6. Verifying session is COMPLETED with recorded duration...")
-    hist_res2 = client.get("/api/activation_history")
+    hist_res2 = client.get("/api/activation_history?limit=1000")
     assert hist_res2.status_code == 200
     hist_data2 = hist_res2.json()
     closed = hist_data2["sessions"][0]

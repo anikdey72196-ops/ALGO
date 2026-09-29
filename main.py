@@ -159,7 +159,6 @@ class TradingBot:
         # Dynamic Spread Guard, Idempotent Order Manager, Reconciler, and Position Manager
         self.spread_guard = DynamicSpreadGuard(window_size=300, percentile_cutoff=95.0)
         self.order_manager = OrderManager(broker=self.broker, max_retries=3, base_backoff_sec=0.5)
-        self.reconciler = ReconciliationEngine(broker=self.broker, state=self.state, sync_interval_sec=30.0)
         self.position_manager = PositionManager(
             broker=self.broker,
             state=self.state,
@@ -167,6 +166,12 @@ class TradingBot:
             history_provider=lambda sym, tf, n: self._get_ohlcv(sym, tf, count=n),
             breakeven_sideways_only=True,
             config=self.config,
+        )
+        self.reconciler = ReconciliationEngine(
+            broker=self.broker,
+            state=self.state,
+            sync_interval_sec=30.0,
+            position_manager=self.position_manager,
         )
 
         # Trend Reversal & CHoCH Subsystem (1H Candlestick Analysis)
@@ -250,6 +255,10 @@ class TradingBot:
                     if hasattr(self, "trap_svc") and self.trap_svc:
                         self.trap_svc.cfg.max_sl_probability = self.config.ml_max_sl_probability
                         self.trap_svc.cfg.p_genuine_threshold = 1.0 - self.config.ml_max_sl_probability
+                if "temporal_ml_enabled" in saved:
+                    self.config.temporal_ml_enabled = bool(saved["temporal_ml_enabled"])
+                    if hasattr(self, "temporal_svc") and self.temporal_svc:
+                        self.temporal_svc.cfg.active_gating = self.config.temporal_ml_enabled
 
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
@@ -258,7 +267,8 @@ class TradingBot:
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
                     f"Pair3={self.config.pair3.symbol} (lot={self.config.pair3.fixed_lot_size}, sl={self.config.pair3.fixed_sl_pips}) | "
-                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f})"
+                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f}) | "
+                    f"TemporalML={'ON' if getattr(self.config, 'temporal_ml_enabled', True) else 'OFF'}"
                 )
             except Exception as e:
                 logger.warning(f"Failed to load bot_settings.json: {e}")
@@ -300,6 +310,7 @@ class TradingBot:
                 "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
                 "ml_gating_enabled": getattr(self.config, "ml_gating_enabled", True),
                 "ml_max_sl_probability": getattr(self.config, "ml_max_sl_probability", 0.50),
+                "temporal_ml_enabled": getattr(self.config, "temporal_ml_enabled", True),
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
@@ -447,6 +458,8 @@ class TradingBot:
                     if deal_res:
                         pnl, status = deal_res
                         self.state.update_trade_pnl(trade.id, pnl, status)
+                        if hasattr(self, "position_manager") and self.position_manager:
+                            self.position_manager.on_trade_closed(trade, pnl, status)
                         self.log(
                             f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
                             f"Realized PnL: ${pnl:+.2f}"
@@ -468,12 +481,16 @@ class TradingBot:
                         )
                     else:
                         self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
+                        if hasattr(self, "position_manager") and self.position_manager:
+                            self.position_manager.on_trade_closed(trade, 0.0, "CLOSED")
                         self.log(
                             f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
                             level="INFO"
                         )
                 else:
                     self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
+                    if hasattr(self, "position_manager") and self.position_manager:
+                        self.position_manager.on_trade_closed(trade, 0.0, "CLOSED")
                     self.log(
                         f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
                         level="INFO"

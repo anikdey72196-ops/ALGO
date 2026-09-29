@@ -712,7 +712,7 @@ class TradingConfig(BaseModel):
     )
     # Machine Learning Temporal & Session Edge Settings
     temporal_ml_enabled: bool = Field(
-        default=False,
+        default=True,
         description="When enabled, ML temporal analyzer models day/time/session profitability and scales risk or filters toxic windows.",
     )
     temporal_veto_toxic: bool = Field(

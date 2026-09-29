@@ -1168,6 +1168,20 @@ class StateManager:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def get_latest_partial_tp_event(self, trade_id: int) -> dict[str, Any] | None:
+        """Retrieve most recent partial TP event for a trade."""
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                SELECT * FROM partial_tp_events
+                WHERE trade_id = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (trade_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def update_partial_tp_outcome(self, event_id: int, realized_max_r: float, outcome_label: str) -> None:
         """Update event with ground-truth trade outcome for training."""
         with self._lock, self.conn:

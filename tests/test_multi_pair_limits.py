@@ -113,6 +113,7 @@ class TestMultiPairLimitsAndSynchronization(unittest.TestCase):
         self.config.risk.max_open_positions = 6
         self.config.risk.max_open_per_symbol = 3
         self.config.ml_gating_enabled = False
+        self.config.temporal_ml_enabled = False
         self.bot = None
 
     def tearDown(self):
