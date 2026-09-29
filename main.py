@@ -19,7 +19,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # pyrefly: ignore [missing-import]
 from apscheduler.triggers.interval import IntervalTrigger
 
-from core.config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction, normalize_strategy_key
+from core.config import TradingConfig, DEFAULT_CONFIG, get_instrument, Direction, MarketBias, normalize_strategy_key
 from core.state import StateManager, TradeRecord
 from core.news_filter import NewsFilter
 from core.risk_engine import RiskEngine

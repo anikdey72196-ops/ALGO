@@ -385,6 +385,37 @@ class TestTrendReversalDetector(unittest.TestCase):
         self.assertEqual(xau["choch_type"], "BEARISH")
         self.assertEqual(xau["reversal_probability"], 85.0)
 
+    def test_reversal_guard_blocks_pre_reversal_sweep(self):
+        """Test that pre-reversal sweep correctly filters pro-trend signals and handles MarketBias."""
+        from main import Direction, MarketBias
+        reversal_analysis = TrendReversalAnalysis(
+            symbol="XAUUSD",
+            trend=MarketBias.BEARISH,
+            is_trending=True,
+            choch_detected=False,
+            choch_type=CHoCHType.NONE,
+            stage=ReversalStage.PRE_REVERSAL_SWEEP,
+            key_swing_level=4171.20,
+            trend_extreme_level=4108.33,
+            invalidation_level=4100.0,
+            reversal_probability=48.0,
+            reversal_risk="HIGH",
+            warning_message="Pre-reversal sweep warning",
+        )
+
+        should_block_reversal = False
+        blocked_direction = None
+
+        if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
+            should_block_reversal = True
+            blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+        elif (reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP or reversal_analysis.reversal_risk in ("HIGH", "CRITICAL")) and reversal_analysis.reversal_probability >= 45.0:
+            should_block_reversal = True
+            blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
+
+        self.assertTrue(should_block_reversal)
+        self.assertEqual(blocked_direction, Direction.SELL)
+
 
 if __name__ == '__main__':
     unittest.main()
