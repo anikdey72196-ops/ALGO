@@ -114,7 +114,9 @@ class TradingBot:
         self._last_utc_day: int | None = None
         self.is_active: bool = False
         self.recent_logs: list[str] = []
+        self.ml_logs: list[str] = []
         self._tick_lock = threading.Lock()
+        self._load_persisted_logs()
 
         # Initialize components
         self.state = StateManager(db_path=self.config.db_path)
@@ -305,6 +307,44 @@ class TradingBot:
             logger.error(f"Failed to save bot settings to bot_settings.json: {e}")
 
 
+    def _load_persisted_logs(self, max_lines: int = 1000) -> None:
+        """Hydrate recent_logs and ml_logs from existing log file if available."""
+        try:
+            log_file = Path(self.config.log_path)
+            if not log_file.exists():
+                return
+            import json
+            loaded_recent = []
+            loaded_ml = []
+            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+            for line in lines[-max_lines:]:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    msg = data.get("record", {}).get("message", "")
+                    t_str = data.get("record", {}).get("time", {}).get("repr", "")
+                    if "T" in t_str:
+                        time_part = t_str.split("T")[1].split("+")[0].split(".")[0]
+                    elif " " in t_str:
+                        time_part = t_str.split()[1].split(".")[0]
+                    else:
+                        time_part = t_str[:8]
+                    entry = f"[{time_part}] {msg}"
+                    loaded_recent.append(entry)
+                    if any(k in msg for k in ["ML", "TRAP", "Trap", "🪤", "🔬", "🤖", "AI", "TEMPORAL", "DECISION", "vetoed"]):
+                        loaded_ml.append(entry)
+                except Exception:
+                    continue
+            if loaded_recent:
+                self.recent_logs = loaded_recent[-1000:]
+            if loaded_ml:
+                self.ml_logs = loaded_ml[-500:]
+        except Exception as e:
+            logger.debug(f"Could not load persisted logs: {e}")
+
     def log(self, message: str, level: str = "INFO") -> None:
         """Helper to append to recent logs and send to logger."""
         try:
@@ -314,8 +354,14 @@ class TradingBot:
             timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         entry = f"[{timestamp}] {message}"
         self.recent_logs.append(entry)
-        if len(self.recent_logs) > 200:
+        if len(self.recent_logs) > 1000:
             self.recent_logs.pop(0)
+
+        # Dedicated ring buffer for ML & AI logs so they are never drowned out by market ticks
+        if any(k in message for k in ["ML", "TRAP", "Trap", "🪤", "🔬", "🤖", "AI", "TEMPORAL", "DECISION", "vetoed"]):
+            self.ml_logs.append(entry)
+            if len(self.ml_logs) > 500:
+                self.ml_logs.pop(0)
         
         if level == "INFO":
             logger.info(message)

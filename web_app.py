@@ -111,10 +111,12 @@ class BotStateResponse(BaseModel):
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
     ml_trap_detector: dict = {}
+    trap_stats: dict = {}
     temporal_ml_model: dict = {}
     open_positions_by_strategy: dict = {}
     execution_summary: dict = {}
     trend_reversal: dict = {}
+    ml_logs: List[str] = []
 
 
 
@@ -325,6 +327,7 @@ async def get_bot_state():
     if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
         try:
             store_stats = bot_instance.trap_svc.store.stats()
+            today_stats = bot_instance.trap_svc.store.stats_today() if hasattr(bot_instance.trap_svc.store, "stats_today") else {}
             strat_stats = bot_instance.trap_svc.store.stats_by_strategy() if hasattr(bot_instance.trap_svc.store, "stats_by_strategy") else {}
             is_shadow = (
                 bot_instance.trap_svc.cfg.shadow_until_samples > 0
@@ -355,6 +358,9 @@ async def get_bot_state():
                 "labeled_events": store_stats.get("labeled", 0),
                 "traps_caught": store_stats.get("traps", 0),
                 "genuine_setups": store_stats.get("genuine", 0),
+                "traps_today": today_stats.get("traps_caught", 0),
+                "vetoed_today": today_stats.get("vetoed", 0),
+                "total_today": today_stats.get("total", 0),
                 "gating_enabled": getattr(bot_instance.config, "ml_gating_enabled", True),
                 "strategies": strategy_models,
             }
@@ -419,7 +425,7 @@ async def get_bot_state():
         daily_pnl=round(daily_pnl, 2),
         trades_today=trade_count,
         circuit_breaker_active=cb_active,
-        recent_logs=list(reversed(bot_instance.recent_logs[-50:])),
+        recent_logs=list(reversed(bot_instance.recent_logs[-150:])),
         available_symbols=available,
         mock_mode=bot_instance.config.use_mock_broker,
         broker_info=broker_info,
@@ -433,11 +439,48 @@ async def get_bot_state():
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
         ml_trap_detector=trap_stats,
+        trap_stats=trap_stats,
         temporal_ml_model=temporal_stats,
         open_positions_by_strategy=open_positions_by_strategy,
         execution_summary=exec_summary,
         trend_reversal=trend_reversal_data,
+        ml_logs=list(reversed(getattr(bot_instance, "ml_logs", [])[-100:])),
     )
+
+
+@app.get("/api/logs")
+async def get_system_logs(category: Optional[str] = None, limit: int = 200):
+    """
+    Return recent logs with optional category filtering (ML, TRADE, REVERSAL, WARN, ALL).
+    Combines in-memory ring buffers and disk logs if necessary.
+    """
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    cat = (category or "ALL").upper()
+    
+    if cat in ("ML", "AI"):
+        # Prioritize dedicated ml_logs buffer
+        logs = list(getattr(bot_instance, "ml_logs", []))
+        for l in bot_instance.recent_logs:
+            if any(k in l for k in ["ML", "TRAP", "Trap", "🪤", "🔬", "🤖", "AI", "TEMPORAL", "DECISION", "vetoed"]):
+                if l not in logs:
+                    logs.append(l)
+    elif cat == "REVERSAL":
+        logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["REVERSAL", "CHoCH", "🚨", "🛡️", "SWEEP"])]
+    elif cat == "TRADE":
+        logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["ORDER", "FILLED", "TRADE", "POSITION", "✅", "AUTHORIZED", "ACTIVATED", "SIGNAL"])]
+    elif cat == "WARN":
+        logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["⚠️", "WARN", "🚫", "⛔", "ERROR", "FAILED", "SKIPPED", "REJECTED"])]
+    else:
+        logs = list(bot_instance.recent_logs)
+
+    return {
+        "status": "ok",
+        "category": cat,
+        "count": len(logs),
+        "logs": list(reversed(logs[-limit:]))
+    }
 
 
 @app.get("/api/trend-reversal")

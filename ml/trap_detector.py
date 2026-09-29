@@ -598,6 +598,34 @@ class EventStore:
                 }
             return res
 
+    def stats_today(self, date_str: Optional[str] = None) -> dict[str, int]:
+        """Return event stats for today (or specified date YYYY-MM-DD prefix)."""
+        if not date_str:
+            date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT COUNT(*),
+                       SUM(label IS NOT NULL),
+                       SUM(label = 0),
+                       SUM(label = 1),
+                       SUM(allowed = 0),
+                       COUNT(DISTINCT CASE WHEN (label = 0 OR allowed = 0) THEN event_id END)
+                FROM ml_events
+                WHERE ts LIKE ?
+                """,
+                (date_str + "%",),
+            )
+            total, labeled, traps, genuine, vetoed, total_traps = cur.fetchone()
+        return {
+            "total": int(total or 0),
+            "labeled": int(labeled or 0),
+            "traps": int(traps or 0),
+            "genuine": int(genuine or 0),
+            "vetoed": int(vetoed or 0),
+            "traps_caught": int(total_traps or 0),
+        }
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
