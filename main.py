@@ -765,15 +765,25 @@ class TradingBot:
                 htf_analysis=htf_analysis,
             )
 
-            # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability CHoCH ──
-            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 60.0:
+            # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability CHoCH or Early Sweep ──
+            should_block_reversal = False
+            blocked_direction = None
+
+            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
+                should_block_reversal = True
                 blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+            elif (reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP or reversal_analysis.reversal_risk in ("HIGH", "CRITICAL")) and reversal_analysis.reversal_probability >= 45.0:
+                should_block_reversal = True
+                blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
+
+            if should_block_reversal and blocked_direction is not None:
                 prior_len = len(signals)
                 signals = [s for s in signals if s.direction != blocked_direction]
                 if len(signals) < prior_len:
+                    reason_desc = f"{reversal_analysis.choch_type.value} CHoCH" if reversal_analysis.choch_detected else f"Pre-Reversal Extreme Sweep ({reversal_analysis.reversal_risk} Risk)"
                     self.log(
-                        f"  🚫 [CHoCH REVERSAL GUARD] Blocked {prior_len - len(signals)} pro-trend signal(s) on {symbol}: "
-                        f"Trend broken by {reversal_analysis.choch_type.value} CHoCH (Prob: {reversal_analysis.reversal_probability:.0f}%).",
+                        f"  🚫 [REVERSAL GUARD] Blocked {prior_len - len(signals)} {blocked_direction.value} signal(s) on {symbol}: "
+                        f"Trend reversal warning: {reason_desc} (Prob: {reversal_analysis.reversal_probability:.0f}%).",
                         level="INFO"
                     )
 

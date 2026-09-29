@@ -301,8 +301,15 @@ class HTFAnalyzer:
             # Macro uptrend: established above 200 EMA with consolidating swings
             bias = MarketBias.BULLISH
             trend_clarity_score = 20.0
+        elif structure_bias == MarketBias.BULLISH and is_below_ema:
+            # Leading price action: Swing structure is making higher highs and higher lows (reversal/pullback rally)
+            bias = MarketBias.BULLISH
+            trend_clarity_score = 25.0
+        elif structure_bias == MarketBias.BEARISH and is_above_ema:
+            # Leading price action: Swing structure is making lower highs and lower lows (reversal/pullback decline)
+            bias = MarketBias.BEARISH
+            trend_clarity_score = 25.0
         else:
-            # Structure actively opposes 200 EMA (counter-trend) -> true neutral
             bias = MarketBias.NEUTRAL
             trend_clarity_score = 10.0
 
@@ -466,6 +473,13 @@ class SMCEntryDetector:
 
         # ── Step 1 & 2: Sweep and Displacement Detection ──
         if bias == MarketBias.BULLISH:
+            # Reversal / Pullback Guard: If LTF is in a strong established downtrend, do not buy into freefall
+            if n >= 25:
+                ltf_ema20 = df['close'].ewm(span=20, adjust=False).mean()
+                ltf_ema50 = df['close'].ewm(span=50, adjust=False).mean()
+                if float(current_close) < float(ltf_ema20.iloc[-1]) and float(ltf_ema20.iloc[-1]) < float(ltf_ema50.iloc[-1]) and (float(ltf_ema20.iloc[-1]) < float(ltf_ema20.iloc[-3])):
+                    return None
+
             low_swings = [sp for sp in swings if not sp.is_high and sp.index < n - 1]
             if not low_swings:
                 return None
@@ -530,9 +544,12 @@ class SMCEntryDetector:
                 else:
                     return None
 
-            # Stop-loss tight beyond invalidation point (sweep extreme)
+            # Stop-loss tight beyond invalidation point (sweep extreme) with minimum safety floor
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
             stop_loss = min(sweep_extreme, swept_level) - sl_buffer
+            min_sl_dist = max(current_atr * 0.8, 15.0 * instrument.pip_size if ("XAU" in instrument.symbol or "GOLD" in instrument.symbol) else 5.0 * instrument.pip_size)
+            if abs(current_close - stop_loss) < min_sl_dist:
+                stop_loss = current_close - min_sl_dist
 
             # Target liquidity pool or HTF supply zone
             take_profit = 0.0
@@ -559,6 +576,13 @@ class SMCEntryDetector:
             }
 
         elif bias == MarketBias.BEARISH:
+            # Reversal / Pullback Guard: If LTF is in a strong established uptrend, do not sell into active bull momentum
+            if n >= 25:
+                ltf_ema20 = df['close'].ewm(span=20, adjust=False).mean()
+                ltf_ema50 = df['close'].ewm(span=50, adjust=False).mean()
+                if float(current_close) > float(ltf_ema20.iloc[-1]) and float(ltf_ema20.iloc[-1]) > float(ltf_ema50.iloc[-1]) and (float(ltf_ema20.iloc[-1]) > float(ltf_ema20.iloc[-3])):
+                    return None
+
             high_swings = [sp for sp in swings if sp.is_high and sp.index < n - 1]
             if not high_swings:
                 return None
@@ -616,8 +640,12 @@ class SMCEntryDetector:
                 else:
                     return None
 
+            # Stop-loss tight beyond invalidation point (sweep extreme) with minimum safety floor
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
             stop_loss = max(sweep_extreme, swept_level) + sl_buffer
+            min_sl_dist = max(current_atr * 0.8, 15.0 * instrument.pip_size if ("XAU" in instrument.symbol or "GOLD" in instrument.symbol) else 5.0 * instrument.pip_size)
+            if abs(current_close - stop_loss) < min_sl_dist:
+                stop_loss = current_close + min_sl_dist
 
             take_profit = 0.0
             opposing_pools = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < current_close]
@@ -733,6 +761,12 @@ class SMCScalp5MEngine:
         lookback_window = min(15, n - 2)
 
         if bias == MarketBias.BULLISH:
+            if n >= 20:
+                ema9 = df['close'].ewm(span=9, adjust=False).mean()
+                ema21 = df['close'].ewm(span=21, adjust=False).mean()
+                if float(current_close) < float(ema9.iloc[-1]) and float(ema9.iloc[-1]) < float(ema21.iloc[-1]) and (float(ema9.iloc[-1]) < float(ema9.iloc[-2])):
+                    return None
+
             swing_highs = [sp for sp in swings if sp.is_high and sp.index < n - 1]
             if not swing_highs:
                 return None
@@ -798,7 +832,7 @@ class SMCScalp5MEngine:
             else:
                 sl_distance = abs(entry_price - stop_loss)
 
-            min_buffer = 1.0 * instrument.pip_size
+            min_buffer = max(1.0 * instrument.pip_size, 12.0 * instrument.pip_size if ("XAU" in instrument.symbol or "GOLD" in instrument.symbol) else 4.0 * instrument.pip_size)
             if sl_distance < min_buffer:
                 sl_distance = min_buffer
                 stop_loss = entry_price - sl_distance
@@ -824,6 +858,12 @@ class SMCScalp5MEngine:
             }
 
         elif bias == MarketBias.BEARISH:
+            if n >= 20:
+                ema9 = df['close'].ewm(span=9, adjust=False).mean()
+                ema21 = df['close'].ewm(span=21, adjust=False).mean()
+                if float(current_close) > float(ema9.iloc[-1]) and float(ema9.iloc[-1]) > float(ema21.iloc[-1]) and (float(ema9.iloc[-1]) > float(ema9.iloc[-2])):
+                    return None
+
             swing_lows = [sp for sp in swings if not sp.is_high and sp.index < n - 1]
             if not swing_lows:
                 return None
@@ -889,7 +929,7 @@ class SMCScalp5MEngine:
             else:
                 sl_distance = abs(stop_loss - entry_price)
 
-            min_buffer = 1.0 * instrument.pip_size
+            min_buffer = max(1.0 * instrument.pip_size, 12.0 * instrument.pip_size if ("XAU" in instrument.symbol or "GOLD" in instrument.symbol) else 4.0 * instrument.pip_size)
             if sl_distance < min_buffer:
                 sl_distance = min_buffer
                 stop_loss = entry_price + sl_distance
@@ -1723,7 +1763,7 @@ class SMCSwingStrategy(BaseStrategy):
 
         tp = raw['tp']
         tp_dist = abs(entry - tp)
-        min_buffer = 1.0 * instrument.pip_size
+        min_buffer = max(1.0 * instrument.pip_size, 15.0 * instrument.pip_size if ("XAU" in instrument.symbol or "GOLD" in instrument.symbol) else 5.0 * instrument.pip_size)
         if sl_dist < min_buffer:
             sl_dist = min_buffer
             sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist

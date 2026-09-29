@@ -463,6 +463,15 @@ async def activate_bot():
     if bot_instance.is_active:
         return {"status": "already_active", "message": "Bot is already active."}
 
+    # Ensure all enabled pairs are included in selected_symbols
+    active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
+    for p_cfg in (bot_instance.config.pair1, bot_instance.config.pair2, bot_instance.config.pair3):
+        if p_cfg and getattr(p_cfg, "enabled", False) and p_cfg.symbol:
+            p_s = p_cfg.symbol.strip().upper()
+            if p_s and p_s != "NONE" and p_s not in active_syms:
+                active_syms.append(p_s)
+    bot_instance.config.selected_symbols = active_syms
+
     bot_instance.is_active = True
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols,
@@ -637,15 +646,14 @@ async def update_configuration(payload: BotConfigUpdate):
                     bot_instance.config.pair3.enabled = False
         else:
             bot_instance.config.selected_symbols = []
-    else:
-        active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
-        if bot_instance.config.pair1.enabled and bot_instance.config.pair1.symbol and bot_instance.config.pair1.symbol not in active_syms:
-            active_syms.append(bot_instance.config.pair1.symbol)
-        if bot_instance.config.pair2.enabled and bot_instance.config.pair2.symbol and bot_instance.config.pair2.symbol not in active_syms:
-            active_syms.append(bot_instance.config.pair2.symbol)
-        if bot_instance.config.pair3.enabled and bot_instance.config.pair3.symbol and bot_instance.config.pair3.symbol not in active_syms:
-            active_syms.append(bot_instance.config.pair3.symbol)
-        bot_instance.config.selected_symbols = active_syms
+    # Ensure all enabled pairs (Pair 1, Pair 2, Pair 3) are present in selected_symbols
+    active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
+    for p_cfg in (bot_instance.config.pair1, bot_instance.config.pair2, bot_instance.config.pair3):
+        if p_cfg and getattr(p_cfg, "enabled", False) and p_cfg.symbol:
+            p_s = p_cfg.symbol.strip().upper()
+            if p_s and p_s != "NONE" and p_s not in active_syms:
+                active_syms.append(p_s)
+    bot_instance.config.selected_symbols = active_syms
 
     if payload.strategy_type is not None:
         new_strat = payload.strategy_type.strip().upper()
