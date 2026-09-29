@@ -2036,7 +2036,7 @@ class OrderFlowStrategy(BaseStrategy):
     ) -> list[TradeSignal]:
         if htf_analysis is None:
             htf_analysis = self.htf_analyzer.analyze(htf_data)
-        if htf_analysis.bias == MarketBias.NEUTRAL and self.of_config.enforce_htf_alignment:
+        if htf_analysis.bias == MarketBias.NEUTRAL and getattr(self.of_config, 'enforce_htf_alignment', True):
             return []
 
         raw = self.engine.detect_order_flow_entry(

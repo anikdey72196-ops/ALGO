@@ -125,6 +125,7 @@ class OrderFlowConfig(BaseModel):
     cvd_divergence_bars: int = Field(default=14, ge=5, le=50, description="Lookback period to check CVD divergence against price swings.")
     min_rr: float = Field(default=1.8, ge=1.0, description="Minimum acceptable R:R ratio for Order Flow setups.")
     target_rr: float = Field(default=2.2, ge=1.0, description="Default target Risk-to-Reward ratio for Order Flow setups.")
+    enforce_htf_alignment: bool = Field(default=True, description="Enforce HTF trend bias alignment for Order Flow setups.")
 class PositionManagementRuleConfig(BaseModel):
     """Configuration for dynamic position management on open trades."""
     # 1. Breakeven after +1R

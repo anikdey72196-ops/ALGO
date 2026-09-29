@@ -300,6 +300,32 @@ class TestOrderFlowStrategy(unittest.TestCase):
         self.assertEqual(normalize_strategy_key("OF_ABSORPTION"), "ORDER_FLOW")
         self.assertEqual(normalize_strategy_key(None, magic=127456), "ORDER_FLOW")
 
+    def test_order_flow_neutral_htf_bias(self):
+        """Verify that neutral HTF bias returns empty list without AttributeError."""
+        htf_analyzer = HTFAnalyzer()
+        strat = OrderFlowStrategy(htf_analyzer, self.of_config)
+        self.assertTrue(strat.of_config.enforce_htf_alignment)
+
+        htf_neutral = HTFAnalysis(
+            bias=MarketBias.NEUTRAL,
+            ema_value=1.0800,
+            last_swing_high=1.0850,
+            last_swing_low=1.0750,
+            trend_clarity_score=10.0,
+        )
+        df_ltf = self._create_mock_ohlcv(count=25, base_price=1.0800, trend="BULLISH")
+        df_htf = self._create_mock_ohlcv(count=50, base_price=1.0800, trend="BULLISH")
+
+        signals = strat.evaluate(
+            symbol="GBPUSD",
+            htf_data=df_htf,
+            ltf_data=df_ltf,
+            instrument=self.instrument,
+            current_spread=0.0001,
+            htf_analysis=htf_neutral,
+        )
+        self.assertEqual(signals, [])
+
 
 if __name__ == "__main__":
     unittest.main()
