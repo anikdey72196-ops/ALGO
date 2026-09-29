@@ -2,10 +2,12 @@
 position_manager.py — Asynchronous Trailing Stops, Breakeven, and Profit Scaling.
 """
 from __future__ import annotations
+import json
+import math
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from loguru import logger
 from core.config import Direction
 from core.state import StateManager
@@ -16,11 +18,17 @@ try:
 except ImportError:
     mt5 = None
 
-
 from core.market_regime import MarketRegimeDetector
 
+try:
+    from ml.smart_partial_tp import SmartPartialTPService, PartialTPVerdict
+except ImportError:
+    SmartPartialTPService = None
+    PartialTPVerdict = None
+
+
 class PositionManager:
-    """Manages active bracket orders: +1R breakeven (specifically for sideways markets), trails, and session closes."""
+    """Manages active bracket orders: +1R breakeven (specifically for sideways markets), smart ML partial TP, and session closes."""
 
     def __init__(
         self,
@@ -29,15 +37,22 @@ class PositionManager:
         poll_interval_sec: float = 5.0,
         history_provider=None,
         breakeven_sideways_only: bool = True,
+        config=None,
+        smart_partial_tp_service=None,
     ):
         self.broker = broker
         self.state = state
         self.poll_interval_sec = poll_interval_sec
         self.history_provider = history_provider
         self.breakeven_sideways_only = breakeven_sideways_only
+        self.config = config
+        self.smart_partial_tp_service = smart_partial_tp_service or (SmartPartialTPService.get_instance() if SmartPartialTPService else None)
         self._stop_event = threading.Event()
         self._be_applied: set[int] = set()
         self._partial_tp_applied: set[int] = set()
+        self._remaining_lots: dict[int, float] = {}
+        self._last_partial_time: dict[int, float] = {}
+        self._partial_stages_taken: dict[int, int] = {}
         self._reversal_shielded: set[int] = set()
         self._worker = threading.Thread(target=self._run_loop, daemon=True, name="PositionMgr")
         self._worker.start()
@@ -100,8 +115,8 @@ class PositionManager:
                     continue
 
                 # ── 1. Breakeven at +1R (Enforced ONLY during Sideways / Ranging Markets) ──
+                r_gain = (current_price - entry) / risk_dist if trade.direction == Direction.BUY else (entry - current_price) / risk_dist
                 if trade.id not in self._be_applied:
-                    r_gain = (current_price - entry) / risk_dist if trade.direction == Direction.BUY else (entry - current_price) / risk_dist
                     if r_gain >= 1.0:
                         # Check regime if sideways_only is enabled
                         is_sideways = not self.breakeven_sideways_only
@@ -123,7 +138,149 @@ class PositionManager:
                         else:
                             logger.debug(f"Trending market active on {trade.symbol} (+{r_gain:.2f}R). Skipping BE lock to allow trend continuation.")
 
-                # ── 2. Session Close Guard (e.g. 21:50 UTC) ──
+                # ── 2. Smart ML Partial Take-Profit (Structural Reversal & Runner Protection) ──
+                if trade.id not in self._remaining_lots:
+                    self._remaining_lots[trade.id] = float(trade.lot_size)
+                remaining_lot = self._remaining_lots[trade.id]
+
+                # Resolve position rules
+                rules = None
+                if self.config and hasattr(self.config, "position_management"):
+                    rules = self.config.position_management.get_rules(trade.strategy_name, trade.symbol)
+
+                smart_enabled = getattr(rules, "smart_partial_tp_enabled", True) if rules else True
+                min_r = getattr(rules, "smart_partial_tp_min_r", 0.6) if rules else 0.6
+                cooldown_sec = getattr(rules, "smart_partial_tp_cooldown_bars", 3) * 60.0 if rules else 180.0
+                shadow_mode = getattr(rules, "smart_partial_tp_shadow_mode", False) if rules else False
+
+                now_ts = time.time()
+                last_time = self._last_partial_time.get(trade.id, 0.0)
+                stages_taken = self._partial_stages_taken.get(trade.id, 0)
+
+                if (
+                    smart_enabled
+                    and self.smart_partial_tp_service is not None
+                    and r_gain >= min_r
+                    and (now_ts - last_time >= cooldown_sec)
+                    and stages_taken < 3
+                    and remaining_lot > 0.01
+                ):
+                    bars_held = 10
+                    if getattr(trade, "timestamp", None):
+                        try:
+                            t_entry = datetime.fromisoformat(str(trade.timestamp).replace("Z", "+00:00"))
+                            bars_held = max(1, int((now_utc - t_entry).total_seconds() / 300))
+                        except Exception:
+                            pass
+
+                    df_hist = None
+                    if self.history_provider:
+                        try:
+                            df_hist = self.history_provider(trade.symbol, "5m", 100)
+                        except Exception as e:
+                            logger.debug(f"History provider error on {trade.symbol}: {e}")
+
+                    verdict = self.smart_partial_tp_service.evaluate(
+                        symbol=trade.symbol,
+                        strategy_name=trade.strategy_name or "SMC",
+                        direction=trade.direction.value if hasattr(trade.direction, "value") else str(trade.direction),
+                        entry_price=entry,
+                        sl_price=orig_sl,
+                        tp_price=trade.take_profit,
+                        current_price=current_price,
+                        current_lot=remaining_lot,
+                        bars_since_entry=bars_held,
+                        df=df_hist,
+                        shadow_mode=shadow_mode,
+                        reversal_threshold=getattr(rules, "smart_partial_tp_reversal_threshold", 0.60) if rules else 0.60,
+                        runner_threshold=getattr(rules, "smart_partial_tp_runner_threshold", 0.65) if rules else 0.65,
+                    )
+
+                    if verdict.action == "PARTIAL_CLOSE" and verdict.close_pct > 0.0:
+                        raw_close = remaining_lot * verdict.close_pct
+                        close_lot = round(math.floor(raw_close / 0.01) * 0.01, 2)
+                        # Keep at least 0.01 runner lot
+                        if remaining_lot - close_lot < 0.01:
+                            close_lot = round(remaining_lot - 0.01, 2)
+
+                        if close_lot >= 0.01:
+                            closed_ok = True
+                            if not verdict.is_shadow:
+                                closed_ok = self._close_mt5_position(trade.id, trade.symbol, close_lot, trade.direction)
+
+                            if closed_ok:
+                                new_rem = round(remaining_lot - close_lot, 2)
+                                self._remaining_lots[trade.id] = new_rem
+                                self._last_partial_time[trade.id] = now_ts
+                                self._partial_stages_taken[trade.id] = stages_taken + 1
+                                self._partial_tp_applied.add(trade.id)
+
+                                # Secure partial profit with SL bump
+                                pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
+                                new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
+                                self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
+
+                                # Persist event to DB
+                                try:
+                                    self.state.record_partial_tp_event(
+                                        trade_id=trade.id,
+                                        symbol=trade.symbol,
+                                        strategy_name=trade.strategy_name or "SMC",
+                                        direction=trade.direction.value if hasattr(trade.direction, "value") else str(trade.direction),
+                                        current_price=current_price,
+                                        r_multiple=round(r_gain, 2),
+                                        p_reversal=round(verdict.p_reversal, 3),
+                                        p_full_tp=round(verdict.p_full_tp, 3),
+                                        predicted_max_r=round(verdict.predicted_max_r, 2),
+                                        action=verdict.action,
+                                        close_pct=round(verdict.close_pct, 2),
+                                        closed_lot=close_lot,
+                                        remaining_lot=new_rem,
+                                        nearest_resistance=verdict.nearest_resistance,
+                                        structure_confluence_count=int(verdict.features.get("structure_confluence_count", 0)),
+                                        features_json=json.dumps(verdict.features),
+                                        is_shadow=verdict.is_shadow,
+                                    )
+                                except Exception as db_err:
+                                    logger.debug(f"Failed to record partial TP event in DB: {db_err}")
+
+                                logger.info(
+                                    f"💰 [SMART PARTIAL TP EXECUTED] Trade #{trade.id} ({trade.symbol}): "
+                                    f"Closed {close_lot} lots ({verdict.close_pct:.0%}) @ {current_price:.5f} (+{r_gain:.2f}R). "
+                                    f"Remaining: {new_rem} lots. Reason: {verdict.reason}"
+                                )
+                    else:
+                        # Action is HOLD
+                        self._last_partial_time[trade.id] = now_ts
+                        try:
+                            self.state.record_partial_tp_event(
+                                trade_id=trade.id,
+                                symbol=trade.symbol,
+                                strategy_name=trade.strategy_name or "SMC",
+                                direction=trade.direction.value if hasattr(trade.direction, "value") else str(trade.direction),
+                                current_price=current_price,
+                                r_multiple=round(r_gain, 2),
+                                p_reversal=round(verdict.p_reversal, 3),
+                                p_full_tp=round(verdict.p_full_tp, 3),
+                                predicted_max_r=round(verdict.predicted_max_r, 2),
+                                action=verdict.action,
+                                close_pct=0.0,
+                                closed_lot=0.0,
+                                remaining_lot=remaining_lot,
+                                nearest_resistance=verdict.nearest_resistance,
+                                structure_confluence_count=int(verdict.features.get("structure_confluence_count", 0)),
+                                features_json=json.dumps(verdict.features),
+                                is_shadow=verdict.is_shadow,
+                            )
+                        except Exception as db_err:
+                            logger.debug(f"Failed to record HOLD event in DB: {db_err}")
+
+                        logger.info(
+                            f"🏃 [SMART RUNNER HOLD] Trade #{trade.id} ({trade.symbol}): "
+                            f"Holding runner @ {current_price:.5f} (+{r_gain:.2f}R). Reason: {verdict.reason}"
+                        )
+
+                # ── 3. Session Close Guard (e.g. 21:50 UTC) ──
                 if "SCALP" in trade.strategy_name.upper() or "ICT" in trade.strategy_name.upper():
                     if now_utc.hour == 21 and now_utc.minute >= 50:
                         logger.info(f"⏰ [SESSION CLOSE] Closing intraday trade #{trade.id} ({trade.symbol}) before daily rollover.")

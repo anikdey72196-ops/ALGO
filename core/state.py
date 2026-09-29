@@ -232,6 +232,31 @@ class StateManager:
                     UNIQUE(date, dimension_type, dimension_value)
                 )
             ''')
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS partial_tp_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trade_id INTEGER NOT NULL,
+                    symbol TEXT NOT NULL,
+                    strategy_name TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    current_price REAL NOT NULL,
+                    r_multiple REAL NOT NULL,
+                    p_reversal REAL NOT NULL,
+                    p_full_tp REAL NOT NULL,
+                    predicted_max_r REAL,
+                    action TEXT NOT NULL,
+                    close_pct REAL NOT NULL,
+                    closed_lot REAL DEFAULT 0.0,
+                    remaining_lot REAL NOT NULL,
+                    nearest_resistance TEXT,
+                    structure_confluence_count INTEGER DEFAULT 0,
+                    features_json TEXT,
+                    realized_max_r REAL,
+                    outcome_label TEXT,
+                    is_shadow INTEGER DEFAULT 0
+                )
+            ''')
 
             # Performance Indexes
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_log_status ON trade_log (status)")
@@ -244,6 +269,8 @@ class StateManager:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_signal_time ON execution_orders(signal_time)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_orders_trade_id ON execution_orders(trade_id)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_fills_order_id ON execution_fills(order_id)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_ptp_trade_id ON partial_tp_events(trade_id)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_ptp_timestamp ON partial_tp_events(timestamp)")
 
             # Auto-close any orphaned mock test trade IDs left over from automated tests
             self.conn.execute("UPDATE trade_log SET status = 'CLOSED_TEST' WHERE status = 'OPEN' AND id >= 9000 AND id <= 9999")
@@ -1085,6 +1112,73 @@ class StateManager:
             self.conn.execute("UPDATE daily_state SET trade_count = 0, realized_pnl = 0.0")
         logger.info("Cleared closed trade records and reset daily counters.")
         self._sync_trades_csv()
+
+    def record_partial_tp_event(
+        self,
+        trade_id: int,
+        symbol: str,
+        strategy_name: str,
+        direction: str,
+        current_price: float,
+        r_multiple: float,
+        p_reversal: float,
+        p_full_tp: float,
+        predicted_max_r: float | None,
+        action: str,
+        close_pct: float,
+        closed_lot: float,
+        remaining_lot: float,
+        nearest_resistance: str | None = None,
+        structure_confluence_count: int = 0,
+        features_json: str | None = None,
+        is_shadow: bool = False,
+    ) -> int:
+        """Record an ML partial TP decision or execution."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                """
+                INSERT INTO partial_tp_events (
+                    trade_id, symbol, strategy_name, direction, timestamp,
+                    current_price, r_multiple, p_reversal, p_full_tp, predicted_max_r,
+                    action, close_pct, closed_lot, remaining_lot,
+                    nearest_resistance, structure_confluence_count,
+                    features_json, is_shadow
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trade_id, symbol, strategy_name, direction, now_iso,
+                    current_price, r_multiple, p_reversal, p_full_tp, predicted_max_r,
+                    action, close_pct, closed_lot, remaining_lot,
+                    nearest_resistance, structure_confluence_count,
+                    features_json, 1 if is_shadow else 0,
+                ),
+            )
+            return cur.lastrowid or 0
+
+    def get_recent_partial_tp_events(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Retrieve recent partial TP evaluations and closures."""
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                SELECT * FROM partial_tp_events
+                ORDER BY id DESC LIMIT ?
+                """,
+                (limit,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def update_partial_tp_outcome(self, event_id: int, realized_max_r: float, outcome_label: str) -> None:
+        """Update event with ground-truth trade outcome for training."""
+        with self._lock, self.conn:
+            self.conn.execute(
+                """
+                UPDATE partial_tp_events
+                SET realized_max_r = ?, outcome_label = ?
+                WHERE id = ?
+                """,
+                (realized_max_r, outcome_label, event_id),
+            )
 
     def close(self) -> None:
         """Close DB connection."""

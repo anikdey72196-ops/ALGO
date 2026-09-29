@@ -164,6 +164,7 @@ class TradingBot:
             poll_interval_sec=5.0,
             history_provider=lambda sym, tf, n: self._get_ohlcv(sym, tf, count=n),
             breakeven_sideways_only=True,
+            config=self.config,
         )
 
         # Trend Reversal & CHoCH Subsystem (1H Candlestick Analysis)

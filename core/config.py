@@ -139,6 +139,14 @@ class PositionManagementRuleConfig(BaseModel):
         default_factory=lambda: [(1.0, 0.50), (2.0, 0.25)],
         description="Stages of (R_trigger, pct_of_current_lot_to_close). e.g. [(1.0, 0.50), (2.0, 0.25)].",
     )
+    # 2b. Smart ML Partial Take-Profit (Structural Reversal Learning)
+    smart_partial_tp_enabled: bool = Field(default=True, description="Enable ML-powered adaptive partial TP based on market structure reversals.")
+    smart_partial_tp_shadow_mode: bool = Field(default=False, description="Log predictions without executing actual partial closures.")
+    smart_partial_tp_min_r: float = Field(default=0.6, ge=0.2, le=3.0, description="Minimum R profit before ML model starts evaluating for partial TP.")
+    smart_partial_tp_reversal_threshold: float = Field(default=0.60, ge=0.3, le=0.9, description="Probability threshold for P(reversal) to trigger partial TP.")
+    smart_partial_tp_runner_threshold: float = Field(default=0.65, ge=0.3, le=0.95, description="Probability threshold for P(full_tp) to hold runner (0% close).")
+    smart_partial_tp_cooldown_bars: int = Field(default=3, ge=1, le=20, description="Minimum bars between successive partial closures on same trade.")
+
 
     # 3 & 4. Trailing Stop (ATR and Structure)
     trailing_stop_mode: str = Field(default="STRUCTURE", description="Trailing stop mode: 'NONE', 'ATR', 'STRUCTURE', 'HYBRID'.")

@@ -34,6 +34,11 @@ from core.config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_ins
 from core.state import format_duration
 from main import TradingBot, parse_ltf_to_seconds
 
+try:
+    from ml.smart_partial_tp import SmartPartialTPService
+except ImportError:
+    SmartPartialTPService = None
+
 
 # ─────────────────────────────────────────────
 #  Pydantic Schemas for Web API
@@ -894,6 +899,47 @@ async def retrain_temporal_ml_model():
     summary = bot_instance.temporal_svc.train_and_update()
     bot_instance.log("🧠 [TEMPORAL ML] Model retrained on latest trade records and event logs.")
     return {"status": "success", "message": "Temporal ML model retrained successfully", "summary": summary}
+
+
+@app.get("/api/ml/partial_tp/status")
+async def get_smart_partial_tp_status():
+    """Return model health, trained sample counts, and execution statistics."""
+    svc = None
+    if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+        svc = bot_instance.position_manager.smart_partial_tp_service
+    elif SmartPartialTPService is not None:
+        svc = SmartPartialTPService.get_instance()
+
+    if not svc:
+        return {"status": "disabled", "message": "Smart Partial TP service unavailable"}
+    return {"status": "active", **svc.get_status()}
+
+
+@app.get("/api/ml/partial_tp/events")
+async def get_smart_partial_tp_events(limit: int = 50):
+    """Return recent partial profit booking evaluations and executions."""
+    if not bot_instance or not hasattr(bot_instance, "state"):
+        return {"events": []}
+    events = bot_instance.state.get_recent_partial_tp_events(limit=limit)
+    return {"events": events, "count": len(events)}
+
+
+@app.post("/api/ml/partial_tp/retrain")
+async def retrain_smart_partial_tp_model():
+    """Trigger retraining or baseline recalibration for the Smart Partial TP Model."""
+    svc = None
+    if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+        svc = bot_instance.position_manager.smart_partial_tp_service
+    elif SmartPartialTPService is not None:
+        svc = SmartPartialTPService.get_instance()
+
+    if not svc:
+        raise HTTPException(status_code=500, detail="Smart Partial TP service unavailable")
+
+    svc.model._train_synthetic_baseline()
+    if bot_instance:
+        bot_instance.log("🧠 [SMART PARTIAL TP ML] Baseline model retrained and recalibrated.")
+    return {"status": "success", "message": "Smart Partial TP model retrained successfully", "status_info": svc.get_status()}
 
 
 
