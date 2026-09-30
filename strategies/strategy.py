@@ -44,8 +44,12 @@ class LTFConfirmation(str, Enum):
     OF_ABSORPTION = "OF_ABSORPTION"       # Order Flow Institutional Absorption at Key Level
     OF_DELTA_DIVERGENCE = "OF_DELTA_DIVERGENCE" # Cumulative Volume Delta Divergence
     OF_LIQUIDITY_TRAP = "OF_LIQUIDITY_TRAP"     # Stop Sweep with Instant Delta Reversal
-    PULLBACK = "PULLBACK"                 # Compatibility fallback
-    STRUCTURAL_BREAK = "STRUCTURAL_BREAK" # Compatibility fallback
+    REVERSAL_ZONE_SD = "REVERSAL_ZONE_SD"       # ICT Standard Deviation (-2.0, -2.5, -4.0 SD) Reversal Zone
+    REVERSAL_ZONE_FIB = "REVERSAL_ZONE_FIB"     # Fibonacci 0.5 - 0.6 Retracement Reversal Zone
+    REVERSAL_ZONE_FVG = "REVERSAL_ZONE_FVG"     # Multi-TF (4H/1H/Daily) Fair Value Gap Reversal Zone
+    REVERSAL_CONFLUENCE = "REVERSAL_CONFLUENCE" # Multi-factor Reversal Zone Confluence
+    PULLBACK = "PULLBACK"                       # Compatibility fallback
+    STRUCTURAL_BREAK = "STRUCTURAL_BREAK"       # Compatibility fallback
     NONE = "NONE"
 
 
@@ -2147,6 +2151,163 @@ class OrderFlowStrategy(BaseStrategy):
         )]
 
 
+class TrendReversalStrategy(BaseStrategy):
+    """
+    Trend Reversal Strategy (Multi-TF Reversal Zones: SD, Fib 0.5-0.6, FVG in 4H/1H/Daily).
+
+    Executes trades at the biased direction of identified institutional reversal zones:
+    1. ICT Standard Deviation Projections (-2.0, -2.5, -4.0 SD).
+    2. Fibonacci 0.5 to 0.6 Retracement / Equilibrium Zone.
+    3. Fair Value Gaps (FVG) across 4H, 1H, and Daily.
+    4. "Below 0.5 Level" Rule:
+       - Any key level (FVG, liquidity sweep, SD extension) below 0.5 Fibonacci represents
+         high-probability Discount accumulation -> Bullish Reversal (BUY).
+       - Any key level above 0.5 Fibonacci represents Premium distribution -> Bearish Reversal (SELL).
+    5. Sets structural stop loss; position manager locks SL at cost-to-cost (+0.3R).
+    """
+
+    def __init__(self, htf_analyzer: HTFAnalyzer, detector: Any | None = None):
+        self.htf_analyzer = htf_analyzer
+        from strategies.trend_reversal import TrendReversalDetector
+        self.detector = detector or TrendReversalDetector(swing_lookback=3)
+        self.magic_offset = 5000  # Magic number: 123456 + 5000 = 128456
+        self.id = "TREND_REVERSAL"
+        self.name = "Trend Reversal Strategy"
+
+    def default_sl(self, symbol: str, entry_price: float, direction: Direction, instrument: InstrumentConfig) -> float:
+        dist = 20.0 * (instrument.pip_size if hasattr(instrument, 'pip_size') else 0.0001)
+        return entry_price - dist if direction == Direction.BUY else entry_price + dist
+
+    def default_tp(self, symbol: str, entry_price: float, sl: float, direction: Direction) -> float:
+        sl_dist = abs(entry_price - sl)
+        return entry_price + (sl_dist * 2.5) if direction == Direction.BUY else entry_price - (sl_dist * 2.5)
+
+    def evaluate(
+        self,
+        symbol: str,
+        htf_data: pd.DataFrame,
+        ltf_data: pd.DataFrame,
+        instrument: InstrumentConfig,
+        current_spread: float,
+        fixed_sl_pips: float | None = None,
+        htf_analysis: HTFAnalysis | None = None,
+        dfs_by_tf: dict[str, pd.DataFrame] | None = None,
+    ) -> list[TradeSignal]:
+        if htf_data is None or len(htf_data) < 25 or ltf_data is None or len(ltf_data) < 5:
+            return []
+
+        curr_price = float(ltf_data['close'].iloc[-1])
+        htf_an = htf_analysis or self.htf_analyzer.analyze(htf_data)
+        bias = htf_an.bias if htf_an else None
+
+        # Analyze reversal zones (multi-TF if dictionary provided, else HTF)
+        if dfs_by_tf and len(dfs_by_tf) > 1:
+            analysis = self.detector.analyze_multitf(
+                dfs=dfs_by_tf,
+                trend=bias,
+                symbol=symbol,
+                htf_analysis=htf_an,
+                current_price=curr_price,
+            )
+        else:
+            analysis = self.detector.analyze(
+                df=htf_data,
+                trend=bias,
+                symbol=symbol,
+                htf_analysis=htf_an,
+                timeframe="1H",
+                current_price=curr_price,
+            )
+
+        if not analysis.choch_detected and not getattr(analysis, "reversal_detected", False):
+            return []
+
+        if analysis.reversal_probability < 40.0:
+            return []
+
+        # Determine biased direction of reversal
+        rev_type = getattr(analysis, "reversal_type", None) or analysis.choch_type
+        from strategies.trend_reversal import CHoCHType
+        if rev_type == CHoCHType.BULLISH:
+            direction = Direction.BUY
+        elif rev_type == CHoCHType.BEARISH:
+            direction = Direction.SELL
+        else:
+            return []
+
+        # Sizing and price calculation
+        atr_series = compute_atr(ltf_data, 14)
+        ltf_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 0.001
+        point_size = 10 ** -instrument.digits
+
+        entry = curr_price
+
+        # Structural Stop Loss
+        if fixed_sl_pips is not None and fixed_sl_pips > 0:
+            pip_unit = 10 * point_size if instrument.digits in (3, 5) else point_size
+            sl_dist = fixed_sl_pips * pip_unit
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+        elif analysis.suggested_sl:
+            sl = analysis.suggested_sl
+            sl_dist = abs(entry - sl)
+        else:
+            sl_dist = max(2.0 * ltf_atr, 15.0 * point_size)
+            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+
+        sl_dist = abs(entry - sl)
+        if sl_dist <= 0:
+            return []
+
+        # Take Profit targeting equilibrium or opposing liquidity pool (minimum 2.0R to 3.0R)
+        if analysis.suggested_tp and abs(analysis.suggested_tp - entry) >= 2.0 * sl_dist:
+            tp = analysis.suggested_tp
+        else:
+            tp = entry + 2.5 * sl_dist if direction == Direction.BUY else entry - 2.5 * sl_dist
+
+        tp_dist = abs(tp - entry)
+        rr_ratio = round(tp_dist / sl_dist, 2)
+        if rr_ratio < 1.5:
+            return []
+
+        # Determine LTF Confirmation enum
+        z_type = getattr(analysis, "reversal_zone_type", "") or ""
+        if "SD" in z_type:
+            conf = LTFConfirmation.REVERSAL_ZONE_SD
+        elif "FIB" in z_type or getattr(analysis.confluence, "in_fib_50_60_zone", False):
+            conf = LTFConfirmation.REVERSAL_ZONE_FIB
+        elif "FVG" in z_type or getattr(analysis.confluence, "fvg_present", False):
+            conf = LTFConfirmation.REVERSAL_ZONE_FVG
+        else:
+            conf = LTFConfirmation.REVERSAL_CONFLUENCE
+
+        # Timestamp
+        raw_time = ltf_data['time'].iloc[-1] if 'time' in ltf_data.columns else datetime.now(timezone.utc)
+        if isinstance(raw_time, str):
+            ts = pd.to_datetime(raw_time, utc=True).to_pydatetime()
+        elif hasattr(raw_time, 'to_pydatetime'):
+            ts = raw_time.to_pydatetime()
+        else:
+            ts = datetime.now(timezone.utc)
+
+        return [TradeSignal(
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry,
+            stop_loss=sl,
+            take_profit=tp,
+            htf_bias=MarketBias.BULLISH if direction == Direction.BUY else MarketBias.BEARISH,
+            ltf_confirmation=conf,
+            rr_ratio=rr_ratio,
+            quality_score=min(95.0, analysis.reversal_probability),
+            timestamp=ts,
+            sl_distance=sl_dist,
+            tp_distance=tp_dist,
+            strategy_id=self.id,
+            strategy_name=self.name,
+            magic_number=123456 + self.magic_offset,
+        )]
+
+
 # ─────────────────────────────────────────────
 #  Strategy Orchestrator Engine
 # ─────────────────────────────────────────────
@@ -2183,8 +2344,9 @@ class StrategyEngine:
             "SMC_SCALP_5M": SMCScalp5MStrategy(self.htf_analyzer, self.tf_config),
             "ICT": ICTStrategy(self.htf_analyzer, self.ict_config),
             "ORDER_FLOW": OrderFlowStrategy(self.htf_analyzer, self.of_config),
+            "TREND_REVERSAL": TrendReversalStrategy(self.htf_analyzer),
         }
-        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
+        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"]
 
     @property
     def active_strategies(self) -> list[BaseStrategy]:
@@ -2209,6 +2371,7 @@ class StrategyEngine:
         current_spread_points: float | None = None,
         account_balance: float | None = None,
         htf_analysis: HTFAnalysis | None = None,
+        dfs_by_tf: dict[str, pd.DataFrame] | None = None,
     ) -> list[TradeSignal]:
         """Runs all enabled strategies concurrently and returns aggregate signals."""
         inst = instrument or self.instrument
@@ -2233,15 +2396,18 @@ class StrategyEngine:
             try:
                 # If scalping or order flow strategy and 5m bars available, prefer 5m bars as LTF
                 active_ltf = bars_5m if (strat_id in ("SMC_SCALP_5M", "ORDER_FLOW") and bars_5m is not None) else ltf
-                sigs = strat.evaluate(
-                    symbol=sym,
-                    htf_data=htf,
-                    ltf_data=active_ltf,
-                    instrument=inst,
-                    current_spread=spread,
-                    fixed_sl_pips=fixed_sl_pips,
-                    htf_analysis=shared_htf_analysis,
-                )
+                eval_kwargs = {
+                    "symbol": sym,
+                    "htf_data": htf,
+                    "ltf_data": active_ltf,
+                    "instrument": inst,
+                    "current_spread": spread,
+                    "fixed_sl_pips": fixed_sl_pips,
+                    "htf_analysis": shared_htf_analysis,
+                }
+                if strat_id == "TREND_REVERSAL" and dfs_by_tf:
+                    eval_kwargs["dfs_by_tf"] = dfs_by_tf
+                sigs = strat.evaluate(**eval_kwargs)
                 all_signals.extend(sigs)
             except Exception as e:
                 logger.error(f"Error evaluating strategy {strat_id} on {sym}: {e}")

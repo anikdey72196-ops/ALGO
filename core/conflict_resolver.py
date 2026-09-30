@@ -1,8 +1,11 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 from loguru import logger
 from core.config import RiskConfig, MarketBias, Direction, normalize_strategy_key
-from strategies.strategy import TradeSignal, LTFConfirmation
+
+if TYPE_CHECKING:
+    from strategies.strategy import TradeSignal, LTFConfirmation
 
 @dataclass(frozen=True)
 class FilterResult:
@@ -66,12 +69,14 @@ class ConflictResolver:
                 rejection_reasons.append(reason)
                 continue
                 
-            # Gate 2: Minimum R:R (Adaptive: 1.4 for 5M OB scalps, 1.8 for ICT / Order Flow setups, standard min_rr_ratio for swing)
+            # Gate 2: Minimum R:R (Adaptive: 1.4 for 5M OB scalps, 1.5 for Reversal, 1.8 for ICT / Order Flow, standard min_rr_ratio for swing)
             conf_val = getattr(signal.ltf_confirmation, 'value', str(signal.ltf_confirmation))
             strat_val = getattr(signal, 'strategy_name', '') or ''
             strat_id_val = getattr(signal, 'strategy_id', '') or ''
-            if signal.ltf_confirmation == LTFConfirmation.OB_SCALP_5M or "SCALP" in strat_val.upper():
+            if conf_val == "OB_SCALP_5M" or "SCALP" in strat_val.upper():
                 min_rr = 1.4
+            elif "REVERSAL" in strat_id_val.upper() or "REVERSAL" in strat_val.upper() or conf_val.startswith("REVERSAL_"):
+                min_rr = 1.5
             elif conf_val.startswith("ICT_") or "ICT" in strat_val.upper():
                 min_rr = 1.8
             elif conf_val.startswith("OF_") or "ORDER_FLOW" in strat_id_val.upper() or "FLOW" in strat_val.upper():

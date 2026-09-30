@@ -15,8 +15,11 @@ import json
 from dataclasses import dataclass
 from loguru import logger
 
+from typing import TYPE_CHECKING
 from core.config import TradingConfig, MarketBias, Direction
-from strategies.strategy import TradeSignal, HTFAnalysis
+
+if TYPE_CHECKING:
+    from strategies.strategy import TradeSignal, HTFAnalysis
 
 
 @dataclass(frozen=True)

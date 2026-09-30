@@ -754,14 +754,20 @@ class TradingBot:
 
             current_mid_price = (quote.bid + quote.ask) / 2.0 if quote else None
 
-            # ── Institutional 1H Trend Reversal Analysis (CHoCH & Confluence Subsystem) ──
-            # Evaluates previous 1-Hour closed candles to detect if 1H market structure is reversing
-            reversal_analysis = self.reversal_detector.analyze(
-                df=closed_htf_data,
+            # ── Institutional Multi-TF Trend Reversal Analysis (SD, Fib 0.5-0.6, FVG in 4H/1H/Daily) ──
+            df_4h = self._get_ohlcv(symbol, "4H")
+            df_1d = self._get_ohlcv(symbol, "1D")
+            multitf_dict = {"1H": closed_htf_data}
+            if df_4h is not None and len(df_4h) >= 20:
+                multitf_dict["4H"] = df_4h
+            if df_1d is not None and len(df_1d) >= 15:
+                multitf_dict["1D"] = df_1d
+
+            reversal_analysis = self.reversal_detector.analyze_multitf(
+                dfs=multitf_dict,
                 trend=htf_analysis.bias,
                 symbol=symbol,
                 htf_analysis=htf_analysis,
-                timeframe="1H",
                 current_price=current_mid_price,
             )
             self.trend_reversal_status[symbol] = reversal_analysis
@@ -769,8 +775,8 @@ class TradingBot:
             if is_new_1h_candle:
                 self.log(
                     f"  🕐 [1H CANDLE CLOSE] {symbol}: 1-Hour candle closed @ {latest_closed_1h_time}. "
-                    f"Analyzed previous market movements: Trend={reversal_analysis.trend.value} | "
-                    f"CHoCH={reversal_analysis.choch_type.value} | Reversal Risk={reversal_analysis.reversal_risk} ({reversal_analysis.reversal_probability:.0f}%)",
+                    f"Analyzed Reversal Zones (SD / Fib 0.5-0.6 / FVG): Trend={reversal_analysis.trend.value} | "
+                    f"Reversal={reversal_analysis.choch_type.value} | Reversal Risk={reversal_analysis.reversal_risk} ({reversal_analysis.reversal_probability:.0f}%)",
                     level="INFO"
                 )
                 self._last_analyzed_1h_bar[symbol] = latest_closed_1h_time
@@ -778,29 +784,29 @@ class TradingBot:
             # ── Always Log Chart Trend Reversal Analysis ──
             if reversal_analysis.is_trending:
                 if reversal_analysis.choch_detected:
-                    confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Pure Structural Break"
+                    confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Reversal Zone Active"
                     self.log(
-                        f"  🚨 [1H TREND REVERSAL ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} CHoCH DETECTED! "
-                        f"Broken 1H Pivot: {reversal_analysis.key_swing_level:.5f} | Stage: {reversal_analysis.stage.value} | "
+                        f"  🚨 [{reversal_analysis.timeframe} REVERSAL ZONE ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} REVERSAL DETECTED! "
+                        f"Zone Type: {reversal_analysis.reversal_zone_type} | Stage: {reversal_analysis.stage.value} | "
                         f"Reversal Prob: {reversal_analysis.reversal_probability:.0f}% ({reversal_analysis.reversal_risk}) | "
                         f"Confluence: [{confluence_str}]",
                         level="WARNING"
                     )
                 elif reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP:
                     self.log(
-                        f"  ⚠️ [1H REVERSAL EARLY WARNING] {symbol} ({reversal_analysis.trend.value}): Liquidity sweep at 1H trend extreme ({reversal_analysis.trend_extreme_level:.5f})! "
-                        f"Watch for 1H CHoCH break at pivot {reversal_analysis.key_swing_level:.5f}.",
+                        f"  ⚠️ [{reversal_analysis.timeframe} REVERSAL EARLY WARNING] {symbol} ({reversal_analysis.trend.value}): Liquidity sweep / extension at extreme ({reversal_analysis.trend_extreme_level:.5f})! "
+                        f"Monitoring for Reversal Zone (SD / Fib 0.5-0.6 / FVG).",
                         level="INFO"
                     )
                 else:
                     self.log(
-                        f"  📈 [1H TREND HEALTHY] {symbol} ({reversal_analysis.trend.value}): 1H trend structure intact. "
-                        f"Key pivot {reversal_analysis.key_swing_level or 0.0:.5f} unviolated. Reversal Risk: LOW ({reversal_analysis.reversal_probability:.0f}%).",
+                        f"  📈 [{reversal_analysis.timeframe} TREND HEALTHY] {symbol} ({reversal_analysis.trend.value}): Trend structure intact. "
+                        f"No active reversal zone triggered. Reversal Risk: LOW ({reversal_analysis.reversal_probability:.0f}%).",
                         level="DEBUG"
                     )
             else:
                 self.log(
-                    f"  ⚖️ [1H MARKET NEUTRAL] {symbol}: No dominant 1H trend structure active. Ranging conditions.",
+                    f"  ⚖️ [1H MARKET NEUTRAL] {symbol}: No dominant trend structure active. Ranging conditions.",
                     level="DEBUG"
                 )
 
@@ -810,7 +816,7 @@ class TradingBot:
                 for open_t in open_symbol_trades:
                     if open_t.direction == opposing_dir:
                         self.log(
-                            f"  🛡️ [REVERSAL SHIELD] Active {open_t.direction.value} trade #{open_t.id} on {symbol} is vulnerable to {reversal_analysis.choch_type.value} CHoCH! "
+                            f"  🛡️ [REVERSAL SHIELD] Active {open_t.direction.value} trade #{open_t.id} on {symbol} is vulnerable to {reversal_analysis.choch_type.value} Reversal! "
                             f"Securing position with Stop Loss protection.",
                             level="WARNING"
                         )
@@ -826,9 +832,10 @@ class TradingBot:
                 fixed_sl_pips=pair_sl,
                 enabled_strategies=eval_strats,
                 htf_analysis=htf_analysis,
+                dfs_by_tf=multitf_dict,
             )
 
-            # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability CHoCH or Early Sweep ──
+            # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability Reversal Zone or Early Sweep ──
             should_block_reversal = False
             blocked_direction = None
 
@@ -843,7 +850,7 @@ class TradingBot:
                 prior_len = len(signals)
                 signals = [s for s in signals if s.direction != blocked_direction]
                 if len(signals) < prior_len:
-                    reason_desc = f"{reversal_analysis.choch_type.value} CHoCH" if reversal_analysis.choch_detected else f"Pre-Reversal Extreme Sweep ({reversal_analysis.reversal_risk} Risk)"
+                    reason_desc = f"{reversal_analysis.choch_type.value} Reversal ({reversal_analysis.reversal_zone_type})" if reversal_analysis.choch_detected else f"Pre-Reversal Extreme Sweep ({reversal_analysis.reversal_risk} Risk)"
                     self.log(
                         f"  🚫 [REVERSAL GUARD] Blocked {prior_len - len(signals)} {blocked_direction.value} signal(s) on {symbol}: "
                         f"Trend reversal warning: {reason_desc} (Prob: {reversal_analysis.reversal_probability:.0f}%).",

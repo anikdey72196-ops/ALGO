@@ -112,6 +112,7 @@ class TestMultiPairLimitsAndSynchronization(unittest.TestCase):
         self.config.enabled_strategies = ["SMC", "SMC_SCALP_5M", "ICT"]
         self.config.risk.max_open_positions = 6
         self.config.risk.max_open_per_symbol = 3
+        self.config.risk.night_limit_enabled = False
         self.config.ml_gating_enabled = False
         self.config.temporal_ml_enabled = False
         self.bot = None
@@ -298,6 +299,7 @@ class TestMultiPairLimitsAndSynchronization(unittest.TestCase):
         strict_config.pair1 = self.config.pair1
         strict_config.pair2 = self.config.pair2
         strict_config.risk.max_open_positions = 3  # Stricter global cap!
+        strict_config.risk.night_limit_enabled = False
 
         self.bot = TradingBot(strict_config, load_saved_settings=False)
         self.bot.startup()

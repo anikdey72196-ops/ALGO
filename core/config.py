@@ -60,6 +60,7 @@ class StrategyType(str, Enum):
     SMC_SCALP_5M = "SMC_SCALP_5M"    # 5m Order Block (OB) Scalp
     ICT = "ICT"                      # ICT KillZone, Judas Swing, MSS & FVG/OTE Model
     ORDER_FLOW = "ORDER_FLOW"        # Order Flow Volume Delta, CVD & Absorption Model
+    TREND_REVERSAL = "TREND_REVERSAL"# Multi-TF Reversal Zone (SD, Fib 0.5-0.6, FVG in 4H/1H/Daily)
 
 
 def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> str:
@@ -69,6 +70,7 @@ def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> 
     - 'SMC_SCALP_5M'
     - 'ICT'
     - 'ORDER_FLOW'
+    - 'TREND_REVERSAL'
     """
     if magic == 124456:
         return "SMC"
@@ -78,11 +80,15 @@ def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> 
         return "ICT"
     elif magic == 127456:
         return "ORDER_FLOW"
+    elif magic == 128456:
+        return "TREND_REVERSAL"
 
     if not strat_name:
         return "SMC"
     s = str(strat_name).upper().strip()
-    if "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
+    if "REVERSAL" in s or "TREND_REVERSAL" in s:
+        return "TREND_REVERSAL"
+    elif "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
         return "ORDER_FLOW"
     elif "SCALP" in s or "5M" in s:
         return "SMC_SCALP_5M"
@@ -130,7 +136,7 @@ class PositionManagementRuleConfig(BaseModel):
     """Configuration for dynamic position management on open trades."""
     # 1. Breakeven after +1R
     breakeven_enabled: bool = Field(default=True, description="Move SL to breakeven once price moves in favor.")
-    breakeven_trigger_r: float = Field(default=1.0, ge=0.5, le=5.0, description="R multiple to trigger breakeven (e.g. 1.0 = +1R).")
+    breakeven_trigger_r: float = Field(default=1.0, ge=0.1, le=5.0, description="R multiple to trigger breakeven (e.g. 1.0 = +1R).")
     breakeven_offset_r: float = Field(default=0.1, ge=0.0, le=1.0, description="Buffer above/below entry in R to cover costs/spread (e.g. +0.1R).")
     breakeven_spread_buffer: bool = Field(default=True, description="Add broker live spread buffer to breakeven SL.")
 
@@ -191,6 +197,13 @@ class PositionManagementConfig(BaseModel):
         # Check strategy override
         if strat_key and strat_key in self.strategy_overrides:
             return self.strategy_overrides[strat_key]
+
+        if strat_key == "TREND_REVERSAL":
+            return PositionManagementRuleConfig(
+                breakeven_enabled=True,
+                breakeven_trigger_r=0.3,
+                breakeven_offset_r=0.0,
+            )
 
         return self.default_rules
 
@@ -608,6 +621,17 @@ class TradingConfig(BaseModel):
                     time_stop_enabled=True,
                     time_stop_bars=30,
                 ),
+                "TREND_REVERSAL": PositionManagementRuleConfig(
+                    breakeven_enabled=True,
+                    breakeven_trigger_r=0.3,
+                    breakeven_offset_r=0.0,
+                    partial_tp_enabled=True,
+                    partial_tp_stages=[(1.5, 0.50), (2.5, 0.25)],
+                    trailing_stop_mode="STRUCTURE",
+                    trailing_activation_r=1.0,
+                    session_close_enabled=False,
+                    time_stop_enabled=False,
+                ),
             },
         ),
         description="Dynamic position management configuration with strategy-specific rules."
@@ -616,8 +640,8 @@ class TradingConfig(BaseModel):
     
     # Multi-strategy concurrent execution
     enabled_strategies: List[str] = Field(
-        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
-        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW).",
+        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"],
+        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW, TREND_REVERSAL).",
     )
     
     # Independent Primary Pair Configurations (3 Pairs)

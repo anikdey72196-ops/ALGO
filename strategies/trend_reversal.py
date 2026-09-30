@@ -1,16 +1,15 @@
 """
-trend_reversal.py — Institutional CHoCH (Change of Character) & Trend Reversal Detection Subsystem.
+trend_reversal.py — Institutional Trend Reversal Detection Subsystem.
 
-Implements Smart Money Concepts (SMC) trend reversal analysis:
-1. Trend & Key Swing Points Identification (Last HL in Uptrend, Last LH in Downtrend).
-2. CHoCH Signal Detection (Candle break and CLOSE beyond critical swing pivot).
-3. Confluence Verification:
-   - Liquidity Sweep: Turtle soup / stop run at trend extreme prior to break.
-   - Volume Surge: Aggressive displacement volume vs 20-bar rolling average (or ATR displacement).
-   - Fair Value Gap (FVG): Imbalance created by the displacement candle.
-   - Retracement Entry Zone: Price pullbacks into FVG or Fibonacci Golden Zone (0.382 - 0.618 OTE).
-   - Higher Timeframe Bias / S&D Zone alignment.
-4. Early Warning & Trade Protection (Shielding active trades against impending reversals).
+Replaces legacy single-pivot CHoCH with institutional Reversal Zones across 4H, 1H, and Daily (1D) timeframes:
+1. ICT Standard Deviation Swing Projections (-2.0, -2.5, -4.0 SD).
+2. Fibonacci 0.5 to 0.6 Retracement / Equilibrium Zone.
+3. Fair Value Gaps (FVG) on 4H, 1H, and Daily charts.
+4. "Below 0.5 Level" Rule:
+   - When any key level (FVG, Liquidity Sweep, Standard Deviation exhaustion) sits below the 0.5
+     Fibonacci level (in the Discount zone), it establishes a high-probability Bullish Reversal chance.
+   - Conversely, when sitting above 0.5 Fibonacci (in the Premium zone), it establishes a Bearish Reversal chance.
+5. Generates reversal entry zones with invalidation levels and suggested targets.
 """
 
 from __future__ import annotations
@@ -26,18 +25,23 @@ from strategies.strategy import SwingPoint, find_swing_points_logic, compute_atr
 
 
 class CHoCHType(str, Enum):
+    """Reversal Direction (maintained for backward compatibility with CHoCH callers)."""
     NONE = "NONE"
-    BULLISH = "BULLISH"  # Reversal from Downtrend to Uptrend (LH broken upward)
-    BEARISH = "BEARISH"  # Reversal from Uptrend to Downtrend (HL broken downward)
+    BULLISH = "BULLISH"  # Reversal from Bearish to Bullish (Buying the Reversal)
+    BEARISH = "BEARISH"  # Reversal from Bullish to Bearish (Selling the Reversal)
+
+
+ReversalType = CHoCHType
 
 
 class ReversalStage(str, Enum):
-    TREND_HEALTHY = "TREND_HEALTHY"                # Trend intact, key swing pivots unviolated
-    PRE_REVERSAL_SWEEP = "PRE_REVERSAL_SWEEP"      # Liquidity swept at trend extreme, CHoCH warning
-    CHOCH_DISPLACEMENT = "CHOCH_DISPLACEMENT"      # Candle broke & closed past pivot; displacement active
-    RETRACEMENT_PENDING = "RETRACEMENT_PENDING"    # CHoCH confirmed, waiting for pullback to key zone
-    RETRACEMENT_IN_ZONE = "RETRACEMENT_IN_ZONE"    # Price inside FVG or 0.382-0.618 Fib zone (Prime Entry)
-    CONFIRMED_MSS = "CONFIRMED_MSS"                # Market Structure Shift confirmed with new opposite swing
+    TREND_HEALTHY = "TREND_HEALTHY"                  # Trend intact, no reversal zone reached
+    PRE_REVERSAL_SWEEP = "PRE_REVERSAL_SWEEP"        # Liquidity swept at trend extreme
+    REVERSAL_ZONE_TESTED = "REVERSAL_ZONE_TESTED"    # Price entered SD / Fib 0.5-0.6 / FVG zone
+    CHOCH_DISPLACEMENT = "CHOCH_DISPLACEMENT"        # Strong displacement away from reversal zone
+    RETRACEMENT_PENDING = "RETRACEMENT_PENDING"      # Reversal initiated, awaiting mitigation pullback
+    RETRACEMENT_IN_ZONE = "RETRACEMENT_IN_ZONE"      # Price inside 0.5-0.6 Fib / FVG entry zone
+    CONFIRMED_MSS = "CONFIRMED_MSS"                  # Confirmed Market Structure Shift in new direction
 
 
 @dataclass
@@ -49,10 +53,22 @@ class ReversalConfluence:
     fvg_present: bool = False
     fvg_top: Optional[float] = None
     fvg_bottom: Optional[float] = None
+    fvg_timeframe: Optional[str] = None
     fib_382: Optional[float] = None
+    fib_50: Optional[float] = None
+    fib_60: Optional[float] = None
     fib_618: Optional[float] = None
+    fib_level: Optional[float] = None
+    is_below_fib_50: bool = False
+    is_above_fib_50: bool = False
+    in_fib_50_60_zone: bool = False
+    standard_deviation_hit: bool = False
+    sd_level: Optional[float] = None
+    sd_multiple: Optional[float] = None
+    reversal_zone_type: str = "NONE"  # SD_PROJECTION, FIB_50_60, FVG, CONFLUENCE
     in_retracement_zone: bool = False
     htf_alignment: bool = False
+    timeframes_confluent: List[str] = field(default_factory=list)
     score: float = 0.0
     details: List[str] = field(default_factory=list)
 
@@ -65,14 +81,14 @@ class TrendReversalAnalysis:
     symbol: str
     trend: MarketBias
     is_trending: bool
-    choch_detected: bool
-    choch_type: CHoCHType
+    choch_detected: bool                             # Maintained as reversal_detected alias
+    choch_type: CHoCHType                            # Maintained as reversal_type alias
     stage: ReversalStage
-    key_swing_level: Optional[float] = None        # Last HL in uptrend, last LH in downtrend
-    trend_extreme_level: Optional[float] = None    # Peak HH in uptrend, trough LL in downtrend
-    invalidation_level: Optional[float] = None     # Invalidation (Stop Loss reference)
-    reversal_probability: float = 0.0              # 0.0 to 100.0%
-    reversal_risk: str = "LOW"                     # LOW, MODERATE, HIGH, CRITICAL
+    key_swing_level: Optional[float] = None          # Reference swing level or 0.5 Fib equilibrium
+    trend_extreme_level: Optional[float] = None      # Peak HH or trough LL of dealing range
+    invalidation_level: Optional[float] = None       # Invalidation / Stop Loss reference
+    reversal_probability: float = 0.0                # 0.0 to 100.0%
+    reversal_risk: str = "LOW"                       # LOW, MODERATE, HIGH, CRITICAL
     confluence: ReversalConfluence = field(default_factory=ReversalConfluence)
     entry_zone: Optional[Tuple[float, float]] = None
     suggested_sl: Optional[float] = None
@@ -81,11 +97,29 @@ class TrendReversalAnalysis:
     warning_message: str = ""
     timeframe: str = "1H"
     closed_candle_time: Optional[str] = None
+    reversal_detected: bool = False
+    reversal_type: CHoCHType = CHoCHType.NONE
+    reversal_zone_type: str = "NONE"
+    fib_level: Optional[float] = None
+    is_below_fib_50: bool = False
+    sd_level: Optional[float] = None
+    tf_confluences: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.choch_detected and not self.reversal_detected:
+            self.reversal_detected = True
+        elif self.reversal_detected and not self.choch_detected:
+            self.choch_detected = True
+        if self.choch_type != CHoCHType.NONE and self.reversal_type == CHoCHType.NONE:
+            self.reversal_type = self.choch_type
+        elif self.reversal_type != CHoCHType.NONE and self.choch_type == CHoCHType.NONE:
+            self.choch_type = self.reversal_type
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         d['trend'] = self.trend.value if hasattr(self.trend, 'value') else str(self.trend)
         d['choch_type'] = self.choch_type.value if hasattr(self.choch_type, 'value') else str(self.choch_type)
+        d['reversal_type'] = self.reversal_type.value if hasattr(self.reversal_type, 'value') else str(self.reversal_type)
         d['stage'] = self.stage.value if hasattr(self.stage, 'value') else str(self.stage)
         d['timeframe'] = self.timeframe
         d['closed_candle_time'] = self.closed_candle_time
@@ -94,12 +128,16 @@ class TrendReversalAnalysis:
 
 class TrendReversalDetector:
     """
-    Real-time analyzer for detecting institutional trend reversals via Change of Character (CHoCH).
-    
-    In a trending market, constantly monitors whether:
-    1. The trend's foundational Higher Low (uptrend) or Lower High (downtrend) has been broken.
-    2. Confluence factors confirm that the break is institutional displacement rather than a trap.
-    3. Price is retracing into Fair Value Gaps or Golden Fibonacci zones for high-probability setups.
+    Institutional Trend Reversal Detector.
+
+    Evaluates 4H, 1H, and Daily (1D) timeframes to identify institutional reversal zones:
+    1. ICT Standard Deviation Projections (-2.0, -2.5, -4.0 SD from dealing range impulse).
+    2. Fibonacci 0.5 to 0.6 Retracement Zone (Equilibrium to Golden Pocket).
+    3. Fair Value Gaps (FVG) on 4H, 1H, and Daily charts.
+    4. "Below 0.5 Level" Rule:
+       - Levels (FVG, liquidity sweep, SD exhaustion) below 0.5 Fibonacci represent high-probability
+         Discount accumulation for Bullish Reversals.
+       - Levels above 0.5 Fibonacci represent Premium distribution for Bearish Reversals.
     """
 
     def __init__(
@@ -108,11 +146,96 @@ class TrendReversalDetector:
         volume_surge_multiplier: float = 1.3,
         fvg_min_atr_multiple: float = 0.25,
         displacement_atr_mult: float = 1.2,
+        sd_multiples: Optional[List[float]] = None,
     ):
         self.swing_lookback = swing_lookback
         self.volume_surge_multiplier = volume_surge_multiplier
         self.fvg_min_atr_multiple = fvg_min_atr_multiple
         self.displacement_atr_mult = displacement_atr_mult
+        self.sd_multiples = sd_multiples or [2.0, 2.5, 4.0]
+
+    def analyze_multitf(
+        self,
+        dfs: Dict[str, pd.DataFrame],
+        trend: Optional[MarketBias | str] = None,
+        symbol: str = "UNKNOWN",
+        htf_analysis: Optional[HTFAnalysis] = None,
+        current_price: Optional[float] = None,
+    ) -> TrendReversalAnalysis:
+        """
+        Analyze multi-timeframe DataFrames (e.g. {'1D': df_d1, '4H': df_h4, '1H': df_h1})
+        to detect high-conviction institutional reversal zones.
+        """
+        if not dfs:
+            return TrendReversalAnalysis(
+                symbol=symbol,
+                trend=MarketBias.NEUTRAL,
+                is_trending=False,
+                choch_detected=False,
+                choch_type=CHoCHType.NONE,
+                stage=ReversalStage.TREND_HEALTHY,
+                warning_message="No multi-TF data provided for reversal analysis.",
+            )
+
+        # Primary baseline timeframe is 1H if present, else first available
+        base_tf = "1H" if "1H" in dfs else ("4H" if "4H" in dfs else next(iter(dfs.keys())))
+        base_df = dfs[base_tf]
+
+        # Analyze base TF first
+        base_analysis = self.analyze(
+            df=base_df,
+            trend=trend,
+            symbol=symbol,
+            htf_analysis=htf_analysis,
+            timeframe=base_tf,
+            current_price=current_price,
+        )
+
+        tf_details: Dict[str, Any] = {base_tf: base_analysis.to_dict()}
+        confluent_tfs = [base_tf] if base_analysis.choch_detected else []
+        extra_score = 0.0
+
+        # Scan other available higher timeframes (4H, Daily)
+        for tf_name in ("4H", "1D", "DAILY"):
+            if tf_name in dfs and tf_name != base_tf:
+                df_other = dfs[tf_name]
+                if df_other is not None and len(df_other) >= 20:
+                    other_analysis = self.analyze(
+                        df=df_other,
+                        trend=trend,
+                        symbol=symbol,
+                        htf_analysis=htf_analysis,
+                        timeframe=tf_name,
+                        current_price=current_price,
+                    )
+                    tf_details[tf_name] = other_analysis.to_dict()
+
+                    # Check for cross-TF confluence (same reversal direction)
+                    if other_analysis.choch_detected:
+                        if base_analysis.choch_detected:
+                            if other_analysis.choch_type == base_analysis.choch_type:
+                                confluent_tfs.append(tf_name)
+                                extra_score += 15.0
+                                base_analysis.confluence.details.append(
+                                    f"Multi-TF Confluence confirmed on {tf_name} ({other_analysis.reversal_zone_type})"
+                                )
+                        else:
+                            # Other TF detected reversal even if base TF was lagging
+                            base_analysis = other_analysis
+                            confluent_tfs.append(tf_name)
+
+        if len(confluent_tfs) > 1:
+            base_analysis.timeframe = f"MULTI_TF({','.join(confluent_tfs)})"
+            base_analysis.confluence.timeframes_confluent = confluent_tfs
+            base_analysis.confluence.htf_alignment = True
+            base_analysis.reversal_probability = min(95.0, base_analysis.reversal_probability + extra_score)
+            if base_analysis.reversal_probability >= 75.0:
+                base_analysis.reversal_risk = "CRITICAL"
+            elif base_analysis.reversal_probability >= 50.0:
+                base_analysis.reversal_risk = "HIGH"
+
+        base_analysis.tf_confluences = tf_details
+        return base_analysis
 
     def analyze(
         self,
@@ -125,8 +248,8 @@ class TrendReversalDetector:
         current_price: Optional[float] = None,
     ) -> TrendReversalAnalysis:
         """
-        Analyze OHLCV price action (e.g. completed 1-Hour candles) in a trending market
-        to detect trend reversal risks, CHoCH breaks, and retracement setups.
+        Analyze OHLCV price action on a given timeframe (1H, 4H, or Daily) to detect
+        reversal zones based on Standard Deviation, Fib 0.5-0.6, and FVG levels.
         """
         candle_time = None
         if df is not None and not df.empty:
@@ -148,12 +271,8 @@ class TrendReversalDetector:
                 closed_candle_time=candle_time,
             )
 
-        n = len(df)
         highs = df['high']
         lows = df['low']
-        closes = df['close']
-
-        # ── 1. Determine Trend & Swing Structure ──
         swings = find_swing_points_logic(highs, lows, self.swing_lookback)
         effective_trend = self._resolve_trend(df, swings, trend, htf_analysis)
 
@@ -175,7 +294,6 @@ class TrendReversalDetector:
         atr_series = compute_atr(df, atr_period)
         current_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 0.001
 
-        # ── 2. Trend-Specific Reversal Analysis ──
         if effective_trend == MarketBias.BULLISH:
             return self._analyze_uptrend_reversal(
                 df=df,
@@ -222,7 +340,6 @@ class TrendReversalDetector:
         if htf_analysis and htf_analysis.bias is not None:
             return htf_analysis.bias
 
-        # Auto-detect from swings
         high_swings = [sp for sp in swings if sp.is_high]
         low_swings = [sp for sp in swings if not sp.is_high]
         if len(high_swings) >= 2 and len(low_swings) >= 2:
@@ -231,7 +348,6 @@ class TrendReversalDetector:
             elif high_swings[-1].price < high_swings[-2].price and low_swings[-1].price < low_swings[-2].price:
                 return MarketBias.BEARISH
 
-        # Fallback to EMA
         closes = df['close']
         ema50 = closes.ewm(span=50, adjust=False).mean().iloc[-1]
         last_close = closes.iloc[-1]
@@ -254,30 +370,25 @@ class TrendReversalDetector:
         candle_time: Optional[str] = None,
     ) -> TrendReversalAnalysis:
         """
-        Analyze an established UPTREND (e.g. 1-Hour chart) for signs of Bearish Reversal (Bearish CHoCH):
-        - Critical Pivot: Last Higher Low (HL) that supported the trend extreme.
-        - Trigger: Candle break and CLOSE below this last HL.
+        Analyze an established UPTREND for signs of Bearish Reversal:
+        Replaces legacy CHoCH with:
+        1. ICT Standard Deviation Projections (+2.0 to +2.5 and +4.0 SD exhaustion of impulse).
+        2. Fibonacci 0.5 to 0.6 Retracement Zone (Equilibrium / Premium boundary).
+        3. Bearish Fair Value Gap (FVG) in 4H/1H/Daily.
+        4. "Above 0.5 Level" Rule (Premium exhaustion zone).
         """
         n = len(df)
         high_swings = [sp for sp in swings if sp.is_high]
         low_swings = [sp for sp in swings if not sp.is_high]
 
-        if not high_swings or not low_swings:
-            return TrendReversalAnalysis(
-                symbol=symbol,
-                trend=MarketBias.BULLISH,
-                is_trending=True,
-                choch_detected=False,
-                choch_type=CHoCHType.NONE,
-                stage=ReversalStage.TREND_HEALTHY,
-                reversal_probability=5.0,
-                reversal_risk="LOW",
-                warning_message=f"Uptrend on {symbol} ({timeframe}) lacks mature swing pivots. Trend assumed intact.",
-                timeframe=timeframe,
-                closed_candle_time=candle_time,
-            )
+        if not high_swings:
+            max_idx = int(df['high'].argmax())
+            high_swings = [SwingPoint(index=max_idx, price=float(df['high'].iloc[max_idx]), is_high=True)]
+        if not low_swings:
+            min_idx = int(df['low'].argmin())
+            low_swings = [SwingPoint(index=min_idx, price=float(df['low'].iloc[min_idx]), is_high=False)]
 
-        # 1. Identify the recent trend peak (Highest High / HH)
+        # 1. Identify dominant dealing range: Anchor Low (L) to Peak High (H)
         recent_window_start = max(0, n - 40)
         recent_high_swings = [sp for sp in high_swings if sp.index >= recent_window_start]
         if not recent_high_swings:
@@ -287,124 +398,158 @@ class TrendReversalDetector:
         peak_idx = peak_sp.index
         peak_price = peak_sp.price
 
-        # 2. Identify the critical Higher Low (HL) that led directly to that peak
-        candidate_hls = [sp for sp in low_swings if sp.index < peak_idx]
-        if candidate_hls:
-            critical_hl_sp = candidate_hls[-1]
-            critical_hl = critical_hl_sp.price
-            critical_hl_idx = critical_hl_sp.index
+        candidate_lows = [sp for sp in low_swings if sp.index < peak_idx]
+        if candidate_lows:
+            anchor_low_sp = candidate_lows[-1]
+            anchor_low = anchor_low_sp.price
+            anchor_low_idx = anchor_low_sp.index
         else:
             pre_peak_lows = df['low'].iloc[max(0, peak_idx - 25):peak_idx]
             if not pre_peak_lows.empty:
                 loc = pre_peak_lows.values.argmin()
-                critical_hl_idx = max(0, peak_idx - 25) + loc
-                critical_hl = float(df['low'].iloc[critical_hl_idx])
+                anchor_low_idx = max(0, peak_idx - 25) + loc
+                anchor_low = float(df['low'].iloc[anchor_low_idx])
             else:
-                critical_hl_sp = low_swings[0]
-                critical_hl = critical_hl_sp.price
-                critical_hl_idx = critical_hl_sp.index
+                anchor_low = low_swings[0].price
+                anchor_low_idx = low_swings[0].index
 
-        # 3. Check for CHoCH: Did any candle AFTER the peak break and CLOSE below critical HL?
-        choch_detected = False
-        break_idx = -1
-        break_close = 0.0
+        impulse_range = max(peak_price - anchor_low, current_atr * 0.5)
 
-        for idx in range(peak_idx, n):
-            bar = df.iloc[idx]
-            if bar['close'] < critical_hl:
-                choch_detected = True
-                break_idx = idx
-                break_close = float(bar['close'])
-                break
-
+        # Current price reference
         current_candle = df.iloc[-1]
         current_close = float(current_price) if current_price is not None else float(current_candle['close'])
 
-        # 4. Confluence Factors
-        confluence_details: List[str] = []
-        score = 0.0
+        # 2. Fibonacci Retracement Levels of Dealing Range
+        # In uptrend, 0.0 is Peak, 1.0 is Anchor Low (or normalized 0 at low, 1 at peak)
+        fib_50 = anchor_low + 0.50 * impulse_range
+        fib_60 = anchor_low + 0.60 * impulse_range
+        fib_618 = anchor_low + 0.618 * impulse_range
+        fib_382 = anchor_low + 0.382 * impulse_range
 
-        # Confluence A: Liquidity Sweep preceding the reversal
-        sweep_detected = False
-        sweep_level = None
-        # Check if the peak candle or candles near the peak swept a prior swing high
+        # Normalized Fibonacci position of current price: 0.0 = low, 1.0 = peak
+        curr_fib_pos = (current_close - anchor_low) / impulse_range if impulse_range > 0 else 0.5
+        is_above_50 = curr_fib_pos >= 0.50
+        is_below_50 = curr_fib_pos < 0.50
+        in_fib_50_60 = (min(fib_50, fib_60) <= current_close <= max(fib_50, fib_60))
+
+        # 3. ICT Standard Deviation Projections (+2.0, +2.5, +4.0 SD above anchor range)
         prior_highs = [sp for sp in high_swings if sp.index < peak_idx]
         if prior_highs:
+            anchor_range = max(prior_highs[-1].price - anchor_low, current_atr * 0.5)
+        else:
+            anchor_range = max(impulse_range * 0.5, current_atr * 0.5)
+
+        sd_20 = anchor_low + 2.0 * anchor_range
+        sd_25 = anchor_low + 2.5 * anchor_range
+        sd_40 = anchor_low + 4.0 * anchor_range
+
+        # Check if peak or current price hit SD exhaustion target
+        sd_multiple = (peak_price - anchor_low) / anchor_range if anchor_range > 0 else 1.0
+        sd_hit = False
+        sd_hit_level = None
+        sd_hit_multiple = None
+        if sd_multiple >= 2.0 - 1e-4 or peak_price >= (sd_20 - current_atr * 0.25):
+            sd_hit = True
+            if sd_multiple >= 4.0 - 1e-4 or peak_price >= sd_40 - current_atr * 0.25:
+                sd_hit_level = sd_40
+                sd_hit_multiple = 4.0
+            elif sd_multiple >= 2.5 - 1e-4 or peak_price >= sd_25 - current_atr * 0.25:
+                sd_hit_level = sd_25
+                sd_hit_multiple = 2.5
+            else:
+                sd_hit_level = sd_20
+                sd_hit_multiple = 2.0
+
+        # 4. Bearish Fair Value Gap (FVG)
+        fvg_present, fvg_top, fvg_bottom = self._detect_bearish_fvg(df, peak_idx, current_atr)
+
+        # 5. Liquidity Sweep at Peak
+        sweep_detected = False
+        sweep_level = None
+        if prior_highs:
             prev_high_level = prior_highs[-1].price
-            # Check if peak breached prev high but closed below or had a deep upper wick
             peak_bar = df.iloc[peak_idx]
             if peak_bar['high'] > prev_high_level:
                 sweep_detected = True
                 sweep_level = float(peak_bar['high'])
-                confluence_details.append(f"Liquidity Sweep above prior high ({prev_high_level:.5f}) to {sweep_level:.5f}")
-                score += 25.0
 
-        # Confluence B: Volume Surge on the break
-        volume_surge = False
-        vol_ratio = 1.0
-        if choch_detected and break_idx >= 0:
-            vol_ratio = self._calculate_volume_ratio(df, break_idx)
-            break_bar = df.iloc[break_idx]
-            body_size = abs(break_bar['close'] - break_bar['open'])
-            if vol_ratio >= self.volume_surge_multiplier or body_size >= self.displacement_atr_mult * current_atr:
-                volume_surge = True
-                confluence_details.append(f"Volume/Displacement Surge ({vol_ratio:.1f}x avg vol or {body_size/current_atr:.1f}x ATR)")
-                score += 20.0
+        # 6. Volume / Displacement Surge
+        vol_ratio = self._calculate_volume_ratio(df, min(n - 1, peak_idx + 1))
+        volume_surge = (vol_ratio >= self.volume_surge_multiplier)
 
-        # Confluence C: Fair Value Gap (Bearish FVG)
-        fvg_present = False
-        fvg_top = None
-        fvg_bottom = None
-        if choch_detected and break_idx >= 0:
-            fvg_present, fvg_top, fvg_bottom = self._detect_bearish_fvg(df, break_idx, current_atr)
-            if fvg_present:
-                confluence_details.append(f"Bearish FVG created at [{fvg_bottom:.5f} - {fvg_top:.5f}]")
-                score += 15.0
+        # 7. Check Legacy Break (Break below anchor low) for full MSS confirmation
+        legacy_break = any(df['close'].iloc[peak_idx:] < anchor_low)
 
-        # Confluence D: Fibonacci Retracement Zone (0.382 – 0.618 OTE)
-        fib_382 = None
-        fib_618 = None
-        in_retrace = False
+        # ── Score & Confluence Compilation ──
+        confluence_details: List[str] = []
+        score = 0.0
+        reversal_zone_types: List[str] = []
 
-        if choch_detected:
-            # Impulse move is from peak (origin) to the lowest point after CHoCH
-            displacement_low = df['low'].iloc[peak_idx:].min()
-            impulse_range = peak_price - displacement_low
-            if impulse_range > 0:
-                fib_382 = displacement_low + 0.382 * impulse_range
-                fib_618 = displacement_low + 0.618 * impulse_range
+        if sd_hit:
+            score += 30.0
+            reversal_zone_types.append(f"SD_{sd_hit_multiple}x")
+            confluence_details.append(f"ICT Standard Deviation Exhaustion hit (+{sd_hit_multiple:.1f} SD @ {sd_hit_level:.5f})")
 
-                # Check if current price is within Fib zone or within FVG
-                if fib_382 <= current_close <= fib_618:
-                    in_retrace = True
-                    confluence_details.append(f"Price inside Golden Fib zone [0.382: {fib_382:.5f} - 0.618: {fib_618:.5f}]")
-                    score += 15.0
-                elif fvg_present and fvg_bottom is not None and fvg_top is not None and fvg_bottom <= current_close <= fvg_top:
-                    in_retrace = True
-                    confluence_details.append(f"Price inside FVG entry zone [{fvg_bottom:.5f} - {fvg_top:.5f}]")
-                    score += 15.0
+        if in_fib_50_60:
+            score += 25.0
+            reversal_zone_types.append("FIB_0.5_0.6")
+            confluence_details.append(f"Price inside Golden 0.5-0.6 Fib Retracement Zone [{fib_50:.5f} - {fib_60:.5f}]")
+        elif is_above_50 and current_close >= fib_60:
+            # In premium zone above 0.5 fib where bearish reversal risk is elevated
+            score += 15.0
+            confluence_details.append(f"Price in Premium zone (Fib {curr_fib_pos:.2f} > 0.50)")
 
-        # Confluence E: Higher Timeframe Bias / S&D Zone Alignment
+        if is_above_50 and (fvg_present or sweep_detected or sd_hit):
+            score += 25.0
+            confluence_details.append("Premium level above 0.5 Fib established (prime Bearish Reversal chance)")
+
+        if fvg_present:
+            score += 20.0
+            reversal_zone_types.append("BEARISH_FVG")
+            confluence_details.append(f"Bearish FVG on {timeframe} at [{fvg_bottom:.5f} - {fvg_top:.5f}]")
+
+        if sweep_detected:
+            score += 20.0
+            confluence_details.append(f"Liquidity Sweep above prior swing high ({sweep_level:.5f})")
+
+        if volume_surge:
+            score += 15.0
+            confluence_details.append(f"Volume Surge ({vol_ratio:.1f}x avg vol)")
+
+        # HTF S/D alignment
         htf_align = False
         if htf_analysis:
-            # If peak tested an HTF Supply Zone or HTF Liquidity Pool
             for zone in htf_analysis.supply_demand_zones:
                 if zone.is_supply and zone.bottom <= peak_price <= zone.top + current_atr * 0.5:
                     htf_align = True
-                    confluence_details.append("Reversal initiated at HTF Supply Zone")
+                    confluence_details.append(f"Reversal aligned with HTF Supply Zone [{zone.bottom:.5f} - {zone.top:.5f}]")
                     score += 15.0
                     break
 
-        # Base CHoCH break score
-        if choch_detected:
-            score += 25.0
-        elif sweep_detected:
-            score += 10.0  # Pre-warning
+        if legacy_break:
+            score += 20.0
+            confluence_details.append(f"Displacement break below swing anchor ({anchor_low:.5f})")
 
-        # Cap probability score realistically at 95%
+        # Determine Reversal Trigger:
+        reversal_detected = (
+            (sd_hit and (sweep_detected or fvg_present or in_fib_50_60 or legacy_break or current_close < peak_price - current_atr * 0.25))
+            or in_fib_50_60
+            or (is_above_50 and (fvg_present or sweep_detected or (sd_hit and current_close < peak_price - current_atr * 0.25)))
+            or (fvg_present and (is_above_50 or sweep_detected or volume_surge))
+            or legacy_break
+            or (score >= 45.0 and current_close < peak_price - current_atr * 0.25)
+        )
+
+        # An active new high without rejection, FVG, sweep, or zone test is trend continuation
+        if current_close >= peak_price - current_atr * 0.25 and not (sweep_detected or fvg_present or legacy_break or in_fib_50_60):
+            reversal_detected = False
+            score = min(score, 20.0)
+
+        if reversal_detected:
+            score = max(score, 50.0)
+
         reversal_prob = min(95.0, round(score, 1))
 
-        # Reversal Risk Level
         if reversal_prob >= 75.0:
             reversal_risk = "CRITICAL"
         elif reversal_prob >= 50.0:
@@ -415,65 +560,47 @@ class TrendReversalDetector:
             reversal_risk = "LOW"
 
         # Determine Stage
-        if not choch_detected:
-            if sweep_detected:
+        if not reversal_detected:
+            if sweep_detected or (sd_hit and current_close < peak_price - current_atr * 0.25):
                 stage = ReversalStage.PRE_REVERSAL_SWEEP
                 warning = (
-                    f"⚠️ [PRE-REVERSAL SWEEP] {symbol} swept liquidity at {sweep_level:.5f}. "
-                    f"Watch for potential Bearish CHoCH if price breaks below last HL ({critical_hl:.5f})."
+                    f"⚠️ [PRE-REVERSAL ALERT] {symbol} ({timeframe}): Liquidity sweep / premium extension at {peak_price:.5f}. "
+                    f"Monitoring for Bearish Reversal Zone (SD / Fib 0.5-0.6 / FVG)."
                 )
             else:
                 stage = ReversalStage.TREND_HEALTHY
-                warning = f"Bullish trend intact on {symbol}. Key swing HL ({critical_hl:.5f}) holding cleanly."
+                warning = f"Bullish trend intact on {symbol} ({timeframe}). No reversal zone triggered."
         else:
-            # Check for confirmed MSS (subsequent lower high + lower low)
-            recent_post_swings = [sp for sp in swings if sp.index > break_idx]
-            has_lh = any(sp.is_high and sp.price < peak_price for sp in recent_post_swings)
-            has_ll = any(not sp.is_high and sp.price < critical_hl for sp in recent_post_swings)
-
-            if has_lh and has_ll:
+            if legacy_break:
                 stage = ReversalStage.CONFIRMED_MSS
-            elif in_retrace:
+            elif in_fib_50_60 or (fvg_present and fvg_bottom is not None and fvg_bottom <= current_close <= (fvg_top or 0.0)):
                 stage = ReversalStage.RETRACEMENT_IN_ZONE
-            elif current_close > (critical_hl_sp.price):
-                stage = ReversalStage.RETRACEMENT_PENDING
+            elif current_close < peak_price:
+                stage = ReversalStage.REVERSAL_ZONE_TESTED
             else:
                 stage = ReversalStage.CHOCH_DISPLACEMENT
 
+            zone_str = "+".join(reversal_zone_types) if reversal_zone_types else "REVERSAL_ZONE"
             warning = (
-                f"🚨 [BEARISH CHoCH] {symbol} broke below last HL ({critical_hl:.5f}) with close @ {break_close:.5f}. "
+                f"🚨 [BEARISH REVERSAL ZONE] {symbol} ({timeframe}): Reversal Zone triggered ({zone_str}). "
                 f"Reversal Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
             )
 
-        # Suggested Setup (Sell Reversal)
-        suggested_sl = None
-        suggested_tp = None
-        suggested_rr = None
-        entry_zone = None
+        # Setup Parameters for Sell Reversal Trade
+        suggested_sl = peak_price + max(0.5 * current_atr, 0.0005)
+        if fvg_present and fvg_bottom is not None and fvg_top is not None:
+            entry_zone = (fvg_bottom, fvg_top)
+        elif in_fib_50_60:
+            entry_zone = (min(fib_50, fib_60), max(fib_50, fib_60))
+        else:
+            entry_zone = (anchor_low, peak_price)
 
-        if choch_detected:
-            suggested_sl = peak_price + max(0.5 * current_atr, 0.0005)
-            # Entry zone is either FVG or Fib 382-618
-            if fvg_present and fvg_bottom is not None and fvg_top is not None:
-                entry_zone = (fvg_bottom, fvg_top)
-            elif fib_382 is not None and fib_618 is not None:
-                entry_zone = (min(fib_382, fib_618), max(fib_382, fib_618))
-            else:
-                entry_zone = (critical_hl, critical_hl + current_atr * 0.5)
+        risk_dist = abs(suggested_sl - current_close)
+        suggested_tp = current_close - 2.5 * max(risk_dist, current_atr)
+        reward_dist = abs(current_close - suggested_tp) if suggested_tp else 0.0
+        suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 2.5
 
-            # Target next major low swing or 2.5R (enforcing min 2:1 R:R)
-            risk_dist = abs(suggested_sl - current_close)
-            target_candidates = [sp.price for sp in low_swings if sp.price < critical_hl]
-            valid_targets = [p for p in target_candidates if (current_close - p) >= 2.0 * risk_dist]
-            if valid_targets:
-                suggested_tp = max(valid_targets)
-            elif htf_analysis and htf_analysis.last_swing_low and (current_close - htf_analysis.last_swing_low) >= 2.0 * risk_dist:
-                suggested_tp = htf_analysis.last_swing_low
-            else:
-                suggested_tp = current_close - 2.5 * risk_dist
-
-            reward_dist = abs(current_close - suggested_tp) if suggested_tp else 0.0
-            suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 0.0
+        primary_zone_type = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
 
         confluence_obj = ReversalConfluence(
             liquidity_sweep=sweep_detected,
@@ -483,10 +610,22 @@ class TrendReversalDetector:
             fvg_present=fvg_present,
             fvg_top=fvg_top,
             fvg_bottom=fvg_bottom,
+            fvg_timeframe=timeframe,
             fib_382=fib_382,
+            fib_50=fib_50,
+            fib_60=fib_60,
             fib_618=fib_618,
-            in_retracement_zone=in_retrace,
+            fib_level=round(curr_fib_pos, 3),
+            is_below_fib_50=is_below_50,
+            is_above_fib_50=is_above_50,
+            in_fib_50_60_zone=in_fib_50_60,
+            standard_deviation_hit=sd_hit,
+            sd_level=sd_hit_level,
+            sd_multiple=sd_hit_multiple,
+            reversal_zone_type=primary_zone_type,
+            in_retracement_zone=in_fib_50_60 or stage == ReversalStage.RETRACEMENT_IN_ZONE,
             htf_alignment=htf_align,
+            timeframes_confluent=[timeframe],
             score=reversal_prob,
             details=confluence_details,
         )
@@ -495,12 +634,12 @@ class TrendReversalDetector:
             symbol=symbol,
             trend=MarketBias.BULLISH,
             is_trending=True,
-            choch_detected=choch_detected,
-            choch_type=CHoCHType.BEARISH if choch_detected else CHoCHType.NONE,
+            choch_detected=reversal_detected,
+            choch_type=CHoCHType.BEARISH if reversal_detected else CHoCHType.NONE,
             stage=stage,
-            key_swing_level=critical_hl,
+            key_swing_level=anchor_low,
             trend_extreme_level=peak_price,
-            invalidation_level=suggested_sl if choch_detected else critical_hl,
+            invalidation_level=suggested_sl if reversal_detected else anchor_low,
             reversal_probability=reversal_prob,
             reversal_risk=reversal_risk,
             confluence=confluence_obj,
@@ -511,6 +650,12 @@ class TrendReversalDetector:
             warning_message=warning,
             timeframe=timeframe,
             closed_candle_time=candle_time,
+            reversal_detected=reversal_detected,
+            reversal_type=CHoCHType.BEARISH if reversal_detected else CHoCHType.NONE,
+            reversal_zone_type=primary_zone_type,
+            fib_level=round(curr_fib_pos, 3),
+            is_below_fib_50=is_below_50,
+            sd_level=sd_hit_level,
         )
 
     def _analyze_downtrend_reversal(
@@ -525,30 +670,27 @@ class TrendReversalDetector:
         candle_time: Optional[str] = None,
     ) -> TrendReversalAnalysis:
         """
-        Analyze an established DOWNTREND (e.g. 1-Hour chart) for signs of Bullish Reversal (Bullish CHoCH):
-        - Critical Pivot: Last Lower High (LH) that supported the trend trough.
-        - Trigger: Candle break and CLOSE above this last LH.
+        Analyze an established DOWNTREND for signs of Bullish Reversal:
+        Replaces legacy CHoCH with:
+        1. ICT Standard Deviation Projections (-2.0 to -2.5 and -4.0 SD downside exhaustion).
+        2. Fibonacci 0.5 to 0.6 Retracement Zone (Equilibrium / Discount boundary).
+        3. Bullish Fair Value Gap (FVG) in 4H/1H/Daily.
+        4. "Below 0.5 Level" Rule:
+           - Levels (FVG, liquidity sweep, SD exhaustion) sitting BELOW 0.5 Fibonacci represent
+             prime institutional accumulation for a Bullish Reversal.
         """
         n = len(df)
         high_swings = [sp for sp in swings if sp.is_high]
         low_swings = [sp for sp in swings if not sp.is_high]
 
-        if not high_swings or not low_swings:
-            return TrendReversalAnalysis(
-                symbol=symbol,
-                trend=MarketBias.BEARISH,
-                is_trending=True,
-                choch_detected=False,
-                choch_type=CHoCHType.NONE,
-                stage=ReversalStage.TREND_HEALTHY,
-                reversal_probability=5.0,
-                reversal_risk="LOW",
-                warning_message=f"Downtrend on {symbol} ({timeframe}) lacks mature swing pivots. Trend assumed intact.",
-                timeframe=timeframe,
-                closed_candle_time=candle_time,
-            )
+        if not high_swings:
+            max_idx = int(df['high'].argmax())
+            high_swings = [SwingPoint(index=max_idx, price=float(df['high'].iloc[max_idx]), is_high=True)]
+        if not low_swings:
+            min_idx = int(df['low'].argmin())
+            low_swings = [SwingPoint(index=min_idx, price=float(df['low'].iloc[min_idx]), is_high=False)]
 
-        # 1. Identify the recent trend trough (Lowest Low / LL)
+        # 1. Identify dominant dealing range: Anchor High (H) to Trough Low (L)
         recent_window_start = max(0, n - 40)
         recent_low_swings = [sp for sp in low_swings if sp.index >= recent_window_start]
         if not recent_low_swings:
@@ -558,116 +700,159 @@ class TrendReversalDetector:
         trough_idx = trough_sp.index
         trough_price = trough_sp.price
 
-        # 2. Identify the critical Lower High (LH) that led directly to that trough
-        candidate_lhs = [sp for sp in high_swings if sp.index < trough_idx]
-        if candidate_lhs:
-            critical_lh_sp = candidate_lhs[-1]
-            critical_lh = critical_lh_sp.price
-            critical_lh_idx = critical_lh_sp.index
+        candidate_highs = [sp for sp in high_swings if sp.index < trough_idx]
+        if candidate_highs:
+            anchor_high_sp = candidate_highs[-1]
+            anchor_high = anchor_high_sp.price
+            anchor_high_idx = anchor_high_sp.index
         else:
-            # Scan backward from trough_idx - 1 to find the last local peak
-            found_lh = False
-            for k in range(trough_idx - 1, max(1, trough_idx - 15), -1):
-                if df['high'].iloc[k] >= df['high'].iloc[k-1] and df['high'].iloc[k] >= df['high'].iloc[k+1]:
-                    critical_lh_idx = k
-                    critical_lh = float(df['high'].iloc[k])
-                    found_lh = True
-                    break
-            if not found_lh:
-                pre_trough_highs = df['high'].iloc[max(0, trough_idx - 10):trough_idx]
-                critical_lh_idx = max(0, trough_idx - 10) + pre_trough_highs.values.argmax()
-                critical_lh = float(df['high'].iloc[critical_lh_idx])
+            pre_trough_highs = df['high'].iloc[max(0, trough_idx - 25):trough_idx]
+            if not pre_trough_highs.empty:
+                loc = pre_trough_highs.values.argmax()
+                anchor_high_idx = max(0, trough_idx - 25) + loc
+                anchor_high = float(df['high'].iloc[anchor_high_idx])
+            else:
+                anchor_high = high_swings[0].price
+                anchor_high_idx = high_swings[0].index
 
-        # 3. Check for CHoCH: Did any candle AFTER the trough break and CLOSE above critical LH?
-        choch_detected = False
-        break_idx = -1
-        break_close = 0.0
-
-        for idx in range(trough_idx, n):
-            bar = df.iloc[idx]
-            if bar['close'] > critical_lh:
-                choch_detected = True
-                break_idx = idx
-                break_close = float(bar['close'])
-                break
+        impulse_range = max(anchor_high - trough_price, current_atr * 0.5)
 
         current_candle = df.iloc[-1]
         current_close = float(current_price) if current_price is not None else float(current_candle['close'])
 
-        # 4. Confluence Factors
-        confluence_details: List[str] = []
-        score = 0.0
+        # 2. Fibonacci Retracement Levels of Dealing Range
+        # In downtrend, 0.0 is Trough Low, 1.0 is Anchor High
+        fib_50 = trough_price + 0.50 * impulse_range
+        fib_60 = trough_price + 0.60 * impulse_range
+        fib_618 = trough_price + 0.618 * impulse_range
+        fib_382 = trough_price + 0.382 * impulse_range
 
-        # Confluence A: Liquidity Sweep preceding the reversal
+        # Normalized Fibonacci position: 0.0 = trough, 1.0 = anchor high
+        curr_fib_pos = (current_close - trough_price) / impulse_range if impulse_range > 0 else 0.5
+        is_below_50 = curr_fib_pos < 0.50
+        is_above_50 = curr_fib_pos >= 0.50
+        in_fib_50_60 = (min(fib_50, fib_60) <= current_close <= max(fib_50, fib_60))
+
+        # 3. ICT Standard Deviation Projections (-2.0, -2.5, -4.0 SD below anchor range)
+        prior_lows = [sp for sp in low_swings if sp.index < trough_idx]
+        if prior_lows:
+            anchor_range = max(anchor_high - prior_lows[-1].price, current_atr * 0.5)
+        else:
+            anchor_range = max(impulse_range * 0.5, current_atr * 0.5)
+
+        sd_20 = anchor_high - 2.0 * anchor_range
+        sd_25 = anchor_high - 2.5 * anchor_range
+        sd_40 = anchor_high - 4.0 * anchor_range
+
+        sd_multiple = (anchor_high - trough_price) / anchor_range if anchor_range > 0 else 1.0
+        sd_hit = False
+        sd_hit_level = None
+        sd_hit_multiple = None
+        if sd_multiple >= 2.0 - 1e-4 or trough_price <= (sd_20 + current_atr * 0.25):
+            sd_hit = True
+            if sd_multiple >= 4.0 - 1e-4 or trough_price <= sd_40 + current_atr * 0.25:
+                sd_hit_level = sd_40
+                sd_hit_multiple = -4.0
+            elif sd_multiple >= 2.5 - 1e-4 or trough_price <= sd_25 + current_atr * 0.25:
+                sd_hit_level = sd_25
+                sd_hit_multiple = -2.5
+            else:
+                sd_hit_level = sd_20
+                sd_hit_multiple = -2.0
+
+        # 4. Bullish Fair Value Gap (FVG)
+        fvg_present, fvg_top, fvg_bottom = self._detect_bullish_fvg(df, trough_idx, current_atr)
+
+        # 5. Liquidity Sweep at Trough
         sweep_detected = False
         sweep_level = None
-        prior_lows = [sp for sp in low_swings if sp.index < trough_idx]
         if prior_lows:
             prev_low_level = prior_lows[-1].price
             trough_bar = df.iloc[trough_idx]
             if trough_bar['low'] < prev_low_level:
                 sweep_detected = True
                 sweep_level = float(trough_bar['low'])
-                confluence_details.append(f"Liquidity Sweep below prior low ({prev_low_level:.5f}) to {sweep_level:.5f}")
-                score += 25.0
 
-        # Confluence B: Volume Surge on the break
-        volume_surge = False
-        vol_ratio = 1.0
-        if choch_detected and break_idx >= 0:
-            vol_ratio = self._calculate_volume_ratio(df, break_idx)
-            break_bar = df.iloc[break_idx]
-            body_size = abs(break_bar['close'] - break_bar['open'])
-            if vol_ratio >= self.volume_surge_multiplier or body_size >= self.displacement_atr_mult * current_atr:
-                volume_surge = True
-                confluence_details.append(f"Volume/Displacement Surge ({vol_ratio:.1f}x avg vol or {body_size/current_atr:.1f}x ATR)")
-                score += 20.0
+        # 6. Volume / Displacement Surge
+        vol_ratio = self._calculate_volume_ratio(df, min(n - 1, trough_idx + 1))
+        volume_surge = (vol_ratio >= self.volume_surge_multiplier)
 
-        # Confluence C: Fair Value Gap (Bullish FVG)
-        fvg_present = False
-        fvg_top = None
-        fvg_bottom = None
-        if choch_detected and break_idx >= 0:
-            fvg_present, fvg_top, fvg_bottom = self._detect_bullish_fvg(df, break_idx, current_atr)
+        # 7. Check Legacy Break (Break above anchor high) for full MSS confirmation
+        legacy_break = any(df['close'].iloc[trough_idx:] > anchor_high)
+
+        # ── Score & Confluence Compilation ──
+        confluence_details: List[str] = []
+        score = 0.0
+        reversal_zone_types: List[str] = []
+
+        if sd_hit:
+            score += 30.0
+            reversal_zone_types.append(f"SD_{abs(sd_hit_multiple):.1f}x")
+            confluence_details.append(f"ICT Standard Deviation Exhaustion hit ({sd_hit_multiple:.1f} SD @ {sd_hit_level:.5f})")
+
+        # "when any level (fvg, liquidity sweep, standard deviation) below .5 level of fibonacci there can be a chance to reversal"
+        if is_below_50:
+            discount_levels: List[str] = []
             if fvg_present:
-                confluence_details.append(f"Bullish FVG created at [{fvg_bottom:.5f} - {fvg_top:.5f}]")
+                discount_levels.append("Bullish FVG")
+            if sweep_detected:
+                discount_levels.append("Liquidity Sweep")
+            if sd_hit or trough_price < fib_50:
+                discount_levels.append("SD Extension")
+
+            if discount_levels:
+                score += 25.0
+                reversal_zone_types.append("DISCOUNT_REVERSAL_<0.5")
+                confluence_details.append(
+                    f"Discount Reversal Opportunity: Key level(s) [{', '.join(discount_levels)}] below 0.5 Fib (pos: {curr_fib_pos:.2f} < 0.50)"
+                )
+            else:
                 score += 15.0
+                confluence_details.append(f"Price in Discount accumulation zone (Fib {curr_fib_pos:.2f} < 0.50)")
 
-        # Confluence D: Fibonacci Retracement Zone (0.382 – 0.618 OTE)
-        fib_382 = None
-        fib_618 = None
-        in_retrace = False
+        if in_fib_50_60:
+            score += 25.0
+            reversal_zone_types.append("FIB_0.5_0.6")
+            confluence_details.append(f"Price inside Golden 0.5-0.6 Fib Retracement Zone [{fib_50:.5f} - {fib_60:.5f}]")
 
-        if choch_detected:
-            displacement_high = df['high'].iloc[trough_idx:].max()
-            impulse_range = displacement_high - trough_price
-            if impulse_range > 0:
-                fib_382 = displacement_high - 0.382 * impulse_range
-                fib_618 = displacement_high - 0.618 * impulse_range
+        if fvg_present:
+            score += 20.0
+            reversal_zone_types.append("BULLISH_FVG")
+            confluence_details.append(f"Bullish FVG on {timeframe} at [{fvg_bottom:.5f} - {fvg_top:.5f}]")
 
-                if min(fib_382, fib_618) <= current_close <= max(fib_382, fib_618):
-                    in_retrace = True
-                    confluence_details.append(f"Price inside Golden Fib zone [0.382: {fib_382:.5f} - 0.618: {fib_618:.5f}]")
-                    score += 15.0
-                elif fvg_present and fvg_bottom is not None and fvg_top is not None and fvg_bottom <= current_close <= fvg_top:
-                    in_retrace = True
-                    confluence_details.append(f"Price inside FVG entry zone [{fvg_bottom:.5f} - {fvg_top:.5f}]")
-                    score += 15.0
+        if sweep_detected:
+            score += 20.0
+            confluence_details.append(f"Liquidity Sweep below prior swing low ({sweep_level:.5f})")
 
-        # Confluence E: Higher Timeframe Bias / S&D Zone Alignment
+        if volume_surge:
+            score += 15.0
+            confluence_details.append(f"Volume Surge ({vol_ratio:.1f}x avg vol)")
+
         htf_align = False
         if htf_analysis:
             for zone in htf_analysis.supply_demand_zones:
                 if not zone.is_supply and zone.bottom - current_atr * 0.5 <= trough_price <= zone.top:
                     htf_align = True
-                    confluence_details.append("Reversal initiated at HTF Demand Zone")
+                    confluence_details.append(f"Reversal aligned with HTF Demand Zone [{zone.bottom:.5f} - {zone.top:.5f}]")
                     score += 15.0
                     break
 
-        if choch_detected:
-            score += 25.0
-        elif sweep_detected:
-            score += 10.0
+        if legacy_break:
+            score += 20.0
+            confluence_details.append(f"Displacement break above swing anchor ({anchor_high:.5f})")
+
+        # Reversal Trigger:
+        reversal_detected = (
+            sd_hit
+            or in_fib_50_60
+            or (is_below_50 and (fvg_present or sweep_detected or sd_hit))
+            or (fvg_present and (is_below_50 or sweep_detected or volume_surge))
+            or legacy_break
+            or (score >= 40.0)
+        )
+
+        if reversal_detected:
+            score = max(score, 50.0)
 
         reversal_prob = min(95.0, round(score, 1))
 
@@ -680,63 +865,47 @@ class TrendReversalDetector:
         else:
             reversal_risk = "LOW"
 
-        # Stage
-        if not choch_detected:
-            if sweep_detected:
+        if not reversal_detected:
+            if sweep_detected or (sd_hit and current_close > trough_price + current_atr * 0.25):
                 stage = ReversalStage.PRE_REVERSAL_SWEEP
                 warning = (
-                    f"⚠️ [PRE-REVERSAL SWEEP] {symbol} swept liquidity at {sweep_level:.5f}. "
-                    f"Watch for potential Bullish CHoCH if price breaks above last LH ({critical_lh:.5f})."
+                    f"⚠️ [PRE-REVERSAL ALERT] {symbol} ({timeframe}): Liquidity sweep / discount extension at {trough_price:.5f}. "
+                    f"Monitoring for Bullish Reversal Zone (SD / Fib 0.5-0.6 / FVG below 0.5)."
                 )
             else:
                 stage = ReversalStage.TREND_HEALTHY
-                warning = f"Bearish trend intact on {symbol}. Key swing LH ({critical_lh:.5f}) holding cleanly."
+                warning = f"Bearish trend intact on {symbol} ({timeframe}). No reversal zone triggered."
         else:
-            recent_post_swings = [sp for sp in swings if sp.index > break_idx]
-            has_hl = any(not sp.is_high and sp.price > trough_price for sp in recent_post_swings)
-            has_hh = any(sp.is_high and sp.price > critical_lh for sp in recent_post_swings)
-
-            if has_hl and has_hh:
+            if legacy_break:
                 stage = ReversalStage.CONFIRMED_MSS
-            elif in_retrace:
+            elif in_fib_50_60 or (fvg_present and fvg_bottom is not None and (fvg_top or 0.0) >= current_close >= fvg_bottom):
                 stage = ReversalStage.RETRACEMENT_IN_ZONE
-            elif current_close < critical_lh:
-                stage = ReversalStage.RETRACEMENT_PENDING
+            elif current_close > trough_price:
+                stage = ReversalStage.REVERSAL_ZONE_TESTED
             else:
                 stage = ReversalStage.CHOCH_DISPLACEMENT
 
+            zone_str = "+".join(reversal_zone_types) if reversal_zone_types else "REVERSAL_ZONE"
             warning = (
-                f"🚨 [BULLISH CHoCH] {symbol} broke above last LH ({critical_lh:.5f}) with close @ {break_close:.5f}. "
+                f"🚨 [BULLISH REVERSAL ZONE] {symbol} ({timeframe}): Reversal Zone triggered ({zone_str}). "
                 f"Reversal Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
             )
 
-        # Suggested Setup (Buy Reversal)
-        suggested_sl = None
-        suggested_tp = None
-        suggested_rr = None
-        entry_zone = None
+        # Setup Parameters for Buy Reversal Trade
+        suggested_sl = trough_price - max(0.5 * current_atr, 0.0005)
+        if fvg_present and fvg_bottom is not None and fvg_top is not None:
+            entry_zone = (fvg_bottom, fvg_top)
+        elif in_fib_50_60:
+            entry_zone = (min(fib_50, fib_60), max(fib_50, fib_60))
+        else:
+            entry_zone = (trough_price, anchor_high)
 
-        if choch_detected:
-            suggested_sl = trough_price - max(0.5 * current_atr, 0.0005)
-            if fvg_present and fvg_bottom is not None and fvg_top is not None:
-                entry_zone = (fvg_bottom, fvg_top)
-            elif fib_382 is not None and fib_618 is not None:
-                entry_zone = (min(fib_382, fib_618), max(fib_382, fib_618))
-            else:
-                entry_zone = (critical_lh - current_atr * 0.5, critical_lh)
+        risk_dist = abs(current_close - suggested_sl)
+        suggested_tp = current_close + 2.5 * max(risk_dist, current_atr)
+        reward_dist = abs(suggested_tp - current_close) if suggested_tp else 0.0
+        suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 2.5
 
-            risk_dist = abs(current_close - suggested_sl)
-            target_candidates = [sp.price for sp in high_swings if sp.price > critical_lh]
-            valid_targets = [p for p in target_candidates if (p - current_close) >= 2.0 * risk_dist]
-            if valid_targets:
-                suggested_tp = min(valid_targets)
-            elif htf_analysis and htf_analysis.last_swing_high and (htf_analysis.last_swing_high - current_close) >= 2.0 * risk_dist:
-                suggested_tp = htf_analysis.last_swing_high
-            else:
-                suggested_tp = current_close + 2.5 * risk_dist
-
-            reward_dist = abs(suggested_tp - current_close) if suggested_tp else 0.0
-            suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 0.0
+        primary_zone_type = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
 
         confluence_obj = ReversalConfluence(
             liquidity_sweep=sweep_detected,
@@ -746,10 +915,22 @@ class TrendReversalDetector:
             fvg_present=fvg_present,
             fvg_top=fvg_top,
             fvg_bottom=fvg_bottom,
+            fvg_timeframe=timeframe,
             fib_382=fib_382,
+            fib_50=fib_50,
+            fib_60=fib_60,
             fib_618=fib_618,
-            in_retracement_zone=in_retrace,
+            fib_level=round(curr_fib_pos, 3),
+            is_below_fib_50=is_below_50,
+            is_above_fib_50=is_above_50,
+            in_fib_50_60_zone=in_fib_50_60,
+            standard_deviation_hit=sd_hit,
+            sd_level=sd_hit_level,
+            sd_multiple=sd_hit_multiple,
+            reversal_zone_type=primary_zone_type,
+            in_retracement_zone=in_fib_50_60 or stage == ReversalStage.RETRACEMENT_IN_ZONE,
             htf_alignment=htf_align,
+            timeframes_confluent=[timeframe],
             score=reversal_prob,
             details=confluence_details,
         )
@@ -758,12 +939,12 @@ class TrendReversalDetector:
             symbol=symbol,
             trend=MarketBias.BEARISH,
             is_trending=True,
-            choch_detected=choch_detected,
-            choch_type=CHoCHType.BULLISH if choch_detected else CHoCHType.NONE,
+            choch_detected=reversal_detected,
+            choch_type=CHoCHType.BULLISH if reversal_detected else CHoCHType.NONE,
             stage=stage,
-            key_swing_level=critical_lh,
+            key_swing_level=anchor_high,
             trend_extreme_level=trough_price,
-            invalidation_level=suggested_sl if choch_detected else critical_lh,
+            invalidation_level=suggested_sl if reversal_detected else anchor_high,
             reversal_probability=reversal_prob,
             reversal_risk=reversal_risk,
             confluence=confluence_obj,
@@ -774,6 +955,12 @@ class TrendReversalDetector:
             warning_message=warning,
             timeframe=timeframe,
             closed_candle_time=candle_time,
+            reversal_detected=reversal_detected,
+            reversal_type=CHoCHType.BULLISH if reversal_detected else CHoCHType.NONE,
+            reversal_zone_type=primary_zone_type,
+            fib_level=round(curr_fib_pos, 3),
+            is_below_fib_50=is_below_50,
+            sd_level=sd_hit_level,
         )
 
     def _calculate_volume_ratio(self, df: pd.DataFrame, target_idx: int) -> float:
@@ -802,15 +989,15 @@ class TrendReversalDetector:
     def _detect_bearish_fvg(
         self,
         df: pd.DataFrame,
-        break_idx: int,
+        pivot_idx: int,
         current_atr: float,
     ) -> Tuple[bool, Optional[float], Optional[float]]:
-        """Detect Bearish Fair Value Gap around the break candle (candle i-2 low > candle i high)."""
+        """Detect Bearish Fair Value Gap (candle i-2 low > candle i high) around the pivot/displacement."""
         n = len(df)
         min_gap = self.fvg_min_atr_multiple * current_atr
 
-        start = max(2, break_idx - 1)
-        end = min(n, break_idx + 4)
+        start = max(2, pivot_idx - 2)
+        end = min(n, pivot_idx + 8)
 
         for i in range(start, end):
             c_curr = df.iloc[i]
@@ -825,15 +1012,15 @@ class TrendReversalDetector:
     def _detect_bullish_fvg(
         self,
         df: pd.DataFrame,
-        break_idx: int,
+        pivot_idx: int,
         current_atr: float,
     ) -> Tuple[bool, Optional[float], Optional[float]]:
-        """Detect Bullish Fair Value Gap around the break candle (candle i low > candle i-2 high)."""
+        """Detect Bullish Fair Value Gap (candle i low > candle i-2 high) around the pivot/displacement."""
         n = len(df)
         min_gap = self.fvg_min_atr_multiple * current_atr
 
-        start = max(2, break_idx - 1)
-        end = min(n, break_idx + 4)
+        start = max(2, pivot_idx - 2)
+        end = min(n, pivot_idx + 8)
 
         for i in range(start, end):
             c_curr = df.iloc[i]

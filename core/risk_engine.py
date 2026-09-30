@@ -4,9 +4,12 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 # pyrefly: ignore [missing-import]
 from loguru import logger
+from typing import TYPE_CHECKING
 from core.config import AccountConfig, RiskConfig, InstrumentConfig, TradingConfig, get_instrument, normalize_strategy_key
 from core.state import StateManager
-from strategies.strategy import TradeSignal
+
+if TYPE_CHECKING:
+    from strategies.strategy import TradeSignal
 
 
 @dataclass(frozen=True)

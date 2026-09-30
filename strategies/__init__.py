@@ -15,6 +15,7 @@ from .strategy import (
     SMCScalp5MStrategy,
     ICTStrategy,
     OrderFlowStrategy,
+    TrendReversalStrategy,
 )
 from .trend_reversal import TrendReversalDetector, TrendReversalAnalysis, CHoCHType
 from .mock_data import generate_mock_price_quote, generate_trending_ohlcv, get_demo_datasets
@@ -32,6 +33,7 @@ __all__ = [
     "SMCScalp5MStrategy",
     "ICTStrategy",
     "OrderFlowStrategy",
+    "TrendReversalStrategy",
     "TrendReversalDetector",
     "TrendReversalAnalysis",
     "CHoCHType",

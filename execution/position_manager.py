@@ -115,10 +115,20 @@ class PositionManager:
                 if risk_dist <= 0:
                     continue
 
-                # ── 1. Breakeven at +1R (Enforced ONLY during Sideways / Ranging Markets) ──
+                # ── 1. Breakeven at Cost-to-Cost (+0.3R for Reversal Trades, +1R for Sideways SMC) ──
                 r_gain = (current_price - entry) / risk_dist if trade.direction == Direction.BUY else (entry - current_price) / risk_dist
+                is_reversal_trade = (
+                    "REVERSAL" in str(trade.strategy_name).upper()
+                    or getattr(trade, "magic_number", 0) == 128456
+                )
                 if trade.id not in self._be_applied:
-                    if r_gain >= 1.0:
+                    if is_reversal_trade and r_gain >= 0.3:
+                        pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
+                        new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
+                        self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
+                        self._be_applied.add(trade.id)
+                        logger.info(f"🛡️ [COST-TO-COST SL] Reversal trade #{trade.id} ({trade.symbol}) Stop Loss moved to cost-to-cost @ {new_sl:.5f} (+{r_gain:.2f}R reached)")
+                    elif r_gain >= 1.0:
                         # Check regime if sideways_only is enabled
                         is_sideways = not self.breakeven_sideways_only
                         if self.breakeven_sideways_only and self.history_provider is not None:
