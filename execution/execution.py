@@ -455,6 +455,7 @@ class MockBrokerAdapter(BrokerAdapter):
         self._positions: dict[int, dict] = {}
         self._prices: dict[str, PriceQuote] = {}
         self._next_order_id = 1
+        self._connected = True
         
         self.set_price("XAUUSD", 2580.00, 2580.25)
         self.set_price("EURUSD", 1.08500, 1.08512)
@@ -464,10 +465,15 @@ class MockBrokerAdapter(BrokerAdapter):
     
     def connect(self) -> bool:
         logger.info("MockBrokerAdapter connected.")
+        self._connected = True
         return True
         
     def disconnect(self) -> None:
         logger.info("MockBrokerAdapter disconnected.")
+        self._connected = False
+
+    def ensure_connected(self) -> bool:
+        return self._connected
         
     def set_price(self, symbol: str, bid: float, ask: float) -> None:
         """Set a mock price for testing."""

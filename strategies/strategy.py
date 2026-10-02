@@ -123,12 +123,59 @@ class TradeSignal:
     strategy_name: str = "SMC Swing"
     magic_number: int = 123456
     runner_tp: float | None = None
+    candle_confirmation: str = ""
 
 
 
 # ─────────────────────────────────────────────
 #  Mathematical & Indicator Helpers
 # ─────────────────────────────────────────────
+
+def check_candle_body_confirmation(
+    candle: pd.Series | dict,
+    direction: Direction,
+    min_body_ratio: float = 0.50,
+) -> tuple[bool, float, str]:
+    """
+    Validates directional candlestick body confirmation:
+    - BUY Setup: Candle MUST be GREEN (close > open) with body/range >= min_body_ratio (default 50% body, <= 50% wick).
+    - SELL Setup: Candle MUST be RED (close < open) with body/range >= min_body_ratio (default 50% body, <= 50% wick).
+    - Max allowed can be a 100% Marubozu candle.
+    - If opposite color or body ratio < min_body_ratio (excessive wick), the candle is rejected.
+    Returns: (is_confirmed: bool, body_ratio: float, reason: str)
+    """
+    try:
+        open_p = float(candle['open'])
+        close_p = float(candle['close'])
+        high_p = float(candle['high'])
+        low_p = float(candle['low'])
+    except Exception as e:
+        return False, 0.0, f"Invalid candle data: {e}"
+
+    total_range = high_p - low_p
+    if total_range <= 1e-9:
+        return False, 0.0, "Zero or flat candle range"
+
+    if direction == Direction.BUY:
+        if close_p <= open_p:
+            return False, 0.0, f"Bearish/Flat candle ({close_p:.5f} <= {open_p:.5f}) rejected for BUY setup"
+        body = close_p - open_p
+        ratio = body / total_range
+        if ratio < min_body_ratio:
+            return False, ratio, f"Bullish body ratio {ratio:.1%} < required {min_body_ratio:.0%} (excessive wick)"
+        return True, ratio, f"Confirmed GREEN candle: {ratio:.1%} body (>= {min_body_ratio:.0%})"
+
+    elif direction == Direction.SELL:
+        if close_p >= open_p:
+            return False, 0.0, f"Bullish/Flat candle ({close_p:.5f} >= {open_p:.5f}) rejected for SELL setup"
+        body = open_p - close_p
+        ratio = body / total_range
+        if ratio < min_body_ratio:
+            return False, ratio, f"Bearish body ratio {ratio:.1%} < required {min_body_ratio:.0%} (excessive wick)"
+        return True, ratio, f"Confirmed RED candle: {ratio:.1%} body (>= {min_body_ratio:.0%})"
+
+    return False, 0.0, f"Unknown direction: {direction}"
+
 
 def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Compute Average True Range (ATR)."""
@@ -524,9 +571,13 @@ class SMCEntryDetector:
 
             if obs:
                 target_ob = obs[0]
-                # Price is currently mitigating the order block
+                # Price is currently mitigating the order block (current or previous candle)
                 if current_low <= target_ob.high and current_close >= target_ob.low:
                     ob_touched = True
+                elif n >= 2:
+                    prev_c = df.iloc[-2]
+                    if float(prev_c['low']) <= target_ob.high and float(prev_c['close']) >= target_ob.low:
+                        ob_touched = True
 
             if fvgs:
                 for fvg in reversed(fvgs):
@@ -534,6 +585,11 @@ class SMCEntryDetector:
                         if current_low <= fvg.top and current_close >= fvg.bottom:
                             fvg_touched = True
                             break
+                        elif n >= 2:
+                            prev_c = df.iloc[-2]
+                            if float(prev_c['low']) <= fvg.top and float(prev_c['close']) >= fvg.bottom:
+                                fvg_touched = True
+                                break
 
             if ob_touched and fvg_touched:
                 conf_type = LTFConfirmation.OB_PLUS_FVG
@@ -547,6 +603,16 @@ class SMCEntryDetector:
                     conf_type = LTFConfirmation.LIQUIDITY_SWEEP
                 else:
                     return None
+
+            # Directional Candle Confirmation: Must be GREEN candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self.config, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_candle,
+                Direction.BUY,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
+                return None
 
             # Stop-loss tight beyond invalidation point (sweep extreme) with minimum safety floor
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
@@ -577,6 +643,7 @@ class SMCEntryDetector:
                 'conf': conf_type,
                 'timestamp': timestamp,
                 'sweep_depth': swept_level - sweep_extreme,
+                'candle_confirmation': conf_desc,
             }
 
         elif bias == MarketBias.BEARISH:
@@ -624,6 +691,10 @@ class SMCEntryDetector:
                 target_ob = obs[0]
                 if current_high >= target_ob.low and current_close <= target_ob.high:
                     ob_touched = True
+                elif n >= 2:
+                    prev_c = df.iloc[-2]
+                    if float(prev_c['high']) >= target_ob.low and float(prev_c['close']) <= target_ob.high:
+                        ob_touched = True
 
             if fvgs:
                 for fvg in reversed(fvgs):
@@ -631,6 +702,11 @@ class SMCEntryDetector:
                         if current_high >= fvg.bottom and current_close <= fvg.top:
                             fvg_touched = True
                             break
+                        elif n >= 2:
+                            prev_c = df.iloc[-2]
+                            if float(prev_c['high']) >= fvg.bottom and float(prev_c['close']) <= fvg.top:
+                                fvg_touched = True
+                                break
 
             if ob_touched and fvg_touched:
                 conf_type = LTFConfirmation.OB_PLUS_FVG
@@ -643,6 +719,16 @@ class SMCEntryDetector:
                     conf_type = LTFConfirmation.LIQUIDITY_SWEEP
                 else:
                     return None
+
+            # Directional Candle Confirmation: Must be RED candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self.config, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_candle,
+                Direction.SELL,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
+                return None
 
             # Stop-loss tight beyond invalidation point (sweep extreme) with minimum safety floor
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
@@ -672,6 +758,7 @@ class SMCEntryDetector:
                 'conf': conf_type,
                 'timestamp': timestamp,
                 'sweep_depth': sweep_extreme - swept_level,
+                'candle_confirmation': conf_desc,
             }
 
         return None
@@ -700,11 +787,13 @@ class SMCScalp5MEngine:
         session_start_utc: int = 7,
         session_end_utc: int = 16,
         target_rr: float = 1.5,
+        min_candle_body_ratio: float = 0.50,
     ):
         self.swing_lookback = swing_lookback
         self.session_start_utc = session_start_utc
         self.session_end_utc = session_end_utc
         self.target_rr = target_rr
+        self.min_candle_body_ratio = min_candle_body_ratio
 
     def check_trading_session(self, current_time: datetime) -> bool:
         """Check if timestamp is within London or NY AM high-volume sessions (07:00 - 16:00 UTC)."""
@@ -825,6 +914,16 @@ class SMCScalp5MEngine:
             if not retest_confirmed:
                 return None
 
+            # Directional Candle Confirmation: Must be Green candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_bar,
+                Direction.BUY,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
+                return None
+
             # Invalidation / Stop Loss: Just beyond the wick of the OB candle
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
             stop_loss = ob_low - sl_buffer
@@ -859,6 +958,7 @@ class SMCScalp5MEngine:
                 'ob_high': ob_high,
                 'ob_low': ob_low,
                 'bos_price': broken_swing_price,
+                'candle_confirmation': conf_desc,
             }
 
         elif bias == MarketBias.BEARISH:
@@ -922,6 +1022,16 @@ class SMCScalp5MEngine:
             if not retest_confirmed:
                 return None
 
+            # Directional Candle Confirmation: Must be Red candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_bar,
+                Direction.SELL,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
+                return None
+
             # Invalidation / Stop Loss: Just beyond the wick of the OB candle
             sl_buffer = max(1.0 * instrument.pip_size, current_atr * 0.1)
             stop_loss = ob_high + sl_buffer
@@ -956,6 +1066,7 @@ class SMCScalp5MEngine:
                 'ob_high': ob_high,
                 'ob_low': ob_low,
                 'bos_price': broken_swing_price,
+                'candle_confirmation': conf_desc,
             }
 
         return None
@@ -1188,6 +1299,7 @@ class ICTEngine:
             # Check FVG in the displacement impulse
             fvg_touched = False
             fvg_top, fvg_bottom = 0.0, 0.0
+            prev_bar = df.iloc[-2] if n >= 2 else current_bar
             for i in range(max(2, sweep_idx), min(mss_idx + 3, n)):
                 c_curr = df.iloc[i]
                 c_p2 = df.iloc[i - 2]
@@ -1196,13 +1308,28 @@ class ICTEngine:
                     if gap >= current_atr * 0.3:
                         fvg_top = float(c_curr['low'])
                         fvg_bottom = float(c_p2['high'])
-                        if current_low <= fvg_top and current_close >= fvg_bottom:
+                        if (current_low <= fvg_top and current_close >= fvg_bottom) or \
+                           (float(prev_bar['low']) <= fvg_top and float(prev_bar['close']) >= fvg_bottom):
                             fvg_touched = True
                             break
 
-            ote_touched = (current_low <= ote_top and current_close >= ote_bottom)
+            ote_touched = (current_low <= ote_top and current_close >= ote_bottom) or \
+                          (float(prev_bar['low']) <= ote_top and float(prev_bar['close']) >= ote_bottom)
 
-            if not (fvg_touched or ote_touched or (current_close > broken_high and current_low <= broken_high)):
+            structure_retest = (current_close > broken_high and current_low <= broken_high) or \
+                               (float(prev_bar['close']) > broken_high and float(prev_bar['low']) <= broken_high)
+
+            if not (fvg_touched or ote_touched or structure_retest):
+                return None
+
+            # Directional Candle Confirmation: Must be GREEN candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self.config, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_bar,
+                Direction.BUY,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
                 return None
 
             # Confirmation classification
@@ -1243,6 +1370,7 @@ class ICTEngine:
                 'conf': conf,
                 'timestamp': timestamp,
                 'kz': active_kz or "ALL_HOURS",
+                'candle_confirmation': conf_desc,
             }
 
         elif bias == MarketBias.BEARISH:
@@ -1308,6 +1436,7 @@ class ICTEngine:
 
             # Check Bearish FVG
             fvg_touched = False
+            prev_bar = df.iloc[-2] if n >= 2 else current_bar
             for i in range(max(2, sweep_idx), min(mss_idx + 3, n)):
                 c_curr = df.iloc[i]
                 c_p2 = df.iloc[i - 2]
@@ -1316,13 +1445,28 @@ class ICTEngine:
                     if gap >= current_atr * 0.3:
                         fvg_top = float(c_p2['low'])
                         fvg_bottom = float(c_curr['high'])
-                        if current_high >= fvg_bottom and current_close <= fvg_top:
+                        if (current_high >= fvg_bottom and current_close <= fvg_top) or \
+                           (float(prev_bar['high']) >= fvg_bottom and float(prev_bar['close']) <= fvg_top):
                             fvg_touched = True
                             break
 
-            ote_touched = (current_high >= ote_bottom and current_close <= ote_top)
+            ote_touched = (current_high >= ote_bottom and current_close <= ote_top) or \
+                          (float(prev_bar['high']) >= ote_bottom and float(prev_bar['close']) <= ote_top)
 
-            if not (fvg_touched or ote_touched or (current_close < broken_low and current_high >= broken_low)):
+            structure_retest = (current_close < broken_low and current_high >= broken_low) or \
+                               (float(prev_bar['close']) < broken_low and float(prev_bar['high']) >= broken_low)
+
+            if not (fvg_touched or ote_touched or structure_retest):
+                return None
+
+            # Directional Candle Confirmation: Must be RED candle with >= 50% body (<= 50% wick)
+            min_body_ratio = getattr(self.config, 'min_candle_body_ratio', 0.50)
+            is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+                current_bar,
+                Direction.SELL,
+                min_body_ratio=min_body_ratio,
+            )
+            if not is_confirmed:
                 return None
 
             if active_kz == "NY_SILVER_BULLET":
@@ -1360,6 +1504,7 @@ class ICTEngine:
                 'conf': conf,
                 'timestamp': timestamp,
                 'kz': active_kz or "ALL_HOURS",
+                'candle_confirmation': conf_desc,
             }
 
         return None
@@ -1483,24 +1628,29 @@ class OrderFlowEngine:
                 swept_low = min(float(prev_bar['low']), float(current_bar['low']))
                 if swept_low < last_swing_low:
                     if float(current_bar['close']) > last_swing_low and float(current_bar['vol_delta']) > 0:
-                        stop_loss = swept_low - min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price - sl_distance
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.BUY, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = swept_low - min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price - sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
-                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                            take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
 
-                        return {
-                            'direction': Direction.BUY,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.BUY,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
             # Check 2: Institutional Absorption (Selling absorbed at support)
             for bar in [prev_bar, current_bar]:
@@ -1511,27 +1661,31 @@ class OrderFlowEngine:
                     vol_factor = float(bar['raw_vol']) / max(1.0, float(bar['vol_sma20']))
 
                     if (wick_ratio >= self.config.wick_ratio_threshold and 
-                        vol_factor >= self.config.absorption_volume_factor and 
-                        float(current_bar['close']) >= float(current_bar['open'])):
+                        vol_factor >= self.config.absorption_volume_factor):
 
-                        stop_loss = min(float(prev_bar['low']), float(current_bar['low'])) - min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price - sl_distance
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.BUY, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = min(float(prev_bar['low']), float(current_bar['low'])) - min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price - sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
-                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                            take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
 
-                        return {
-                            'direction': Direction.BUY,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_ABSORPTION,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.BUY,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_ABSORPTION,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
             # Check 3: Cumulative Volume Delta Divergence (Bullish)
             lookback = min(self.config.cvd_divergence_bars, n - 2)
@@ -1545,25 +1699,30 @@ class OrderFlowEngine:
                 curr_cvd = float(current_bar['cvd'])
 
                 if curr_low <= prior_lowest_price + (0.1 * current_atr) and curr_cvd > prior_cvd_at_low:
-                    if float(current_bar['close']) > float(current_bar['open']) and float(current_bar['vol_delta']) > 0:
-                        stop_loss = curr_low - min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price - sl_distance
+                    if float(current_bar['vol_delta']) > 0:
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.BUY, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = curr_low - min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price - sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
-                        take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + target_dist]
+                            take_profit = min(erl_targets) if erl_targets else entry_price + target_dist
 
-                        return {
-                            'direction': Direction.BUY,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.BUY,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
         # -------------------------------------------------------------
         # BEARISH SETUPS (HTF Bias == BEARISH)
@@ -1575,24 +1734,29 @@ class OrderFlowEngine:
                 swept_high = max(float(prev_bar['high']), float(current_bar['high']))
                 if swept_high > last_swing_high:
                     if float(current_bar['close']) < last_swing_high and float(current_bar['vol_delta']) < 0:
-                        stop_loss = swept_high + min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price + sl_distance
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.SELL, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = swept_high + min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price + sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
-                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                            take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
 
-                        return {
-                            'direction': Direction.SELL,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.SELL,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_LIQUIDITY_TRAP,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
             # Check 2: Institutional Absorption (Buying absorbed at resistance)
             for bar in [prev_bar, current_bar]:
@@ -1603,27 +1767,31 @@ class OrderFlowEngine:
                     vol_factor = float(bar['raw_vol']) / max(1.0, float(bar['vol_sma20']))
 
                     if (wick_ratio >= self.config.wick_ratio_threshold and 
-                        vol_factor >= self.config.absorption_volume_factor and 
-                        float(current_bar['close']) <= float(current_bar['open'])):
+                        vol_factor >= self.config.absorption_volume_factor):
 
-                        stop_loss = max(float(prev_bar['high']), float(current_bar['high'])) + min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price + sl_distance
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.SELL, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = max(float(prev_bar['high']), float(current_bar['high'])) + min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price + sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
-                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                            take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
 
-                        return {
-                            'direction': Direction.SELL,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_ABSORPTION,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.SELL,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_ABSORPTION,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
             # Check 3: Cumulative Volume Delta Divergence (Bearish)
             lookback = min(self.config.cvd_divergence_bars, n - 2)
@@ -1637,25 +1805,30 @@ class OrderFlowEngine:
                 curr_cvd = float(current_bar['cvd'])
 
                 if curr_high >= prior_highest_price - (0.1 * current_atr) and curr_cvd < prior_cvd_at_high:
-                    if float(current_bar['close']) < float(current_bar['open']) and float(current_bar['vol_delta']) < 0:
-                        stop_loss = curr_high + min_buffer
-                        sl_distance = abs(entry_price - stop_loss)
-                        if fixed_sl_pips is not None and fixed_sl_pips > 0:
-                            sl_distance = fixed_sl_pips * instrument.pip_size
-                            stop_loss = entry_price + sl_distance
+                    if float(current_bar['vol_delta']) < 0:
+                        is_conf, b_ratio, c_desc = check_candle_body_confirmation(
+                            current_bar, Direction.SELL, min_body_ratio=getattr(self.config, 'min_candle_body_ratio', 0.50)
+                        )
+                        if is_conf:
+                            stop_loss = curr_high + min_buffer
+                            sl_distance = abs(entry_price - stop_loss)
+                            if fixed_sl_pips is not None and fixed_sl_pips > 0:
+                                sl_distance = fixed_sl_pips * instrument.pip_size
+                                stop_loss = entry_price + sl_distance
 
-                        target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
-                        erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
-                        take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
+                            target_dist = max(sl_distance * self.config.target_rr, 6.0 * current_spread)
+                            erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - target_dist]
+                            take_profit = max(erl_targets) if erl_targets else entry_price - target_dist
 
-                        return {
-                            'direction': Direction.SELL,
-                            'entry': entry_price,
-                            'sl': stop_loss,
-                            'tp': take_profit,
-                            'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
-                            'timestamp': timestamp,
-                        }
+                            return {
+                                'direction': Direction.SELL,
+                                'entry': entry_price,
+                                'sl': stop_loss,
+                                'tp': take_profit,
+                                'conf': LTFConfirmation.OF_DELTA_DIVERGENCE,
+                                'timestamp': timestamp,
+                                'candle_confirmation': c_desc,
+                            }
 
         return None
 
@@ -1813,6 +1986,7 @@ class SMCSwingStrategy(BaseStrategy):
             strategy_id=self.id,
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
+            candle_confirmation=raw.get('candle_confirmation', ''),
         )]
 
 
@@ -1923,6 +2097,7 @@ class SMCScalp5MStrategy(BaseStrategy):
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
             runner_tp=raw.get('runner_tp'),
+            candle_confirmation=raw.get('candle_confirmation', ''),
         )]
 
 
@@ -2035,6 +2210,7 @@ class ICTStrategy(BaseStrategy):
             strategy_id=self.id,
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
+            candle_confirmation=raw.get('candle_confirmation', ''),
         )]
 
 
@@ -2148,6 +2324,7 @@ class OrderFlowStrategy(BaseStrategy):
             strategy_id=self.id,
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
+            candle_confirmation=raw.get('candle_confirmation', ''),
         )]
 
 
@@ -2235,6 +2412,13 @@ class TrendReversalStrategy(BaseStrategy):
         else:
             return []
 
+        # Directional Candlestick Confirmation on current LTF candle
+        is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
+            ltf_data.iloc[-1], direction, min_body_ratio=0.50
+        )
+        if not is_confirmed:
+            return []
+
         # Sizing and price calculation
         atr_series = compute_atr(ltf_data, 14)
         ltf_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 0.001
@@ -2305,6 +2489,7 @@ class TrendReversalStrategy(BaseStrategy):
             strategy_id=self.id,
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
+            candle_confirmation=conf_desc,
         )]
 
 
@@ -2346,7 +2531,10 @@ class StrategyEngine:
             "ORDER_FLOW": OrderFlowStrategy(self.htf_analyzer, self.of_config),
             "TREND_REVERSAL": TrendReversalStrategy(self.htf_analyzer),
         }
-        self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"]
+        if self.trading_config and hasattr(self.trading_config, 'enabled_strategies'):
+            self.enabled_strategies: list[str] = [s for s in self.trading_config.enabled_strategies if s in self.strategies]
+        else:
+            self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
 
     @property
     def active_strategies(self) -> list[BaseStrategy]:

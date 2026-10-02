@@ -298,10 +298,10 @@ class TestTrendReversalDetector(unittest.TestCase):
         """Test that TradingBot executes reversal analysis during tick and shields active trades."""
         from unittest.mock import MagicMock, patch
         from main import TradingBot
-        from config import DEFAULT_CONFIG
+        from config import TradingConfig
         from state import TradeRecord
 
-        bot = TradingBot(DEFAULT_CONFIG, load_saved_settings=False)
+        bot = TradingBot(TradingConfig(), load_saved_settings=False)
         bot.broker = MagicMock()
         bot.broker.get_current_price = MagicMock(return_value=MagicMock(bid=105.0, ask=105.05, spread=0.05))
 
@@ -334,6 +334,7 @@ class TestTrendReversalDetector(unittest.TestCase):
         bot.config.pair2.enabled = False
         bot.config.pair3.enabled = False
         bot.config.selected_symbols = ["XAUUSD"]
+        bot.config.reversal_strategy_enabled = True
 
         # Track protect_against_reversal
         bot.position_manager.protect_against_reversal = MagicMock(return_value=True)
@@ -518,7 +519,7 @@ class TestTrendReversalDetector(unittest.TestCase):
         # LTF 15m data around current price
         ltf_timestamps = pd.date_range("2026-09-01 03:00:00", periods=20, freq="15min", tz="UTC")
         ltf_data = pd.DataFrame([
-            {'time': t, 'open': 106.5, 'high': 106.8, 'low': 106.2, 'close': 106.6, 'volume': 150}
+            {'time': t, 'open': 106.8, 'high': 106.8, 'low': 106.2, 'close': 106.3, 'volume': 150}
             for t in ltf_timestamps
         ], index=ltf_timestamps)
 

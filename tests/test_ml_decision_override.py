@@ -344,6 +344,139 @@ class TestMLDecisionOverride(unittest.TestCase):
         # Reset bot state
         bot_instance.is_active = False
 
+    def test_trap_gate_shadow_mode_allows_trade_with_probabilities(self):
+        """When shadow_mode=True, TrapGate predicts high SL probability but NEVER blocks."""
+        cfg = TrapDetectorConfig(shadow_mode=True, max_sl_probability=0.40, p_genuine_threshold=0.60)
+        mock_model = MagicMock(spec=TrapModel)
+        mock_model.predict_proba_genuine = MagicMock(return_value=np.array([0.15]))  # P(SL) = 85%
+        mock_model.version = "sgd-test"
+        mock_model.n_samples = 50
+        mock_model._sgd_fitted = True
+        mock_model.lgbm = None
+
+        gate = TrapGate(mock_model, cfg)
+        decision = gate.evaluate(EventKind.FVG_BULL, {k: 0.0 for k in ALL_FEATURES})
+
+        self.assertTrue(decision.allow, "Shadow mode must NEVER block trade execution!")
+        self.assertEqual(decision.mode, "shadow")
+        self.assertAlmostEqual(decision.p_genuine, 0.15)
+        self.assertIn("(would veto)", decision.reason)
+        self.assertIn("P(SL)=85.0%", decision.reason)
+
+    def test_bot_execute_tick_shadow_mode_proceeds(self):
+        """In shadow mode, high SL risk setup is logged with [ML SHADOW MODE] and trade proceeds to execution."""
+        config = TradingConfig(use_mock_broker=True)
+        config.ml_gating_enabled = True
+        config.ml_shadow_mode = True
+        config.ml_max_sl_probability = 0.40
+        bot = TradingBot(config=config, load_saved_settings=False)
+
+        mock_signal = TradeSignal(
+            symbol="EURUSD",
+            direction=Direction.BUY,
+            entry_price=1.1000,
+            stop_loss=1.0950,
+            take_profit=1.1100,
+            htf_bias=MarketBias.BULLISH,
+            ltf_confirmation=LTFConfirmation.OB_SCALP_5M,
+            rr_ratio=2.0,
+            quality_score=90.0,
+            timestamp=datetime.now(timezone.utc),
+            strategy_name="5M Scalp",
+        )
+
+        mock_quote = MagicMock()
+        mock_quote.ask = 1.1001
+        mock_quote.bid = 1.1000
+        mock_quote.spread = 0.0001
+        bot.broker.get_current_price = MagicMock(return_value=mock_quote)
+
+        from conflict_resolver import FilterResult
+        from news_filter import SpreadFilterResult, NewsFilter
+        bot.strategy.evaluate_all = MagicMock(return_value=[mock_signal])
+        bot.conflict_resolver.resolve = MagicMock(
+            return_value=FilterResult(accepted_signal=mock_signal, total_signals=1, rejected_count=0, rejection_reasons=[])
+        )
+
+        df = pd.DataFrame({
+            "open": [1.10, 1.10, 1.10, 1.10],
+            "high": [1.11, 1.11, 1.11, 1.11],
+            "low": [1.09, 1.09, 1.09, 1.09],
+            "close": [1.10, 1.10, 1.10, 1.10],
+            "volume": [100, 100, 100, 100],
+        }, index=pd.date_range("2026-01-01", periods=4, freq="5min", tz="UTC"))
+        bot._get_ohlcv = MagicMock(return_value=df)
+
+        # Trap event with high SL risk
+        mock_trap_ev = MagicMock()
+        mock_trap_ev.allowed = True
+        mock_trap_ev.p_genuine = 0.25
+        mock_trap_ev.model_version = "sgd-shadow"
+        mock_trap_ev.features = {"priority_discount": 1.0, "is_below_fib_50": 1.0}
+        bot.trap_svc.observe_event = MagicMock(return_value=mock_trap_ev)
+
+        mock_ai_verdict = MagicMock()
+        mock_ai_verdict.confirmed = True
+        mock_ai_verdict.confidence = 85.0
+        mock_ai_verdict.reason = "Discount zone accumulation"
+        bot.ai_analyst.evaluate_setup = MagicMock(return_value=mock_ai_verdict)
+
+        mock_auth = MagicMock()
+        mock_auth.authorized = True
+        mock_auth.lot_size = 0.10
+        mock_auth.risk_amount = 100.0
+        mock_auth.account_equity = 10000.0
+        bot.risk_engine.authorize_trade = MagicMock(return_value=mock_auth)
+
+        from state import StateManager
+        bot.state = StateManager(db_path=":memory:")
+
+        def create_mock_order_res(bracket):
+            res = MagicMock()
+            res.success = True
+            res.order_id = 9999
+            res.fill_price = 1.1001
+            return res
+        bot.broker.send_bracket_order = MagicMock(side_effect=create_mock_order_res)
+
+        bot.config.pair1.symbol = "EURUSD"
+        bot.config.pair1.enabled = True
+        bot.config.pair2.enabled = False
+        bot.config.pair3.enabled = False
+        bot.config.selected_symbols = ["EURUSD"]
+        bot.state.is_circuit_breaker_active = MagicMock(return_value=False)
+        bot.news_filter.is_blackout = MagicMock(return_value=(False, "No blackout"))
+        bot.news_filter.check_news_blackout = MagicMock(return_value=MagicMock(blocked=False))
+        bot.state.can_trade = MagicMock(return_value=(True, "OK"))
+        bot.state.get_open_positions = MagicMock(return_value=[])
+
+        with patch.object(NewsFilter, "check_spread", return_value=SpreadFilterResult(blocked=False, current_spread=0.0001, avg_spread=0.0001)):
+            bot._execute_tick()
+
+        # In shadow mode, AI and Broker MUST be reached
+        bot.ai_analyst.evaluate_setup.assert_called_once()
+        bot.broker.send_bracket_order.assert_called_once()
+
+        logs = "\n".join(bot.recent_logs)
+        self.assertIn("🪤 [ML SHADOW MODE] [HIGH PRIORITY DISCOUNT <0.5 FIB / SD -4.5]", logs)
+        self.assertIn("P(SL)=75.0%", logs)
+        self.assertIn("(WOULD VETO)", logs)
+        self.assertIn("ORDER FILLED", logs)
+
+    def test_priority_discount_institutional_features_present(self):
+        """Verify institutional features exist in ALL_FEATURES."""
+        expected = [
+            "is_below_fib_50",
+            "in_fib_50_60",
+            "sd_exhaustion_4x",
+            "order_block_test",
+            "trendline_liq",
+            "priority_discount",
+        ]
+        for feat in expected:
+            self.assertIn(feat, ALL_FEATURES, f"Feature {feat} missing from ALL_FEATURES!")
+
 
 if __name__ == "__main__":
     unittest.main()
+

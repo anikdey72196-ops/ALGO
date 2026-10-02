@@ -121,6 +121,7 @@ class ICTConfig(BaseModel):
     ote_fib_min: float = Field(default=0.618, description="Optimal Trade Entry minimum Fibonacci retracement.")
     ote_fib_max: float = Field(default=0.786, description="Optimal Trade Entry maximum Fibonacci retracement.")
     target_rr: float = Field(default=2.0, ge=1.0, description="Default Target Risk-to-Reward ratio for ICT setups.")
+    min_candle_body_ratio: float = Field(default=0.50, ge=0.0, le=1.0, description="Minimum body-to-range ratio (0.50 = 50% body / max 50% wick) required on confirmation candle.")
 
 
 class OrderFlowConfig(BaseModel):
@@ -132,6 +133,7 @@ class OrderFlowConfig(BaseModel):
     min_rr: float = Field(default=1.8, ge=1.0, description="Minimum acceptable R:R ratio for Order Flow setups.")
     target_rr: float = Field(default=2.2, ge=1.0, description="Default target Risk-to-Reward ratio for Order Flow setups.")
     enforce_htf_alignment: bool = Field(default=True, description="Enforce HTF trend bias alignment for Order Flow setups.")
+    min_candle_body_ratio: float = Field(default=0.50, ge=0.0, le=1.0, description="Minimum body-to-range ratio (0.50 = 50% body / max 50% wick) required on confirmation candle.")
 class PositionManagementRuleConfig(BaseModel):
     """Configuration for dynamic position management on open trades."""
     # 1. Breakeven after +1R
@@ -140,16 +142,21 @@ class PositionManagementRuleConfig(BaseModel):
     breakeven_offset_r: float = Field(default=0.1, ge=0.0, le=1.0, description="Buffer above/below entry in R to cover costs/spread (e.g. +0.1R).")
     breakeven_spread_buffer: bool = Field(default=True, description="Add broker live spread buffer to breakeven SL.")
 
-    # 2. Partial Take-Profit at 1R and/or 2R
+    # 2. Target 50% Partial Take-Profit & Cost-to-Cost SL
+    target_50_pct_tp_enabled: bool = Field(default=True, description="Book 50% profit when price reaches 50% of target distance, and move SL to cost-to-cost.")
+    target_50_pct_trigger: float = Field(default=0.50, ge=0.1, le=0.9, description="Fraction of target distance to trigger 50% partial close (0.50 = 50% of target).")
+    target_50_pct_close_ratio: float = Field(default=0.50, ge=0.1, le=0.9, description="Fraction of lot size to close at 50% target (0.50 = close half lot).")
+
+    # 2b. Secondary Partial Take-Profit Stages (Legacy / Fallback)
     partial_tp_enabled: bool = Field(default=True, description="Enable partial position close at target R multiples.")
     partial_tp_stages: list[tuple[float, float]] = Field(
         default_factory=lambda: [(1.0, 0.50), (2.0, 0.25)],
         description="Stages of (R_trigger, pct_of_current_lot_to_close). e.g. [(1.0, 0.50), (2.0, 0.25)].",
     )
-    # 2b. Smart ML Partial Take-Profit (Structural Reversal Learning)
+    # 2c. Smart ML Partial Take-Profit (Structural Reversal Learning)
     smart_partial_tp_enabled: bool = Field(default=True, description="Enable ML-powered adaptive partial TP based on market structure reversals.")
     smart_partial_tp_shadow_mode: bool = Field(default=False, description="Log predictions without executing actual partial closures.")
-    smart_partial_tp_min_r: float = Field(default=0.6, ge=0.2, le=3.0, description="Minimum R profit before ML model starts evaluating for partial TP.")
+    smart_partial_tp_min_r: float = Field(default=1.0, ge=0.2, le=3.0, description="Minimum R profit before ML model starts evaluating for partial TP.")
     smart_partial_tp_reversal_threshold: float = Field(default=0.60, ge=0.3, le=0.9, description="Probability threshold for P(reversal) to trigger partial TP.")
     smart_partial_tp_runner_threshold: float = Field(default=0.65, ge=0.3, le=0.95, description="Probability threshold for P(full_tp) to hold runner (0% close).")
     smart_partial_tp_cooldown_bars: int = Field(default=3, ge=1, le=20, description="Minimum bars between successive partial closures on same trade.")
@@ -362,6 +369,10 @@ class RiskConfig(BaseModel):
         default=2.0,
         ge=1.0,
         description="Reject trade if live spread > avg_spread * this value.",
+    )
+    directional_loss_cooldown_enabled: bool = Field(
+        default=False,
+        description="Enable directional consecutive loss cooldown guard (cooldown after 2 consecutive losses in same direction). Set to False to deactivate.",
     )
     # Automatic Night Trade Limit (11 PM - 8 AM)
     night_limit_enabled: bool = Field(
@@ -640,8 +651,12 @@ class TradingConfig(BaseModel):
     
     # Multi-strategy concurrent execution
     enabled_strategies: List[str] = Field(
-        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"],
-        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW, TREND_REVERSAL).",
+        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
+        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW).",
+    )
+    reversal_strategy_enabled: bool = Field(
+        default=False,
+        description="Enable Institutional Reversal Zone scanning, alerts, and Reversal Guard filtering.",
     )
     
     # Independent Primary Pair Configurations (3 Pairs)
@@ -694,6 +709,16 @@ class TradingConfig(BaseModel):
         default=False,
         description="Whether to restrict scalping to London/NY sessions (False = active 24/7 in all sessions).",
     )
+    min_candle_body_ratio: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description="Minimum body-to-range ratio (0.50 = 50% body / max 50% wick) required on confirmation candle for trade execution.",
+    )
+    require_candle_confirmation: bool = Field(
+        default=True,
+        description="Enforce directional candle confirmation (Green for BUY, Red for SELL) with minimum 50% body.",
+    )
     selected_symbols: List[str] = Field(
         default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD"],
         description="List of active symbols to analyze concurrently.",
@@ -734,10 +759,18 @@ class TradingConfig(BaseModel):
         ge=0,
         description="Number of samples before active gating begins (0 = immediate active protection).",
     )
+    ml_shadow_mode: bool = Field(
+        default=False,
+        description="When True, Trap Detector operates in Shadow Mode: observes, predicts, and records traps/losses without vetoing trades in live market.",
+    )
     # Machine Learning Temporal & Session Edge Settings
     temporal_ml_enabled: bool = Field(
         default=True,
         description="When enabled, ML temporal analyzer models day/time/session profitability and scales risk or filters toxic windows.",
+    )
+    temporal_ml_shadow_mode: bool = Field(
+        default=True,
+        description="When True, Temporal & Session Edge Analyzer operates in Shadow Mode: observes, predicts, and records session/hour performance without scaling down lot sizes or vetoing trades in live market.",
     )
     temporal_veto_toxic: bool = Field(
         default=False,
@@ -754,7 +787,7 @@ class TradingConfig(BaseModel):
         description="Google Gemini API key. If None, checks GEMINI_API_KEY environment variable.",
     )
     gemini_model: str = Field(
-        default="gemini-2.0-flash",
+        default="gemini-flash-lite-latest",
         description="Gemini model name for ultra-low latency trade analysis.",
     )
     ai_confidence_threshold: float = Field(

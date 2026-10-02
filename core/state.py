@@ -300,6 +300,13 @@ class StateManager:
                         stop_loss, take_profit, lot_size, realized_pnl, status,
                         strategy_name, magic_number
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        status = excluded.status,
+                        stop_loss = excluded.stop_loss,
+                        take_profit = excluded.take_profit,
+                        realized_pnl = excluded.realized_pnl,
+                        closed_at = NULL,
+                        duration_seconds = NULL
                 ''', (
                     trade.id,
                     trade.timestamp.isoformat(),

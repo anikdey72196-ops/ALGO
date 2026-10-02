@@ -37,7 +37,7 @@ class AIAnalyst:
     def __init__(self, config: TradingConfig):
         self.config = config
         self.api_key = config.gemini_api_key or os.environ.get("GEMINI_API_KEY")
-        self.model_name = config.gemini_model or "gemini-2.0-flash"
+        self.model_name = getattr(config, "gemini_model", None) or os.environ.get("GEMINI_MODEL") or "gemini-flash-lite-latest"
         self.threshold = config.ai_confidence_threshold
         self._client = None
 
@@ -120,16 +120,34 @@ Decision Rules:
 """
 
     def _call_gemini_api(self, prompt: str) -> AIDecision:
-        """Query Gemini API with JSON formatting."""
+        """Query Gemini API with JSON formatting and model fallback."""
         from google.genai import types
-        response = self._client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1,  # Strict, low-variance reasoning
-            ),
-        )
+        candidate_models = [self.model_name]
+        for fallback in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"):
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
+
+        response = None
+        last_error = None
+        for m in candidate_models:
+            try:
+                response = self._client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1,  # Strict, low-variance reasoning
+                    ),
+                )
+                if response and response.text:
+                    break
+            except Exception as e:
+                logger.warning(f"Gemini model '{m}' evaluation failed: {e}. Trying next candidate...")
+                last_error = e
+                continue
+
+        if response is None or not response.text:
+            raise last_error or RuntimeError("No response from Gemini models")
 
         data = json.loads(response.text)
         confirmed = bool(data.get("confirmed", False))

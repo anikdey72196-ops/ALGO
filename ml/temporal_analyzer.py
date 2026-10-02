@@ -960,6 +960,11 @@ class TemporalEdgeService:
             logger.info("TemporalEdgeService: No existing model found. Training initial model from DB...")
             self.train_and_update()
 
+    @property
+    def cfg(self) -> TemporalModelConfig:
+        """Alias for config attribute for compatibility."""
+        return self.config
+
     def train_and_update(self) -> Dict[str, Any]:
         """Trigger model fitting on current database records."""
         with self._lock:

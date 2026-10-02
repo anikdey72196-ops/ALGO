@@ -59,10 +59,13 @@ class TestStrategyIsolatedTrapDetector(unittest.TestCase):
         ict_model = self.svc.get_model("ICT")
         scalp_model = self.svc.get_model("SMC_SCALP_5M")
         of_model = self.svc.get_model("ORDER_FLOW")
+        reversal_model = self.svc.get_model("TREND_REVERSAL")
 
         self.assertIsNot(smc_model, ict_model)
         self.assertIsNot(smc_model, scalp_model)
         self.assertIsNot(ict_model, of_model)
+        self.assertIsNot(reversal_model, smc_model)
+        self.assertIsNot(reversal_model, ict_model)
 
         # Backward-compatible property .model should return the SMC model
         self.assertIs(self.svc.model, smc_model)

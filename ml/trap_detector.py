@@ -65,10 +65,14 @@ except ImportError:
             return "ICT"
         elif magic == 127456:
             return "ORDER_FLOW"
+        elif magic == 128456:
+            return "TREND_REVERSAL"
         if not strat_name:
             return "SMC"
         s = str(strat_name).upper().strip()
-        if "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
+        if "REVERSAL" in s or "TREND_REVERSAL" in s:
+            return "TREND_REVERSAL"
+        elif "FLOW" in s or "DELTA" in s or "ABSORPTION" in s or s == "ORDER_FLOW":
             return "ORDER_FLOW"
         elif "SCALP" in s or "5M" in s:
             return "SMC_SCALP_5M"
@@ -94,6 +98,7 @@ class TrapDetectorConfig(BaseModel):
     # Gate behavior
     p_genuine_threshold: float = 0.50       # block if P(genuine) < threshold
     max_sl_probability: float = 0.50        # block if P(SL) > max_sl_probability
+    shadow_mode: bool = False               # passive observation without vetoing trades
     shadow_until_samples: int = 0           # 0 = immediate active gating
     fail_open_on_error: bool = False        # inference error -> allow? (fail closed in production)
 
@@ -160,6 +165,15 @@ STRATEGY_TUNING: dict[str, dict[str, Any]] = {
         "learning_rate": 0.04,
         "p_genuine_threshold": 0.50,
         "description": "ICT Institutional: KillZone Judas swings, Silver Bullet sweeps, and Optimal Trade Entry (OTE).",
+    },
+    "TREND_REVERSAL": {
+        "min_samples": 25,
+        "num_leaves": 7,
+        "min_child_samples": 4,
+        "n_estimators": 100,
+        "learning_rate": 0.04,
+        "p_genuine_threshold": 0.48,
+        "description": "Trend Reversal: ICT Standard Deviation exhaustion (-2.0, -2.5, -4.0 SD), Fib 0.5-0.6 equilibrium zones, and multi-TF FVGs in discount (<0.5) / premium.",
     },
 }
 
@@ -228,19 +242,27 @@ FEATURE_ORDER: dict[EventKind, list[str]] = {
         "gap_atr", "body_ratio", "body_atr", "rvol", "premium_disc",
         "dist_eqh_atr", "dist_eql_atr", "hour_sin", "hour_cos",
         "range_atr", "is_bull_candle", "consecutive_fvgs",
+        "is_below_fib_50", "in_fib_50_60", "sd_exhaustion_4x",
+        "order_block_test", "trendline_liq", "priority_discount",
     ],
     EventKind.FVG_BEAR: [
         "gap_atr", "body_ratio", "body_atr", "rvol", "premium_disc",
         "dist_eqh_atr", "dist_eql_atr", "hour_sin", "hour_cos",
         "range_atr", "is_bull_candle", "consecutive_fvgs",
+        "is_below_fib_50", "in_fib_50_60", "sd_exhaustion_4x",
+        "order_block_test", "trendline_liq", "priority_discount",
     ],
     EventKind.SWEEP_BSL: [
         "wick_atr", "wick_body_ratio", "rvol", "close_inside",
         "overshoot_atr", "premium_disc", "range_atr", "hour_sin", "hour_cos",
+        "is_below_fib_50", "in_fib_50_60", "sd_exhaustion_4x",
+        "order_block_test", "trendline_liq", "priority_discount",
     ],
     EventKind.SWEEP_SSL: [
         "wick_atr", "wick_body_ratio", "rvol", "close_inside",
         "overshoot_atr", "premium_disc", "range_atr", "hour_sin", "hour_cos",
+        "is_below_fib_50", "in_fib_50_60", "sd_exhaustion_4x",
+        "order_block_test", "trendline_liq", "priority_discount",
     ],
 }
 
@@ -302,6 +324,35 @@ def _count_consecutive_fvgs(df: pd.DataFrame, i: int, kind: EventKind, max_back:
     return n
 
 
+def _check_sd_exhaustion(df: pd.DataFrame, i: int, price: float, lookback: int = 100) -> float:
+    """Detect if price reached extreme Standard Deviation exhaustion (-4.0 to -4.5 or +4.0 to +4.5 SD)."""
+    lo = max(0, i - lookback)
+    win = df.iloc[lo:i]
+    if win.empty:
+        return 0.0
+    hi, low = float(win["high"].max()), float(win["low"].min())
+    rng = hi - low
+    if rng <= 1e-9:
+        return 0.0
+    anchor_range = rng * 0.5
+    dist = abs(price - (low + 0.5 * rng))
+    multiple = dist / max(anchor_range, 1e-9)
+    return 1.0 if multiple >= 3.8 else 0.0
+
+
+def _check_order_block_test(df: pd.DataFrame, i: int, price: float, atr: float, lookback: int = 20) -> float:
+    """Detect if price is currently testing/mitigating a prior Order Block / displacement origin."""
+    lo = max(0, i - lookback)
+    for j in range(i - 2, lo, -1):
+        c_rng = float(df["high"].iloc[j] - df["low"].iloc[j])
+        if c_rng >= 1.2 * atr:
+            ob_top = float(df["high"].iloc[j])
+            ob_bot = float(df["low"].iloc[j])
+            if ob_bot - 0.5 * atr <= price <= ob_top + 0.5 * atr:
+                return 1.0
+    return 0.0
+
+
 def extract_features(
     df: pd.DataFrame,
     i: int,
@@ -349,12 +400,20 @@ def extract_features(
             mid = (float(df["low"].iloc[i - 2]) + float(df["high"].iloc[i])) / 2.0
 
         eqh, eql = _dist_eq(df, i, mid, cfg.eq_lookback)
+        pd_val = _premium_discount(df, i, mid, cfg.pd_lookback)
+        is_below_50 = 1.0 if pd_val < 0.50 else 0.0
+        in_fib_50_60 = 1.0 if (0.50 <= pd_val <= 0.60) else 0.0
+        sd_exh = _check_sd_exhaustion(df, i, mid, cfg.pd_lookback)
+        ob_test = _check_order_block_test(df, i, mid, a, cfg.eq_lookback)
+        trendline_liq = 1.0 if (eqh / a <= 0.5 or eql / a <= 0.5) else 0.0
+        priority_disc = 1.0 if (is_below_50 == 1.0 or sd_exh == 1.0) else 0.0
+
         return {
             "gap_atr":           gap / a,
             "body_ratio":        body / rng,
             "body_atr":          body / a,
             "rvol":              _rvol(df, i - 1, cfg.rvol_lookback),
-            "premium_disc":      _premium_discount(df, i, mid, cfg.pd_lookback),
+            "premium_disc":      pd_val,
             "dist_eqh_atr":      eqh / a,
             "dist_eql_atr":      eql / a,
             "hour_sin":          hs,
@@ -362,6 +421,12 @@ def extract_features(
             "range_atr":         float((df["high"].iloc[i] - df["low"].iloc[i]) / a),
             "is_bull_candle":    1.0 if disp["close"] > disp["open"] else 0.0,
             "consecutive_fvgs":  float(_count_consecutive_fvgs(df, i, kind)),
+            "is_below_fib_50":   is_below_50,
+            "in_fib_50_60":      in_fib_50_60,
+            "sd_exhaustion_4x":  sd_exh,
+            "order_block_test":  ob_test,
+            "trendline_liq":     trendline_liq,
+            "priority_discount": priority_disc,
         }
 
     if kind in (EventKind.SWEEP_BSL, EventKind.SWEEP_SSL):
@@ -385,16 +450,31 @@ def extract_features(
         else:
             overshoot = max(float(prior["low"].min() - bar["low"]), 0.0)
 
+        close_p = float(bar["close"])
+        pd_val = _premium_discount(df, i, close_p, cfg.pd_lookback)
+        is_below_50 = 1.0 if pd_val < 0.50 else 0.0
+        in_fib_50_60 = 1.0 if (0.50 <= pd_val <= 0.60) else 0.0
+        sd_exh = _check_sd_exhaustion(df, i, close_p, cfg.pd_lookback)
+        ob_test = _check_order_block_test(df, i, close_p, a, cfg.eq_lookback)
+        trendline_liq = 1.0 if (overshoot / a > 0.0 or close_inside == 1.0) else 0.0
+        priority_disc = 1.0 if (is_below_50 == 1.0 or sd_exh == 1.0) else 0.0
+
         return {
             "wick_atr":         wick / a,
             "wick_body_ratio":  wick / max(abs(float(bar["close"] - bar["open"])), 1e-9),
             "rvol":             _rvol(df, i, cfg.rvol_lookback),
             "close_inside":     close_inside,
             "overshoot_atr":    overshoot / a,
-            "premium_disc":     _premium_discount(df, i, float(bar["close"]), cfg.pd_lookback),
+            "premium_disc":     pd_val,
             "range_atr":        rng / a,
             "hour_sin":         hs,
             "hour_cos":         hc,
+            "is_below_fib_50":   is_below_50,
+            "in_fib_50_60":      in_fib_50_60,
+            "sd_exhaustion_4x":  sd_exh,
+            "order_block_test":  ob_test,
+            "trendline_liq":     trendline_liq,
+            "priority_discount": priority_disc,
         }
 
     raise ValueError(f"unsupported event kind: {kind}")
@@ -869,20 +949,12 @@ class TrapGate:
         model = self.get_model(strat)
         version_str = model.version if isinstance(self.model_source, TrapModel) else f"{strat}:{model.version}"
 
-        # Shadow mode check
-        if (
+        is_shadow = getattr(self.cfg, "shadow_mode", False) or (
             self.cfg.shadow_until_samples > 0
             and model.n_samples < self.cfg.shadow_until_samples
             and not model._sgd_fitted
             and model.lgbm is None
-        ):
-            return GateDecision(
-                allow=True,
-                p_genuine=0.5,
-                mode="shadow",
-                model_version=version_str,
-                reason=f"shadow mode [{strat}] ({model.n_samples}/{self.cfg.shadow_until_samples})",
-            )
+        )
 
         x = np.array([[features.get(k, 0.0) for k in ALL_FEATURES]], dtype=float)
 
@@ -891,9 +963,9 @@ class TrapGate:
         except Exception as exc:
             logger.exception("TrapGate inference failed for %s: %s", strat, exc)
             return GateDecision(
-                allow=self.cfg.fail_open_on_error,
+                allow=True if is_shadow else self.cfg.fail_open_on_error,
                 p_genuine=0.5,
-                mode="error",
+                mode="shadow" if is_shadow else "error",
                 model_version=version_str,
                 reason=f"inference error [{strat}]: {exc}",
             )
@@ -903,6 +975,17 @@ class TrapGate:
         effective_p_thr = strat_tuning.get("p_genuine_threshold", self.cfg.p_genuine_threshold)
         effective_max_sl = getattr(self.cfg, "max_sl_probability", 1.0 - effective_p_thr)
         is_sl_high = (p_sl > effective_max_sl) or (p < effective_p_thr)
+
+        if is_shadow:
+            would_veto = is_sl_high
+            return GateDecision(
+                allow=True,  # Shadow mode NEVER blocks trade execution
+                p_genuine=p,
+                mode="shadow",
+                model_version=version_str,
+                reason=f"shadow mode [{strat}] P(SL)={p_sl*100:.1f}%, P(TP)={p*100:.1f}% {'(would veto)' if would_veto else '(would allow)'}",
+            )
+
         allow = not is_sl_high
 
         return GateDecision(
@@ -931,7 +1014,7 @@ class TrapDetectorService:
         self.store = EventStore(cfg.db_path)
         self.models: dict[str, TrapModel] = {}
         # Pre-initialize core strategy models
-        for s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"):
+        for s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"):
             self.get_model(s)
         self.gate = TrapGate(self, cfg)
 
@@ -981,10 +1064,14 @@ class TrapDetectorService:
         df: pd.DataFrame,
         bar_index: int,
         strategy: str = "SMC",
+        extra_features: Optional[dict[str, float]] = None,
     ) -> EventRecord:
         """Record a candidate setup and its causal features for a specific strategy."""
         strat = normalize_strategy_key(strategy)
         features = extract_features(df, bar_index, kind, self.cfg)
+        if extra_features:
+            features.update(extra_features)
+
         if isinstance(df.index, pd.DatetimeIndex):
             event_ts = df.index[bar_index].to_pydatetime()
         elif "time" in df.columns:
@@ -1014,7 +1101,12 @@ class TrapDetectorService:
         ev.allowed = decision.allow
         self.store.upsert(ev)
 
-        if not decision.allow:
+        if decision.mode == "shadow":
+            logger.info(
+                "TrapGate shadow observation [%s] | %s %s %s | p=%.3f | %s",
+                strat, symbol, timeframe, kind.value, decision.p_genuine, decision.reason,
+            )
+        elif not decision.allow:
             logger.info(
                 "TrapGate veto [%s] | %s %s %s | p=%.3f | %s",
                 strat, symbol, timeframe, kind.value, decision.p_genuine, decision.reason,
@@ -1079,7 +1171,7 @@ class TrapDetectorService:
     def retrain_if_ready(self, strategy: Optional[str] = None) -> bool:
         """Retrain LightGBM per strategy on its own labeled corpus. Returns True if any model was swapped."""
         strategies = [normalize_strategy_key(strategy)] if strategy else sorted(
-            {"SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"} | {
+            {"SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"} | {
                 normalize_strategy_key(r.strategy) for r in self.store.labeled() if getattr(r, "strategy", None)
             }
         )

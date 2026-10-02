@@ -160,7 +160,7 @@ class PositionManager:
                     rules = self.config.position_management.get_rules(trade.strategy_name, trade.symbol)
 
                 smart_enabled = getattr(rules, "smart_partial_tp_enabled", True) if rules else True
-                min_r = getattr(rules, "smart_partial_tp_min_r", 0.6) if rules else 0.6
+                min_r = getattr(rules, "smart_partial_tp_min_r", 1.0) if rules else 1.0
                 cooldown_sec = getattr(rules, "smart_partial_tp_cooldown_bars", 3) * 60.0 if rules else 180.0
                 shadow_mode = getattr(rules, "smart_partial_tp_shadow_mode", False) if rules else False
 
@@ -168,7 +168,117 @@ class PositionManager:
                 last_time = self._last_partial_time.get(trade.id, 0.0)
                 stages_taken = self._partial_stages_taken.get(trade.id, 0)
 
-                if (
+                # ── 2. Primary 50% Target Profit Booking & Cost-to-Cost SL ──
+                # User Rule: Book 50% profit ONLY at 50% of the target distance, move SL to cost-to-cost,
+                # and hold remaining 50% position all the way to full TP (or exit at cost-to-cost on reversal).
+                target_tp = float(getattr(trade, "take_profit", 0.0) or 0.0)
+                target_dist = abs(target_tp - entry) if target_tp > 0 else 0.0
+                current_gain = (current_price - entry) if trade.direction == Direction.BUY else (entry - current_price)
+                pct_to_target = (current_gain / target_dist) if target_dist > 0 else 0.0
+
+                target_50_enabled = getattr(rules, "target_50_pct_tp_enabled", True) if rules else True
+                target_50_trigger = getattr(rules, "target_50_pct_trigger", 0.50) if rules else 0.50
+                target_50_reached = (pct_to_target >= target_50_trigger) if target_dist > 0 else (r_gain >= 1.0)
+
+                if target_50_enabled:
+                    if target_50_reached and trade.id not in self._partial_tp_applied and remaining_lot > 0.01:
+                        orig_lot = float(trade.lot_size)
+                        close_ratio = getattr(rules, "target_50_pct_close_ratio", 0.50) if rules else 0.50
+                        raw_close = orig_lot * close_ratio
+                        close_lot = round(math.floor(raw_close / 0.01) * 0.01, 2)
+
+                        # Preserve at least 0.01 runner lot to ride until full TP
+                        if remaining_lot - close_lot < 0.01:
+                            close_lot = round(remaining_lot - 0.01, 2)
+
+                        if close_lot >= 0.01:
+                            closed_ok = self._close_mt5_position(trade.id, trade.symbol, close_lot, trade.direction)
+                            if closed_ok:
+                                new_rem = round(remaining_lot - close_lot, 2)
+                                self._remaining_lots[trade.id] = new_rem
+                                self._last_partial_time[trade.id] = now_ts
+                                self._partial_stages_taken[trade.id] = 1
+                                self._partial_tp_applied.add(trade.id)
+
+                                # Move Stop Loss to Cost-to-Cost (Entry Price / Breakeven)
+                                new_sl = round(entry, 5)
+                                self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, target_tp)
+                                self._be_applied.add(trade.id)
+
+                                # Evaluate Smart ML features for background telemetry and training
+                                verdict_features = {}
+                                p_rev_val = 0.50
+                                p_full_val = 0.50
+                                if self.smart_partial_tp_service is not None:
+                                    try:
+                                        bars_held = 10
+                                        if getattr(trade, "timestamp", None):
+                                            try:
+                                                t_entry = datetime.fromisoformat(str(trade.timestamp).replace("Z", "+00:00"))
+                                                bars_held = max(1, int((now_utc - t_entry).total_seconds() / 300))
+                                            except Exception:
+                                                pass
+                                        df_hist = self.history_provider(trade.symbol, "5m", 100) if self.history_provider else None
+                                        verdict = self.smart_partial_tp_service.evaluate(
+                                            symbol=trade.symbol,
+                                            strategy_name=trade.strategy_name or "SMC",
+                                            direction=trade.direction.value if hasattr(trade.direction, "value") else str(trade.direction),
+                                            entry_price=entry,
+                                            sl_price=orig_sl,
+                                            tp_price=target_tp,
+                                            current_price=current_price,
+                                            current_lot=remaining_lot,
+                                            bars_since_entry=bars_held,
+                                            df=df_hist,
+                                            shadow_mode=True,
+                                        )
+                                        if verdict and hasattr(verdict, "features"):
+                                            verdict_features = verdict.features
+                                            p_rev_val = verdict.p_reversal
+                                            p_full_val = verdict.p_full_tp
+                                            self._trade_features[trade.id] = verdict.features
+                                    except Exception as eval_err:
+                                        logger.debug(f"SmartPartialTP telemetry eval error: {eval_err}")
+
+                                if not verdict_features:
+                                    verdict_features = {
+                                        "pct_to_target": round(pct_to_target, 3),
+                                        "target_dist": target_dist,
+                                        "r_gain": round(r_gain, 2),
+                                        "cost_to_cost_sl": new_sl,
+                                    }
+
+                                # Persist event to DB
+                                try:
+                                    self.state.record_partial_tp_event(
+                                        trade_id=trade.id,
+                                        symbol=trade.symbol,
+                                        strategy_name=trade.strategy_name or "SMC",
+                                        direction=trade.direction.value if hasattr(trade.direction, "value") else str(trade.direction),
+                                        current_price=current_price,
+                                        r_multiple=round(r_gain, 2),
+                                        p_reversal=round(p_rev_val, 3),
+                                        p_full_tp=round(p_full_val, 3),
+                                        predicted_max_r=round(r_gain * 2.0, 2),
+                                        action="PARTIAL_CLOSE",
+                                        close_pct=close_ratio,
+                                        closed_lot=close_lot,
+                                        remaining_lot=new_rem,
+                                        nearest_resistance="50% Target Milestone",
+                                        structure_confluence_count=1,
+                                        features_json=json.dumps(verdict_features),
+                                        is_shadow=False,
+                                    )
+                                except Exception as db_err:
+                                    logger.debug(f"Failed to record 50% target partial TP event in DB: {db_err}")
+
+                                logger.info(
+                                    f"🎯 [50% TARGET REACHED] Trade #{trade.id} ({trade.symbol}): "
+                                    f"Booked 50% profit ({close_lot} lots closed @ {current_price:.5f}, +{r_gain:.2f}R, {pct_to_target*100:.1f}% to TP). "
+                                    f"Stop Loss moved to Cost-to-Cost @ {new_sl:.5f}. "
+                                    f"Holding remaining {new_rem} lots until full Take Profit @ {target_tp:.5f}."
+                                )
+                elif (
                     smart_enabled
                     and self.smart_partial_tp_service is not None
                     and r_gain >= min_r

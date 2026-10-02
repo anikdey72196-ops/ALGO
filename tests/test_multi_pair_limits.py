@@ -131,6 +131,7 @@ class TestMultiPairLimitsAndSynchronization(unittest.TestCase):
     def test_synchronized_dual_pair_execution_same_cycle(self):
         """Verify that Pair 1 and Pair 2 can both execute valid trades in the exact same tick cycle."""
         self.bot = TradingBot(self.config, load_saved_settings=False)
+        self.bot.config.ai_confirmation_enabled = False
         self.bot.startup()
         self.bot.is_active = True
 

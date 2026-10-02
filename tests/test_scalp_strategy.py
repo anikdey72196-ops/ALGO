@@ -106,8 +106,8 @@ class TestScalpStrategy(unittest.TestCase):
             (2000.5, 2004.0, 2000.2, 2003.8),
             (2003.8, 2006.5, 2003.5, 2006.0),  # idx 9: BOS above 2005.0
             (2006.0, 2007.0, 2005.0, 2006.5),
-            (2006.5, 2006.5, 2003.0, 2003.5),
-            (2003.5, 2004.0, 2001.5, 2001.8),  # idx 12: Retest into OB
+            (2006.5, 2006.5, 2001.5, 2001.8),  # idx 11: Retest into OB [2000.0, 2002.0]
+            (2001.8, 2004.0, 2001.6, 2003.8),  # idx 12: Confirmed GREEN candle (>50% body)
         ]
         candles = [make_candle(base_time + timedelta(minutes=5 * i), o, h, l, c) for i, (o, h, l, c) in enumerate(prices)]
         df_5m = pd.DataFrame(candles)
@@ -148,10 +148,10 @@ class TestScalpStrategy(unittest.TestCase):
             (2000.5, 2004.0, 2000.2, 2003.8),  # idx 8
             (2003.8, 2006.5, 2003.5, 2006.0),  # idx 9: BOS! (Close=2006.0 > 2005.0)
             (2006.0, 2007.0, 2005.0, 2006.5),  # idx 10: extension
-            # idx 11: Retrace back towards OB
-            (2006.5, 2006.5, 2003.0, 2003.5),  # idx 11
-            # idx 12: Retest into the OB zone [2000.0, 2002.0]
-            (2003.5, 2004.0, 2001.5, 2001.8),  # idx 12: Low=2001.5 touches OB! Close=2001.8
+            # idx 11: Retrace back touching OB [2000.0, 2002.0]
+            (2006.5, 2006.5, 2001.5, 2001.8),  # idx 11: Low=2001.5 touches OB
+            # idx 12: Directional GREEN confirmation candle with >= 50% body
+            (2001.8, 2004.0, 2001.6, 2003.8),  # idx 12: Open=2001.8, High=2004.0, Low=2001.6, Close=2003.8 (83.3% body)
         ]
 
         for i, (o, h, l, c) in enumerate(prices):
@@ -179,7 +179,7 @@ class TestScalpStrategy(unittest.TestCase):
         self.assertIsNotNone(signal, "Expected a valid bullish 5M OB scalp signal")
         self.assertEqual(signal['direction'], Direction.BUY)
         self.assertEqual(signal['conf'], LTFConfirmation.OB_SCALP_5M)
-        self.assertAlmostEqual(signal['entry'], 2001.8, places=2)
+        self.assertAlmostEqual(signal['entry'], 2003.8, places=2)
 
         # Stop loss should be just below the OB candle low (2000.0)
         self.assertLess(signal['sl'], 2000.0)
@@ -207,10 +207,10 @@ class TestScalpStrategy(unittest.TestCase):
             (2014.8, 2014.9, 2011.0, 2011.2),  # idx 8
             (2011.2, 2011.5, 2008.0, 2008.5),  # idx 9: BOS! (Close=2008.5 < 2010.0)
             (2008.5, 2009.0, 2007.5, 2008.0),  # idx 10
-            # idx 11: Retrace back towards OB
-            (2008.0, 2012.0, 2007.8, 2011.5),  # idx 11
-            # idx 12: Retest into the OB zone [2013.0, 2015.0]
-            (2011.5, 2013.5, 2011.0, 2013.2),  # idx 12: High=2013.5 touches OB! Close=2013.2
+            # idx 11: Retrace back touching OB [2013.0, 2015.0]
+            (2008.0, 2014.0, 2007.8, 2013.5),  # idx 11: High=2014.0 touches OB
+            # idx 12: Directional RED confirmation candle with >= 50% body
+            (2013.5, 2013.8, 2011.0, 2011.2),  # idx 12: Open=2013.5, High=2013.8, Low=2011.0, Close=2011.2 (82.1% body)
         ]
 
         for i, (o, h, l, c) in enumerate(prices):
@@ -238,7 +238,7 @@ class TestScalpStrategy(unittest.TestCase):
         self.assertIsNotNone(signal, "Expected a valid bearish 5M OB scalp signal")
         self.assertEqual(signal['direction'], Direction.SELL)
         self.assertEqual(signal['conf'], LTFConfirmation.OB_SCALP_5M)
-        self.assertAlmostEqual(signal['entry'], 2013.2, places=2)
+        self.assertAlmostEqual(signal['entry'], 2011.2, places=2)
 
         # Stop loss should be just above the OB candle high (2015.0)
         self.assertGreater(signal['sl'], 2015.0)

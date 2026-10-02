@@ -208,6 +208,12 @@ class TestTemporalAnalyzer(unittest.TestCase):
         state_data = resp_state.json()
         self.assertIn("temporal_ml_model", state_data)
 
+    def test_temporal_ml_shadow_mode_configuration(self):
+        """Verify that TradingConfig defaults temporal_ml_shadow_mode to True (no live lot manipulation)."""
+        from config import TradingConfig
+        cfg = TradingConfig()
+        self.assertTrue(cfg.temporal_ml_shadow_mode, "temporal_ml_shadow_mode should default to True for funded accounts")
+
 
 if __name__ == "__main__":
     unittest.main()

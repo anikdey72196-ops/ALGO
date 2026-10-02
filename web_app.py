@@ -69,7 +69,10 @@ class BotConfigUpdate(BaseModel):
     night_timezone_mode: Optional[str] = None
     ml_gating_enabled: Optional[bool] = None
     ml_max_sl_probability: Optional[float] = None
+    ml_shadow_mode: Optional[bool] = None
     temporal_ml_enabled: Optional[bool] = None
+    reversal_strategy_enabled: Optional[bool] = None
+    directional_loss_cooldown_enabled: Optional[bool] = None
 
 
 class BotStateResponse(BaseModel):
@@ -90,11 +93,14 @@ class BotStateResponse(BaseModel):
     night_start_hour: int = 23
     night_end_hour: int = 8
     night_timezone_mode: str = "Asia/Kolkata"
+    directional_loss_cooldown_enabled: bool = False
     ai_confirmation_enabled: bool
     ai_confidence_threshold: float
     ml_gating_enabled: bool = True
     ml_max_sl_probability: float = 0.50
+    ml_shadow_mode: bool = True
     temporal_ml_enabled: bool = True
+    reversal_strategy_enabled: bool = False
     equity: float
     daily_pnl: float
     trades_today: int
@@ -419,11 +425,14 @@ async def get_bot_state():
         night_start_hour=getattr(bot_instance.config.risk, 'night_start_hour', 23),
         night_end_hour=getattr(bot_instance.config.risk, 'night_end_hour', 8),
         night_timezone_mode=getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'),
+        directional_loss_cooldown_enabled=getattr(bot_instance.config.risk, 'directional_loss_cooldown_enabled', False),
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
         ml_max_sl_probability=getattr(bot_instance.config, "ml_max_sl_probability", 0.50),
+        ml_shadow_mode=getattr(bot_instance.config, "ml_shadow_mode", False),
         temporal_ml_enabled=getattr(bot_instance.config, "temporal_ml_enabled", True),
+        reversal_strategy_enabled=getattr(bot_instance.config, "reversal_strategy_enabled", False),
         equity=round(equity, 2),
         daily_pnl=round(daily_pnl, 2),
         trades_today=trade_count,
@@ -774,6 +783,9 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.risk.night_timezone_mode = payload.night_timezone_mode
 
+    if payload.directional_loss_cooldown_enabled is not None:
+        bot_instance.config.risk.directional_loss_cooldown_enabled = payload.directional_loss_cooldown_enabled
+
     if payload.ai_confirmation_enabled is not None:
         if bot_instance.is_active and payload.ai_confirmation_enabled != bot_instance.config.ai_confirmation_enabled:
             raise HTTPException(
@@ -801,6 +813,11 @@ async def update_configuration(payload: BotConfigUpdate):
             bot_instance.trap_svc.cfg.max_sl_probability = payload.ml_max_sl_probability
             bot_instance.trap_svc.cfg.p_genuine_threshold = 1.0 - payload.ml_max_sl_probability
 
+    if payload.ml_shadow_mode is not None:
+        bot_instance.config.ml_shadow_mode = payload.ml_shadow_mode
+        if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+            bot_instance.trap_svc.cfg.shadow_mode = payload.ml_shadow_mode
+
     if payload.temporal_ml_enabled is not None:
         if bot_instance.is_active and payload.temporal_ml_enabled != getattr(bot_instance.config, 'temporal_ml_enabled', True):
             raise HTTPException(
@@ -810,6 +827,9 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.temporal_ml_enabled = payload.temporal_ml_enabled
         if hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
             bot_instance.temporal_svc.cfg.active_gating = payload.temporal_ml_enabled
+
+    if payload.reversal_strategy_enabled is not None:
+        bot_instance.config.reversal_strategy_enabled = payload.reversal_strategy_enabled
 
     # Persist updated configuration to bot_settings.json
     bot_instance.save_settings()

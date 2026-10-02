@@ -226,8 +226,8 @@ def test_position_manager_integration():
             )
             trade_id = state.record_trade(trade)
 
-            # Current price = 1.1060 (+1.2R)
-            mock_broker = MockBroker(current_price=1.1060)
+            # Current price = 1.1080 (+1.6R, >50% of 150-pip target distance)
+            mock_broker = MockBroker(current_price=1.1080)
             df_hist = _generate_synthetic_ohlcv(60)
 
             # Create SmartPartialTPService with temp model
@@ -270,3 +270,98 @@ def test_position_manager_integration():
             if pm is not None:
                 pm.shutdown()
             state.close()
+
+
+def test_target_50_pct_partial_profit_and_cost_to_cost_sl():
+    """
+    Test user requirement:
+    - On small 1-2 candle movement, do NOT book premature profit.
+    - When price reaches 50% of target distance, book exactly 50% profit (close half the lot).
+    - Move Stop Loss to Cost-to-Cost (entry price / breakeven).
+    - Hold remaining 50% lot until full Take Profit (no additional cuts).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test_50pct_target.db"
+        state = StateManager(db_path=str(db_path))
+        pm = None
+        try:
+            # GBPUSD trade: 0.12 lot, Entry 1.3000, SL 1.2980 (20 pips risk), TP 1.3040 (40 pips target)
+            trade = TradeRecord(
+                id=999,
+                timestamp=datetime.now(timezone.utc),
+                symbol="GBPUSD",
+                direction=Direction.BUY,
+                entry_price=1.3000,
+                stop_loss=1.2980,
+                take_profit=1.3040,
+                lot_size=0.12,
+                realized_pnl=0.0,
+                status="OPEN",
+                strategy_name="SMC",
+            )
+            state.record_trade(trade)
+
+            # Broker with mutable price and SL tracking
+            class TrackingBroker:
+                def __init__(self, price: float):
+                    self.price = price
+                    self.closed_volume = 0.0
+                    self.sl_record = None
+
+                def get_current_price(self, symbol: str):
+                    return MockQuote(bid=self.price, ask=self.price + 0.0001)
+
+            broker = TrackingBroker(price=1.3003)  # Small 1-2 candle move (only 3 pips, ~8% of target)
+            config = TradingConfig()
+
+            pm = PositionManager(
+                broker=broker,
+                state=state,
+                poll_interval_sec=100.0,
+                config=config,
+            )
+            # Track SL modifications
+            sl_modified_values = []
+            pm._modify_mt5_sl_tp = lambda ticket, sym, sl, tp: sl_modified_values.append(sl) or True
+            # Track lot closures
+            closed_lots = []
+            pm._close_mt5_position = lambda ticket, sym, lot, dir: closed_lots.append(lot) or True
+
+            # ── Step 1: Small move (+3 pips) -> MUST NOT BOOK PROFIT ──
+            pm.process_positions()
+            assert len(closed_lots) == 0, "Premature profit booking must NOT occur on small 1-2 candle moves"
+            assert pm._remaining_lots.get(999, 0.12) == 0.12
+            assert 999 not in pm._partial_tp_applied
+
+            # ── Step 2: Price reaches 50% of target distance (+20 pips -> 1.3020) ──
+            broker.price = 1.3020
+            pm.process_positions()
+
+            # Verify 50% of 0.12 lots (0.06 lots) was booked
+            assert len(closed_lots) == 1, "50% profit booking MUST trigger at 50% target"
+            assert closed_lots[0] == 0.06, f"Expected 0.06 lots closed (50% of 0.12), got {closed_lots[0]}"
+            assert pm._remaining_lots[999] == 0.06, f"Expected 0.06 lots remaining, got {pm._remaining_lots[999]}"
+            assert 999 in pm._partial_tp_applied
+
+            # Verify Stop Loss was moved to Cost-to-Cost (entry price: 1.3000)
+            assert len(sl_modified_values) >= 1
+            assert abs(sl_modified_values[-1] - 1.3000) < 1e-4, f"SL must be moved to entry price 1.3000, got {sl_modified_values[-1]}"
+
+            # ── Step 3: Price moves further (+30 pips -> 1.3030) -> NO MORE PARTIAL CUTS ──
+            broker.price = 1.3030
+            pm.process_positions()
+            assert len(closed_lots) == 1, "Remaining position must be held for full TP without further partial cuts"
+            assert pm._remaining_lots[999] == 0.06
+
+            # Verify recorded event in state database
+            events = state.get_recent_partial_tp_events(limit=10)
+            assert len(events) >= 1
+            assert events[0]["trade_id"] == 999
+            assert events[0]["closed_lot"] == 0.06
+            assert events[0]["remaining_lot"] == 0.06
+
+        finally:
+            if pm is not None:
+                pm.shutdown()
+            state.close()
+

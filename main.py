@@ -110,7 +110,7 @@ class TradingBot:
     """Main trading bot orchestrator."""
 
     def __init__(self, config: TradingConfig | None = None, load_saved_settings: bool = True):
-        self.config = config or DEFAULT_CONFIG
+        self.config = config.model_copy(deep=True) if config is not None else DEFAULT_CONFIG.model_copy(deep=True)
         self._last_utc_day: int | None = None
         self.is_active: bool = False
         self.recent_logs: list[str] = []
@@ -137,6 +137,7 @@ class TradingBot:
             p_genuine_threshold=1.0 - getattr(self.config, 'ml_max_sl_probability', 0.50),
             max_sl_probability=getattr(self.config, 'ml_max_sl_probability', 0.50),
             shadow_until_samples=getattr(self.config, 'ml_shadow_until_samples', 0),
+            shadow_mode=getattr(self.config, 'ml_shadow_mode', False),
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
 
@@ -258,7 +259,15 @@ class TradingBot:
                 if "temporal_ml_enabled" in saved:
                     self.config.temporal_ml_enabled = bool(saved["temporal_ml_enabled"])
                     if hasattr(self, "temporal_svc") and self.temporal_svc:
-                        self.temporal_svc.cfg.active_gating = self.config.temporal_ml_enabled
+                        target_cfg = getattr(self.temporal_svc, "config", getattr(self.temporal_svc, "cfg", None))
+                        if target_cfg:
+                            target_cfg.active_gating = self.config.temporal_ml_enabled
+                if "reversal_strategy_enabled" in saved:
+                    self.config.reversal_strategy_enabled = bool(saved["reversal_strategy_enabled"])
+                if "ml_shadow_mode" in saved:
+                    self.config.ml_shadow_mode = bool(saved["ml_shadow_mode"])
+                    if hasattr(self, "trap_svc") and self.trap_svc:
+                        self.trap_svc.cfg.shadow_mode = self.config.ml_shadow_mode
 
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
@@ -267,7 +276,7 @@ class TradingBot:
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
                     f"Pair3={self.config.pair3.symbol} (lot={self.config.pair3.fixed_lot_size}, sl={self.config.pair3.fixed_sl_pips}) | "
-                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f}) | "
+                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f}, shadow={'ON' if getattr(self.config, 'ml_shadow_mode', False) else 'OFF'}) | "
                     f"TemporalML={'ON' if getattr(self.config, 'temporal_ml_enabled', True) else 'OFF'}"
                 )
             except Exception as e:
@@ -310,7 +319,9 @@ class TradingBot:
                 "ai_confirmation_enabled": self.config.ai_confirmation_enabled,
                 "ml_gating_enabled": getattr(self.config, "ml_gating_enabled", True),
                 "ml_max_sl_probability": getattr(self.config, "ml_max_sl_probability", 0.50),
+                "ml_shadow_mode": getattr(self.config, "ml_shadow_mode", True),
                 "temporal_ml_enabled": getattr(self.config, "temporal_ml_enabled", True),
+                "reversal_strategy_enabled": getattr(self.config, "reversal_strategy_enabled", False),
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
@@ -755,6 +766,11 @@ class TradingBot:
             current_mid_price = (quote.bid + quote.ask) / 2.0 if quote else None
 
             # ── Institutional Multi-TF Trend Reversal Analysis (SD, Fib 0.5-0.6, FVG in 4H/1H/Daily) ──
+            is_reversal_enabled = (
+                getattr(self.config, "reversal_strategy_enabled", False)
+                or "TREND_REVERSAL" in self.config.enabled_strategies
+            )
+
             df_4h = self._get_ohlcv(symbol, "4H")
             df_1d = self._get_ohlcv(symbol, "1D")
             multitf_dict = {"1H": closed_htf_data}
@@ -763,65 +779,69 @@ class TradingBot:
             if df_1d is not None and len(df_1d) >= 15:
                 multitf_dict["1D"] = df_1d
 
-            reversal_analysis = self.reversal_detector.analyze_multitf(
-                dfs=multitf_dict,
-                trend=htf_analysis.bias,
-                symbol=symbol,
-                htf_analysis=htf_analysis,
-                current_price=current_mid_price,
-            )
-            self.trend_reversal_status[symbol] = reversal_analysis
-
-            if is_new_1h_candle:
-                self.log(
-                    f"  🕐 [1H CANDLE CLOSE] {symbol}: 1-Hour candle closed @ {latest_closed_1h_time}. "
-                    f"Analyzed Reversal Zones (SD / Fib 0.5-0.6 / FVG): Trend={reversal_analysis.trend.value} | "
-                    f"Reversal={reversal_analysis.choch_type.value} | Reversal Risk={reversal_analysis.reversal_risk} ({reversal_analysis.reversal_probability:.0f}%)",
-                    level="INFO"
+            reversal_analysis = None
+            if is_reversal_enabled:
+                reversal_analysis = self.reversal_detector.analyze_multitf(
+                    dfs=multitf_dict,
+                    trend=htf_analysis.bias,
+                    symbol=symbol,
+                    htf_analysis=htf_analysis,
+                    current_price=current_mid_price,
                 )
-                self._last_analyzed_1h_bar[symbol] = latest_closed_1h_time
+                self.trend_reversal_status[symbol] = reversal_analysis
 
-            # ── Always Log Chart Trend Reversal Analysis ──
-            if reversal_analysis.is_trending:
-                if reversal_analysis.choch_detected:
-                    confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Reversal Zone Active"
+                if is_new_1h_candle:
                     self.log(
-                        f"  🚨 [{reversal_analysis.timeframe} REVERSAL ZONE ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} REVERSAL DETECTED! "
-                        f"Zone Type: {reversal_analysis.reversal_zone_type} | Stage: {reversal_analysis.stage.value} | "
-                        f"Reversal Prob: {reversal_analysis.reversal_probability:.0f}% ({reversal_analysis.reversal_risk}) | "
-                        f"Confluence: [{confluence_str}]",
-                        level="WARNING"
-                    )
-                elif reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP:
-                    self.log(
-                        f"  ⚠️ [{reversal_analysis.timeframe} REVERSAL EARLY WARNING] {symbol} ({reversal_analysis.trend.value}): Liquidity sweep / extension at extreme ({reversal_analysis.trend_extreme_level:.5f})! "
-                        f"Monitoring for Reversal Zone (SD / Fib 0.5-0.6 / FVG).",
+                        f"  🕐 [1H CANDLE CLOSE] {symbol}: 1-Hour candle closed @ {latest_closed_1h_time}. "
+                        f"Analyzed Reversal Zones (SD / Fib 0.5-0.6 / FVG): Trend={reversal_analysis.trend.value} | "
+                        f"Reversal={reversal_analysis.choch_type.value} | Reversal Risk={reversal_analysis.reversal_risk} ({reversal_analysis.reversal_probability:.0f}%)",
                         level="INFO"
                     )
-                else:
-                    self.log(
-                        f"  📈 [{reversal_analysis.timeframe} TREND HEALTHY] {symbol} ({reversal_analysis.trend.value}): Trend structure intact. "
-                        f"No active reversal zone triggered. Reversal Risk: LOW ({reversal_analysis.reversal_probability:.0f}%).",
-                        level="DEBUG"
-                    )
-            else:
-                self.log(
-                    f"  ⚖️ [1H MARKET NEUTRAL] {symbol}: No dominant trend structure active. Ranging conditions.",
-                    level="DEBUG"
-                )
+                    self._last_analyzed_1h_bar[symbol] = latest_closed_1h_time
 
-            # ── Active Trade Protection Against Reversals ──
-            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
-                opposing_dir = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
-                for open_t in open_symbol_trades:
-                    if open_t.direction == opposing_dir:
+                # ── Always Log Chart Trend Reversal Analysis ──
+                if reversal_analysis.is_trending:
+                    if reversal_analysis.choch_detected:
+                        confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Reversal Zone Active"
                         self.log(
-                            f"  🛡️ [REVERSAL SHIELD] Active {open_t.direction.value} trade #{open_t.id} on {symbol} is vulnerable to {reversal_analysis.choch_type.value} Reversal! "
-                            f"Securing position with Stop Loss protection.",
+                            f"  🚨 [{reversal_analysis.timeframe} REVERSAL ZONE ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} REVERSAL DETECTED! "
+                            f"Zone Type: {reversal_analysis.reversal_zone_type} | Stage: {reversal_analysis.stage.value} | "
+                            f"Reversal Prob: {reversal_analysis.reversal_probability:.0f}% ({reversal_analysis.reversal_risk}) | "
+                            f"Confluence: [{confluence_str}]",
                             level="WARNING"
                         )
-                        if self.position_manager and open_t.id:
-                            self.position_manager.protect_against_reversal(open_t, reversal_analysis)
+                    elif reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP:
+                        self.log(
+                            f"  ⚠️ [{reversal_analysis.timeframe} REVERSAL EARLY WARNING] {symbol} ({reversal_analysis.trend.value}): Liquidity sweep / extension at extreme ({reversal_analysis.trend_extreme_level:.5f})! "
+                            f"Monitoring for Reversal Zone (SD / Fib 0.5-0.6 / FVG).",
+                            level="INFO"
+                        )
+                    else:
+                        self.log(
+                            f"  📈 [{reversal_analysis.timeframe} TREND HEALTHY] {symbol} ({reversal_analysis.trend.value}): Trend structure intact. "
+                            f"No active reversal zone triggered. Reversal Risk: LOW ({reversal_analysis.reversal_probability:.0f}%).",
+                            level="DEBUG"
+                        )
+                else:
+                    self.log(
+                        f"  ⚖️ [1H MARKET NEUTRAL] {symbol}: No dominant trend structure active. Ranging conditions.",
+                        level="DEBUG"
+                    )
+
+                # ── Active Trade Protection Against Reversals ──
+                if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
+                    opposing_dir = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+                    for open_t in open_symbol_trades:
+                        if open_t.direction == opposing_dir:
+                            self.log(
+                                f"  🛡️ [REVERSAL SHIELD] Active {open_t.direction.value} trade #{open_t.id} on {symbol} is vulnerable to {reversal_analysis.choch_type.value} Reversal! "
+                                f"Securing position with Stop Loss protection.",
+                                level="WARNING"
+                            )
+                            if self.position_manager and open_t.id:
+                                self.position_manager.protect_against_reversal(open_t, reversal_analysis)
+            else:
+                self.trend_reversal_status.pop(symbol, None)
 
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
@@ -836,26 +856,27 @@ class TradingBot:
             )
 
             # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability Reversal Zone or Early Sweep ──
-            should_block_reversal = False
-            blocked_direction = None
+            if is_reversal_enabled and reversal_analysis is not None:
+                should_block_reversal = False
+                blocked_direction = None
 
-            if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
-                should_block_reversal = True
-                blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
-            elif (reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP or reversal_analysis.reversal_risk in ("HIGH", "CRITICAL")) and reversal_analysis.reversal_probability >= 45.0:
-                should_block_reversal = True
-                blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
+                if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
+                    should_block_reversal = True
+                    blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+                elif (reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP or reversal_analysis.reversal_risk in ("HIGH", "CRITICAL")) and reversal_analysis.reversal_probability >= 45.0:
+                    should_block_reversal = True
+                    blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
 
-            if should_block_reversal and blocked_direction is not None:
-                prior_len = len(signals)
-                signals = [s for s in signals if s.direction != blocked_direction]
-                if len(signals) < prior_len:
-                    reason_desc = f"{reversal_analysis.choch_type.value} Reversal ({reversal_analysis.reversal_zone_type})" if reversal_analysis.choch_detected else f"Pre-Reversal Extreme Sweep ({reversal_analysis.reversal_risk} Risk)"
-                    self.log(
-                        f"  🚫 [REVERSAL GUARD] Blocked {prior_len - len(signals)} {blocked_direction.value} signal(s) on {symbol}: "
-                        f"Trend reversal warning: {reason_desc} (Prob: {reversal_analysis.reversal_probability:.0f}%).",
-                        level="INFO"
-                    )
+                if should_block_reversal and blocked_direction is not None:
+                    prior_len = len(signals)
+                    signals = [s for s in signals if s.direction != blocked_direction]
+                    if len(signals) < prior_len:
+                        reason_desc = f"{reversal_analysis.choch_type.value} Reversal ({reversal_analysis.reversal_zone_type})" if reversal_analysis.choch_detected else f"Pre-Reversal Extreme Sweep ({reversal_analysis.reversal_risk} Risk)"
+                        self.log(
+                            f"  🚫 [REVERSAL GUARD] Blocked {prior_len - len(signals)} {blocked_direction.value} signal(s) on {symbol}: "
+                            f"Trend reversal warning: {reason_desc} (Prob: {reversal_analysis.reversal_probability:.0f}%).",
+                            level="INFO"
+                        )
 
             if not signals:
                 logger.info(f"  No signals generated for Pair {pair_num} ({symbol}).")
@@ -910,13 +931,14 @@ class TradingBot:
                     )
                     continue
 
+                conf_str = f" | {best_signal.candle_confirmation}" if getattr(best_signal, "candle_confirmation", "") else ""
                 self.log(
                     f"  ✅ [{best_signal.strategy_name}] SIGNAL DETECTED: {best_signal.direction.value} {symbol} "
                     f"| Entry={best_signal.entry_price:.5f} "
                     f"| SL={best_signal.stop_loss:.5f} "
                     f"| TP={best_signal.take_profit:.5f} "
                     f"| R:R={best_signal.rr_ratio:.2f} "
-                    f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value})"
+                    f"| Score={best_signal.quality_score:.1f} ({best_signal.ltf_confirmation.value}){conf_str}"
                 )
 
                 # Initialize EQM lifecycle tracking for this candidate order
@@ -944,6 +966,25 @@ class TradingBot:
                             trap_dir = "long" if best_signal.direction == Direction.BUY else "short"
                             ml_df = self._prepare_df_for_trap_detector(ltf_data)
                             strat_key = normalize_strategy_key(best_signal.strategy_name)
+
+                            # Institutional confluence features (Fib 0.5-0.6, Discount <0.5, SD -4.0 to -4.5, HTF FVG/OB)
+                            extra_confluence: dict[str, float] = {}
+                            rev_analysis = self.trend_reversal_status.get(symbol)
+                            if rev_analysis and rev_analysis.confluence:
+                                c = rev_analysis.confluence
+                                if c.is_below_fib_50:
+                                    extra_confluence["is_below_fib_50"] = 1.0
+                                    extra_confluence["priority_discount"] = 1.0
+                                if c.in_fib_50_60_zone:
+                                    extra_confluence["in_fib_50_60"] = 1.0
+                                if c.standard_deviation_hit and c.sd_multiple and abs(c.sd_multiple) >= 4.0:
+                                    extra_confluence["sd_exhaustion_4x"] = 1.0
+                                    extra_confluence["priority_discount"] = 1.0
+                                if c.liquidity_sweep:
+                                    extra_confluence["trendline_liq"] = 1.0
+                                if c.fvg_present:
+                                    extra_confluence["order_block_test"] = 1.0
+
                             trap_ev = self.trap_svc.observe_event(
                                 symbol=symbol,
                                 timeframe=ltf_tf,
@@ -955,6 +996,7 @@ class TradingBot:
                                 df=ml_df,
                                 bar_index=len(ml_df) - 1,
                                 strategy=strat_key,
+                                extra_features=extra_confluence,
                             )
                             p_tp = trap_ev.p_genuine if trap_ev.p_genuine is not None else 0.50
                             p_tp_val = p_tp
@@ -963,7 +1005,18 @@ class TradingBot:
                             eqm_order.ml_p_tp = p_tp
                             eqm_order.ml_p_sl = p_sl
 
-                            if not trap_ev.allowed:
+                            is_shadow = getattr(self.config, 'ml_shadow_mode', False) or getattr(self.trap_svc.cfg, 'shadow_mode', False)
+                            priority_tag = " [HIGH PRIORITY DISCOUNT <0.5 FIB / SD -4.5]" if trap_ev.features.get("priority_discount", 0.0) == 1.0 else ""
+
+                            if is_shadow:
+                                would_veto_str = " (WOULD VETO)" if (p_sl > max_sl_thr or not trap_ev.allowed) else " (WOULD ALLOW)"
+                                self.log(
+                                    f"  🪤 [ML SHADOW MODE]{priority_tag} Trap Analysis: P(SL)={p_sl*100:.1f}%, P(TP)={p_tp*100:.1f}%{would_veto_str} "
+                                    f"| Strategy '{best_signal.strategy_name}' [{strat_key}] on {symbol} "
+                                    f"| Executing trade for live market observation & continuous reinforcement learning.",
+                                    level="INFO",
+                                )
+                            elif not trap_ev.allowed:
                                 self.log(
                                     f"  🪤 [ML DECISION OVERRIDE] Trade SKIPPED: High chance of Stop Loss "
                                     f"(P(SL)={p_sl*100:.1f}% > {max_sl_thr*100:.1f}%, P(TP)={p_tp*100:.1f}%) "
@@ -972,11 +1025,12 @@ class TradingBot:
                                 )
                                 self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4001, rejection_reason=f"ML Veto P(SL)={p_sl:.2f}")
                                 continue
-                            self.log(
-                                f"  🔬 [ML MODEL APPROVED] Setup verified genuine [{strat_key}] (P(TP)={p_tp*100:.1f}%, "
-                                f"P(SL)={p_sl*100:.1f}% <= {max_sl_thr*100:.1f}%) | "
-                                f"Model={trap_ev.model_version} | Proceeding to AI & Risk validation"
-                            )
+                            else:
+                                self.log(
+                                    f"  🔬 [ML MODEL APPROVED] Setup verified genuine [{strat_key}] (P(TP)={p_tp*100:.1f}%, "
+                                    f"P(SL)={p_sl*100:.1f}% <= {max_sl_thr*100:.1f}%) | "
+                                    f"Model={trap_ev.model_version} | Proceeding to AI & Risk validation"
+                                )
                         except Exception as e:
                             self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
 
@@ -991,29 +1045,40 @@ class TradingBot:
                             strategy=strat_key,
                             planned_rr=best_signal.rr_ratio,
                         )
-                        temporal_risk_mult = temp_verdict.risk_multiplier
-
-                        if not temp_verdict.allowed and getattr(self.config, 'temporal_veto_toxic', False):
+                        is_temp_shadow = getattr(self.config, 'temporal_ml_shadow_mode', True)
+                        if is_temp_shadow:
+                            temporal_risk_mult = 1.0
+                            would_veto_str = " (WOULD VETO)" if not temp_verdict.allowed else (f" (WOULD SCALE {temp_verdict.risk_multiplier:.2f}x)" if temp_verdict.risk_multiplier != 1.0 else "")
                             self.log(
-                                f"  ⏰ [TEMPORAL ML VETO] Trade SKIPPED: High-hazard losing window "
-                                f"({temp_verdict.day_name} {temp_verdict.session} P(SL)={temp_verdict.p_loss*100:.1f}%) | "
-                                f"Expected Return: {temp_verdict.expected_r:+.2f}R | {temp_verdict.reason}",
-                                level="WARNING",
-                            )
-                            self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4004, rejection_reason=f"Temporal Veto {temp_verdict.edge_tier.value}")
-                            continue
-                        elif not temp_verdict.allowed:
-                            temporal_risk_mult = max(0.25, temporal_risk_mult)
-                            self.log(
-                                f"  ⚠️ [TEMPORAL HAZARD WARNING] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
-                                f"(P(SL)={temp_verdict.p_loss*100:.1f}%). Sizing scaled down to {temporal_risk_mult:.2f}x."
+                                f"  ⏰ [TEMPORAL SHADOW MODE]{would_veto_str} {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                f"(P(Win)={temp_verdict.p_win*100:.1f}%, P(SL)={temp_verdict.p_loss*100:.1f}%, ExpRet={temp_verdict.expected_r:+.2f}R) | "
+                                f"Executing at full 1.00x sizing.",
+                                level="INFO",
                             )
                         else:
-                            self.log(
-                                f"  ⏰ [TEMPORAL ML APPROVED] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
-                                f"(P(Win)={temp_verdict.p_win*100:.1f}%, Expected Return={temp_verdict.expected_r:+.2f}R) | "
-                                f"Risk Scale: {temporal_risk_mult:.2f}x"
-                            )
+                            temporal_risk_mult = temp_verdict.risk_multiplier
+
+                            if not temp_verdict.allowed and getattr(self.config, 'temporal_veto_toxic', False):
+                                self.log(
+                                    f"  ⏰ [TEMPORAL ML VETO] Trade SKIPPED: High-hazard losing window "
+                                    f"({temp_verdict.day_name} {temp_verdict.session} P(SL)={temp_verdict.p_loss*100:.1f}%) | "
+                                    f"Expected Return: {temp_verdict.expected_r:+.2f}R | {temp_verdict.reason}",
+                                    level="WARNING",
+                                )
+                                self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4004, rejection_reason=f"Temporal Veto {temp_verdict.edge_tier.value}")
+                                continue
+                            elif not temp_verdict.allowed:
+                                temporal_risk_mult = max(0.25, temporal_risk_mult)
+                                self.log(
+                                    f"  ⚠️ [TEMPORAL HAZARD WARNING] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                    f"(P(SL)={temp_verdict.p_loss*100:.1f}%). Sizing scaled down to {temporal_risk_mult:.2f}x."
+                                )
+                            else:
+                                self.log(
+                                    f"  ⏰ [TEMPORAL ML APPROVED] {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                    f"(P(Win)={temp_verdict.p_win*100:.1f}%, Expected Return={temp_verdict.expected_r:+.2f}R) | "
+                                    f"Risk Scale: {temporal_risk_mult:.2f}x"
+                                )
                     except Exception as e:
                         self.log(f"  ⚠️ Temporal ML Gate error (failing open): {e}", level="WARNING")
 
@@ -1244,20 +1309,27 @@ class TradingBot:
         "ICT_JUDAS_SWING",
         "OF_ABSORPTION",
         "OF_DELTA_DIVERGENCE",
+        "REVERSAL_ZONE_SD",
+        "REVERSAL_ZONE_FIB",
+        "REVERSAL_CONFLUENCE",
     }
 
     def _signal_to_trap_kind(self, sig: TradeSignal) -> EventKind:
         """Map any TradeSignal's LTF confirmation to a TrapDetector EventKind.
 
         Ensures 100% of strategy setups (SMC Swing, 5M Scalp, ICT Institutional,
-        and Order Flow) are evaluated by the ML model.
+        Order Flow, and Trend Reversal) are evaluated by the ML model.
         """
         conf_val = getattr(sig.ltf_confirmation, "value", str(sig.ltf_confirmation))
         is_buy = (sig.direction == Direction.BUY)
 
+        if conf_val in ("REVERSAL_ZONE_FVG", "FVG"):
+            return EventKind.FVG_BULL if is_buy else EventKind.FVG_BEAR
+
         if conf_val in self._SWEEP_CONFIRMATIONS:
-            # Sweeps: SSL taken (liquidity swept below) -> potential long;
-            # BSL taken (liquidity swept above) -> potential short
+            # Sweeps & SD/Fib Reversals:
+            # SSL / discount level below 0.5 Fib taken -> potential long;
+            # BSL / premium level above 0.5 Fib taken -> potential short
             return EventKind.SWEEP_SSL if is_buy else EventKind.SWEEP_BSL
 
         # Zone, FVG, Retest, Scalp, and Structural Setups:

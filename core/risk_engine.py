@@ -167,26 +167,27 @@ class RiskEngine:
         # ── Strict Rule 3: Directional Consecutive Loss Cooldown ──
         # If the last 2 closed trades for this symbol in this direction were losses within cooldown (1h),
         # prevent repeated shorting into an aggressive rally or repeated buying into a collapse.
-        recent_trades = [t for t in self.state.get_all_trades(limit=50) if t.symbol == signal.symbol and t.status in ("CLOSED", "CLOSED_SL", "CLOSED_TP")]
-        dir_trades = [t for t in recent_trades if t.direction == signal.direction]
-        if len(dir_trades) >= 2:
-            last_two = dir_trades[:2]
-            if all(t.realized_pnl < 0 or t.status == "CLOSED_SL" for t in last_two):
-                last_loss_time = last_two[0].closed_at or last_two[0].timestamp
-                if last_loss_time:
-                    if last_loss_time.tzinfo is None:
-                        last_loss_time = last_loss_time.replace(tzinfo=timezone.utc)
-                    elapsed_sec = (check_time - last_loss_time).total_seconds()
-                    cooldown_sec = 3600.0  # 60 minute cooldown
-                    if 0 <= elapsed_sec < cooldown_sec:
-                        rem_min = max(1, int((cooldown_sec - elapsed_sec) / 60))
-                        msg = f"Directional Loss Guard: 2 consecutive {signal.direction.value} losses on {signal.symbol}. Cooldown active for {rem_min}m to prevent trading against trend/pullback."
-                        logger.warning(f"Trade rejected: {msg}")
-                        return AuthorizationResult(
-                            authorized=False,
-                            rejection_reason=msg,
-                            account_equity=current_equity
-                        )
+        if getattr(self.config.risk, 'directional_loss_cooldown_enabled', False):
+            recent_trades = [t for t in self.state.get_all_trades(limit=50) if t.symbol == signal.symbol and t.status in ("CLOSED", "CLOSED_SL", "CLOSED_TP")]
+            dir_trades = [t for t in recent_trades if t.direction == signal.direction]
+            if len(dir_trades) >= 2:
+                last_two = dir_trades[:2]
+                if all(t.realized_pnl < 0 or t.status == "CLOSED_SL" for t in last_two):
+                    last_loss_time = last_two[0].closed_at or last_two[0].timestamp
+                    if last_loss_time:
+                        if last_loss_time.tzinfo is None:
+                            last_loss_time = last_loss_time.replace(tzinfo=timezone.utc)
+                        elapsed_sec = (check_time - last_loss_time).total_seconds()
+                        cooldown_sec = 3600.0  # 60 minute cooldown
+                        if 0 <= elapsed_sec < cooldown_sec:
+                            rem_min = max(1, int((cooldown_sec - elapsed_sec) / 60))
+                            msg = f"Directional Loss Guard: 2 consecutive {signal.direction.value} losses on {signal.symbol}. Cooldown active for {rem_min}m to prevent trading against trend/pullback."
+                            logger.warning(f"Trade rejected: {msg}")
+                            return AuthorizationResult(
+                                authorized=False,
+                                rejection_reason=msg,
+                                account_equity=current_equity
+                            )
             
         sl_distance = signal.sl_distance if signal.sl_distance > 0 else abs(signal.entry_price - signal.stop_loss)
         if sl_distance <= 0:
