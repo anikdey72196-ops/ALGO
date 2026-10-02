@@ -73,10 +73,11 @@ class StateManager:
         self.csv_path = csv_path
         self.sessions_csv_path = sessions_csv_path
         self._lock = threading.RLock()
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout = 5000")
+        self.conn.execute("PRAGMA synchronous = NORMAL")
+        self.conn.execute("PRAGMA busy_timeout = 30000")
         self._init_schema()
         self._ensure_daily_row(datetime.now(timezone.utc).date())
         self.cleanup_interrupted_sessions()

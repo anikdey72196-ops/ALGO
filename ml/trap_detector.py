@@ -562,95 +562,159 @@ class EventStore:
     """ACID SQLite store for ML events, sharing the ALGO state DB (WAL mode)."""
 
     def __init__(self, db_path: str):
+        self.db_path = db_path
         self._lock = threading.Lock()
         with self._lock:
-            self._conn = sqlite3.connect(db_path, check_same_thread=False)
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.executescript(_DDL)
+            self._init_db()
 
-            # Auto-migration: ensure 'strategy' column and index exist in pre-existing tables
-            cur = self._conn.execute("PRAGMA table_info(ml_events)")
-            cols = [row[1] for row in cur.fetchall()]
-            if "strategy" not in cols:
-                self._conn.execute("ALTER TABLE ml_events ADD COLUMN strategy TEXT NOT NULL DEFAULT 'SMC'")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS ix_ml_events_strategy ON ml_events(strategy)")
+    def _init_db(self) -> None:
+        self._conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=30000")
+        self._conn.execute("PRAGMA wal_autocheckpoint=1000")
+        self._conn.executescript(_DDL)
 
-            self._conn.commit()
+        # Auto-migration: ensure 'strategy' column and index exist in pre-existing tables
+        cur = self._conn.execute("PRAGMA table_info(ml_events)")
+        cols = [row[1] for row in cur.fetchall()]
+        if "strategy" not in cols:
+            self._conn.execute("ALTER TABLE ml_events ADD COLUMN strategy TEXT NOT NULL DEFAULT 'SMC'")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS ix_ml_events_strategy ON ml_events(strategy)")
+
+        self._conn.commit()
+
+    def _handle_db_error(self, e: Exception) -> bool:
+        """
+        Attempts self-healing if a malformed disk image or index corruption is detected.
+        Returns True if healed and caller can retry, False otherwise.
+        """
+        err_msg = str(e).lower()
+        if "malformed" in err_msg or "disk image" in err_msg:
+            logger.error(f"EventStore detected SQLite corruption: {e}. Attempting self-healing REINDEX...")
+            try:
+                self._conn.execute("REINDEX;")
+                self._conn.commit()
+                check = self._conn.execute("PRAGMA quick_check;").fetchall()
+                if check == [("ok",)]:
+                    logger.info("EventStore self-healing REINDEX succeeded. Database restored to healthy state.")
+                    return True
+            except Exception as reindex_err:
+                logger.error(f"Self-healing REINDEX failed: {reindex_err}")
+
+            logger.critical(
+                f"SQLite database '{self.db_path}' is malformed and requires repair! "
+                f"Please run: python scripts/repair_database.py --db {self.db_path}"
+            )
+        return False
 
     def upsert(self, ev: EventRecord) -> None:
         with self._lock:
-            strat = normalize_strategy_key(getattr(ev, "strategy", "SMC"))
-            self._conn.execute(
-                """
-                INSERT INTO ml_events (
-                    event_id, ts, symbol, timeframe, kind, direction, entry, stop, target,
-                    features, label, outcome, r_multiple, label_ts, p_genuine, model_version,
-                    allowed, strategy
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(event_id) DO UPDATE SET
-                    label=excluded.label,
-                    outcome=excluded.outcome,
-                    r_multiple=excluded.r_multiple,
-                    label_ts=excluded.label_ts,
-                    p_genuine=excluded.p_genuine,
-                    model_version=excluded.model_version,
-                    allowed=excluded.allowed,
-                    strategy=excluded.strategy
-                """,
-                (
-                    ev.event_id, ev.ts.isoformat(), ev.symbol, ev.timeframe,
-                    ev.kind.value, ev.direction, ev.entry, ev.stop, ev.target,
-                    json.dumps(ev.features), ev.label, ev.outcome, ev.r_multiple,
-                    ev.label_ts.isoformat() if ev.label_ts else None,
-                    ev.p_genuine, ev.model_version,
-                    int(ev.allowed) if ev.allowed is not None else None,
-                    strat,
-                ),
-            )
-            self._conn.commit()
+            try:
+                self._upsert_internal(ev)
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    self._upsert_internal(ev)
+                else:
+                    raise
+
+    def _upsert_internal(self, ev: EventRecord) -> None:
+        strat = normalize_strategy_key(getattr(ev, "strategy", "SMC"))
+        self._conn.execute(
+            """
+            INSERT INTO ml_events (
+                event_id, ts, symbol, timeframe, kind, direction, entry, stop, target,
+                features, label, outcome, r_multiple, label_ts, p_genuine, model_version,
+                allowed, strategy
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                label=excluded.label,
+                outcome=excluded.outcome,
+                r_multiple=excluded.r_multiple,
+                label_ts=excluded.label_ts,
+                p_genuine=excluded.p_genuine,
+                model_version=excluded.model_version,
+                allowed=excluded.allowed,
+                strategy=excluded.strategy
+            """,
+            (
+                ev.event_id, ev.ts.isoformat(), ev.symbol, ev.timeframe,
+                ev.kind.value, ev.direction, ev.entry, ev.stop, ev.target,
+                json.dumps(ev.features), ev.label, ev.outcome, ev.r_multiple,
+                ev.label_ts.isoformat() if ev.label_ts else None,
+                ev.p_genuine, ev.model_version,
+                int(ev.allowed) if ev.allowed is not None else None,
+                strat,
+            ),
+        )
+        self._conn.commit()
 
     def pending_labels(self, older_than: datetime, strategy: Optional[str] = None) -> list[EventRecord]:
         with self._lock:
-            if strategy:
-                strat = normalize_strategy_key(strategy)
-                cur = self._conn.execute(
-                    "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? AND strategy = ? ORDER BY ts ASC",
-                    (older_than.isoformat(), strat),
-                )
-            else:
-                cur = self._conn.execute(
-                    "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? ORDER BY ts ASC",
-                    (older_than.isoformat(),),
-                )
-            return [self._row(r) for r in cur.fetchall()]
+            try:
+                return self._pending_labels_internal(older_than, strategy)
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    return self._pending_labels_internal(older_than, strategy)
+                raise
+
+    def _pending_labels_internal(self, older_than: datetime, strategy: Optional[str] = None) -> list[EventRecord]:
+        if strategy:
+            strat = normalize_strategy_key(strategy)
+            cur = self._conn.execute(
+                "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? AND strategy = ? ORDER BY ts ASC",
+                (older_than.isoformat(), strat),
+            )
+        else:
+            cur = self._conn.execute(
+                "SELECT * FROM ml_events WHERE label IS NULL AND ts < ? ORDER BY ts ASC",
+                (older_than.isoformat(),),
+            )
+        return [self._row(r) for r in cur.fetchall()]
 
     def labeled(self, strategy: Optional[str] = None) -> list[EventRecord]:
         with self._lock:
-            if strategy:
-                strat = normalize_strategy_key(strategy)
-                cur = self._conn.execute(
-                    "SELECT * FROM ml_events WHERE label IS NOT NULL AND strategy = ? ORDER BY ts ASC",
-                    (strat,),
-                )
-            else:
-                cur = self._conn.execute(
-                    "SELECT * FROM ml_events WHERE label IS NOT NULL ORDER BY ts ASC"
-                )
-            return [self._row(r) for r in cur.fetchall()]
+            try:
+                return self._labeled_internal(strategy)
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    return self._labeled_internal(strategy)
+                raise
+
+    def _labeled_internal(self, strategy: Optional[str] = None) -> list[EventRecord]:
+        if strategy:
+            strat = normalize_strategy_key(strategy)
+            cur = self._conn.execute(
+                "SELECT * FROM ml_events WHERE label IS NOT NULL AND strategy = ? ORDER BY ts ASC",
+                (strat,),
+            )
+        else:
+            cur = self._conn.execute(
+                "SELECT * FROM ml_events WHERE label IS NOT NULL ORDER BY ts ASC"
+            )
+        return [self._row(r) for r in cur.fetchall()]
 
     def stats(self, strategy: Optional[str] = None) -> dict[str, int]:
         with self._lock:
-            if strategy:
-                strat = normalize_strategy_key(strategy)
-                cur = self._conn.execute(
-                    "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events WHERE strategy = ?",
-                    (strat,),
-                )
-            else:
-                cur = self._conn.execute(
-                    "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events"
-                )
-            total, labeled, traps, genuine = cur.fetchone()
+            try:
+                return self._stats_internal(strategy)
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    return self._stats_internal(strategy)
+                raise
+
+    def _stats_internal(self, strategy: Optional[str] = None) -> dict[str, int]:
+        if strategy:
+            strat = normalize_strategy_key(strategy)
+            cur = self._conn.execute(
+                "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events WHERE strategy = ?",
+                (strat,),
+            )
+        else:
+            cur = self._conn.execute(
+                "SELECT COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1) FROM ml_events"
+            )
+        total, labeled, traps, genuine = cur.fetchone()
         return {
             "total":   int(total or 0),
             "labeled": int(labeled or 0),
@@ -660,43 +724,59 @@ class EventStore:
 
     def stats_by_strategy(self) -> dict[str, dict[str, int]]:
         with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT strategy, COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1)
-                FROM ml_events
-                GROUP BY strategy
-                """
-            )
-            res: dict[str, dict[str, int]] = {}
-            for row in cur.fetchall():
-                strat = str(row[0] or "SMC")
-                res[strat] = {
-                    "total":   int(row[1] or 0),
-                    "labeled": int(row[2] or 0),
-                    "traps":   int(row[3] or 0),
-                    "genuine": int(row[4] or 0),
-                }
-            return res
+            try:
+                return self._stats_by_strategy_internal()
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    return self._stats_by_strategy_internal()
+                raise
+
+    def _stats_by_strategy_internal(self) -> dict[str, dict[str, int]]:
+        cur = self._conn.execute(
+            """
+            SELECT strategy, COUNT(*), SUM(label IS NOT NULL), SUM(label = 0), SUM(label = 1)
+            FROM ml_events
+            GROUP BY strategy
+            """
+        )
+        res: dict[str, dict[str, int]] = {}
+        for row in cur.fetchall():
+            strat = str(row[0] or "SMC")
+            res[strat] = {
+                "total":   int(row[1] or 0),
+                "labeled": int(row[2] or 0),
+                "traps":   int(row[3] or 0),
+                "genuine": int(row[4] or 0),
+            }
+        return res
 
     def stats_today(self, date_str: Optional[str] = None) -> dict[str, int]:
         """Return event stats for today (or specified date YYYY-MM-DD prefix)."""
+        with self._lock:
+            try:
+                return self._stats_today_internal(date_str)
+            except sqlite3.DatabaseError as e:
+                if self._handle_db_error(e):
+                    return self._stats_today_internal(date_str)
+                raise
+
+    def _stats_today_internal(self, date_str: Optional[str] = None) -> dict[str, int]:
         if not date_str:
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT COUNT(*),
-                       SUM(label IS NOT NULL),
-                       SUM(label = 0),
-                       SUM(label = 1),
-                       SUM(allowed = 0),
-                       COUNT(DISTINCT CASE WHEN (label = 0 OR allowed = 0) THEN event_id END)
-                FROM ml_events
-                WHERE ts LIKE ?
-                """,
-                (date_str + "%",),
-            )
-            total, labeled, traps, genuine, vetoed, total_traps = cur.fetchone()
+        cur = self._conn.execute(
+            """
+            SELECT COUNT(*),
+                   SUM(label IS NOT NULL),
+                   SUM(label = 0),
+                   SUM(label = 1),
+                   SUM(allowed = 0),
+                   COUNT(DISTINCT CASE WHEN (label = 0 OR allowed = 0) THEN event_id END)
+            FROM ml_events
+            WHERE ts LIKE ?
+            """,
+            (date_str + "%",),
+        )
+        total, labeled, traps, genuine, vetoed, total_traps = cur.fetchone()
         return {
             "total": int(total or 0),
             "labeled": int(labeled or 0),
