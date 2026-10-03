@@ -61,6 +61,7 @@ class BotConfigUpdate(BaseModel):
     fixed_lot_size: Optional[float] = None
     fixed_sl_pips: Optional[float] = None
     ai_confirmation_enabled: Optional[bool] = None
+    pair_configs: Optional[dict] = None
     max_open_positions: Optional[int] = None
     night_limit_enabled: Optional[bool] = None
     night_max_open_positions: Optional[int] = None
@@ -81,6 +82,7 @@ class BotStateResponse(BaseModel):
     pair1: dict
     pair2: dict
     pair3: dict
+    pairs_config: dict = {}
     enabled_strategies: List[str]
     strategy_type: str
     fixed_lot_size: Optional[float]
@@ -125,6 +127,8 @@ class BotStateResponse(BaseModel):
     execution_summary: dict = {}
     trend_reversal: dict = {}
     ml_logs: List[str] = []
+    current_window: dict = {}
+    temporal_ml_shadow_mode: bool = True
 
 
 
@@ -330,6 +334,51 @@ async def get_bot_state():
         "enabled": bot_instance.config.pair3.enabled,
     }
 
+    # Build multi-pair lot size and SL configuration dictionary
+    pairs_cfg_data = {}
+    default_meta = {
+        "XAUUSD": {"name": "Gold / USD", "lot": 0.05, "sl": 25.0},
+        "EURUSD": {"name": "Euro / USD", "lot": 0.10, "sl": 15.0},
+        "GBPUSD": {"name": "Pound / USD", "lot": 0.12, "sl": 20.0},
+        "BTCUSD": {"name": "Bitcoin / USD", "lot": 0.01, "sl": 150.0},
+        "ETHUSD": {"name": "Ethereum / USD", "lot": 0.05, "sl": 80.0},
+    }
+    for s_name, meta in default_meta.items():
+        lot_val = meta["lot"]
+        sl_val = meta["sl"]
+        en_val = s_name in bot_instance.config.selected_symbols
+
+        if hasattr(bot_instance.config, "pair_configs") and s_name in bot_instance.config.pair_configs:
+            cfg = bot_instance.config.pair_configs[s_name]
+            if cfg.fixed_lot_size is not None:
+                lot_val = cfg.fixed_lot_size
+            if cfg.fixed_sl_pips is not None:
+                sl_val = cfg.fixed_sl_pips
+            en_val = cfg.enabled and en_val
+        elif bot_instance.config.pair1.symbol == s_name:
+            if bot_instance.config.pair1.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair1.fixed_lot_size
+            if bot_instance.config.pair1.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair1.fixed_sl_pips
+        elif bot_instance.config.pair2.symbol == s_name:
+            if bot_instance.config.pair2.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair2.fixed_lot_size
+            if bot_instance.config.pair2.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair2.fixed_sl_pips
+        elif bot_instance.config.pair3.symbol == s_name:
+            if bot_instance.config.pair3.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair3.fixed_lot_size
+            if bot_instance.config.pair3.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair3.fixed_sl_pips
+
+        pairs_cfg_data[s_name.lower()] = {
+            "symbol": s_name,
+            "name": meta["name"],
+            "lot": lot_val,
+            "sl": sl_val,
+            "active": en_val,
+        }
+
     # ML Trap Detector status & statistics
     trap_stats = {}
     if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
@@ -413,6 +462,7 @@ async def get_bot_state():
         pair1=pair1_data,
         pair2=pair2_data,
         pair3=pair3_data,
+        pairs_config=pairs_cfg_data,
         enabled_strategies=bot_instance.config.enabled_strategies,
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
@@ -457,6 +507,8 @@ async def get_bot_state():
         execution_summary=exec_summary,
         trend_reversal=trend_reversal_data,
         ml_logs=list(reversed(getattr(bot_instance, "ml_logs", [])[-100:])),
+        current_window=getattr(bot_instance, "window_recorder", None).get_window_info() if hasattr(bot_instance, "window_recorder") and bot_instance.window_recorder else {},
+        temporal_ml_shadow_mode=getattr(bot_instance.config, "temporal_ml_shadow_mode", True),
     )
 
 
@@ -569,6 +621,168 @@ async def deactivate_bot():
     }
 
 
+@app.post("/api/update")
+async def handle_dashboard_update(payload: dict):
+    """
+    Unified dashboard update endpoint supporting state toggles,
+    strategy toggles, pair toggles, and configuration saves.
+    """
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    action = payload.get("action")
+    if action == "set_status":
+        status = payload.get("status")
+        if status in ("RUNNING", "ACTIVATED"):
+            if not bot_instance.is_active:
+                await activate_bot()
+            return {"status": "success", "botStatus": "RUNNING"}
+        elif status in ("HALTED", "IDLE", "DEACTIVATED"):
+            if bot_instance.is_active:
+                await deactivate_bot()
+            return {"status": "success", "botStatus": status}
+
+    elif action == "toggle_strategy":
+        strat_id = payload.get("strategy")
+        active = payload.get("active", True)
+        strat_map = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW"}
+        strat_name = strat_map.get(strat_id, str(strat_id).upper())
+        current = list(bot_instance.config.enabled_strategies)
+        if active and strat_name not in current:
+            current.append(strat_name)
+        elif not active and strat_name in current:
+            current.remove(strat_name)
+        bot_instance.config.enabled_strategies = current
+        bot_instance.save_settings()
+        return {"status": "success", "enabled_strategies": current}
+
+    elif action == "toggle_pair":
+        pair_id = payload.get("pair")
+        active = payload.get("active", True)
+        sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
+        sym = sym_map.get(pair_id, str(pair_id).upper())
+        current = list(bot_instance.config.selected_symbols)
+        if active and sym not in current:
+            current.append(sym)
+        elif not active and sym in current:
+            current.remove(sym)
+        bot_instance.config.selected_symbols = current
+        bot_instance.save_settings()
+        return {"status": "success", "selected_symbols": current}
+
+    elif action == "update_pair_settings":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Lot Size and Stop Loss modifications are LOCKED during activation! Deactivate the bot first."
+            )
+        pair_id = payload.get("pair")
+        lot_val = payload.get("lot")
+        sl_val = payload.get("sl")
+        sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
+        sym = sym_map.get(str(pair_id).lower(), str(pair_id).upper())
+
+        from core.config import PairSettings
+        if not hasattr(bot_instance.config, "pair_configs"):
+            bot_instance.config.pair_configs = {}
+        if sym not in bot_instance.config.pair_configs:
+            bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+
+        if lot_val is not None:
+            val_f = round(float(lot_val), 2)
+            bot_instance.config.pair_configs[sym].fixed_lot_size = val_f
+            if sym == bot_instance.config.pair1.symbol:
+                bot_instance.config.pair1.fixed_lot_size = val_f
+            elif sym == bot_instance.config.pair2.symbol:
+                bot_instance.config.pair2.fixed_lot_size = val_f
+            elif sym == bot_instance.config.pair3.symbol:
+                bot_instance.config.pair3.fixed_lot_size = val_f
+
+        if sl_val is not None:
+            sl_f = round(float(sl_val), 1)
+            bot_instance.config.pair_configs[sym].fixed_sl_pips = sl_f
+            if sym == bot_instance.config.pair1.symbol:
+                bot_instance.config.pair1.fixed_sl_pips = sl_f
+            elif sym == bot_instance.config.pair2.symbol:
+                bot_instance.config.pair2.fixed_sl_pips = sl_f
+            elif sym == bot_instance.config.pair3.symbol:
+                bot_instance.config.pair3.fixed_sl_pips = sl_f
+
+        bot_instance.save_settings()
+        return {
+            "status": "success",
+            "symbol": sym,
+            "lot": bot_instance.config.pair_configs[sym].fixed_lot_size,
+            "sl": bot_instance.config.pair_configs[sym].fixed_sl_pips,
+        }
+
+    elif action == "save_configuration":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Configuration changes are LOCKED during activation! Deactivate the bot first."
+            )
+        config = payload.get("config", {})
+        strats = config.get("strategies", {})
+        if strats:
+            enabled_strats = []
+            for k, v in strats.items():
+                if v:
+                    strat_name = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW"}.get(k, k.upper())
+                    enabled_strats.append(strat_name)
+            bot_instance.config.enabled_strategies = enabled_strats
+
+        pairs = config.get("pairs", {})
+        if pairs:
+            enabled_pairs = []
+            from core.config import PairSettings
+            if not hasattr(bot_instance.config, "pair_configs"):
+                bot_instance.config.pair_configs = {}
+
+            for k, v in pairs.items():
+                sym = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}.get(str(k).lower(), str(k).upper())
+                is_active = True
+                lot_val = None
+                sl_val = None
+
+                if isinstance(v, dict):
+                    is_active = bool(v.get("active", True))
+                    lot_val = v.get("lot")
+                    sl_val = v.get("sl")
+                elif isinstance(v, bool):
+                    is_active = v
+
+                if is_active:
+                    enabled_pairs.append(sym)
+
+                if sym not in bot_instance.config.pair_configs:
+                    bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+
+                bot_instance.config.pair_configs[sym].enabled = is_active
+                if lot_val is not None:
+                    lf = round(float(lot_val), 2)
+                    bot_instance.config.pair_configs[sym].fixed_lot_size = lf
+                    if sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_lot_size = lf
+                    elif sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_lot_size = lf
+                    elif sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_lot_size = lf
+                if sl_val is not None:
+                    sf = round(float(sl_val), 1)
+                    bot_instance.config.pair_configs[sym].fixed_sl_pips = sf
+                    if sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_sl_pips = sf
+                    elif sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_sl_pips = sf
+                    elif sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_sl_pips = sf
+
+            bot_instance.config.selected_symbols = enabled_pairs
+
+        if "aiGateEnabled" in config:
+            bot_instance.config.ai_confirmation_enabled = bool(config["aiGateEnabled"])
+
+        bot_instance.save_settings()
+        return {"status": "success", "message": "Configuration and pair Lot/SL settings saved"}
+
+    return {"status": "success", "message": "Acknowledged"}
+
+
 @app.post("/api/configure")
 async def update_configuration(payload: BotConfigUpdate):
     """
@@ -662,6 +876,49 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.pair3.fixed_lot_size = payload.pair3.fixed_lot_size
         bot_instance.config.pair3.fixed_sl_pips = payload.pair3.fixed_sl_pips
         bot_instance.config.pair3.enabled = payload.pair3.enabled
+
+    # Handle multi-pair independent configurations (pair_configs)
+    if payload.pair_configs is not None:
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Pair configurations are LOCKED during activation! Deactivate the bot first to modify Lot Size or SL."
+            )
+        from core.config import PairSettings
+        if not hasattr(bot_instance.config, "pair_configs"):
+            bot_instance.config.pair_configs = {}
+        for k, v in payload.pair_configs.items():
+            sym = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}.get(str(k).lower(), str(k).upper())
+            if sym not in bot_instance.config.pair_configs:
+                bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+            if isinstance(v, dict):
+                if "lot" in v and v["lot"] is not None:
+                    bot_instance.config.pair_configs[sym].fixed_lot_size = round(float(v["lot"]), 2)
+                elif "fixed_lot_size" in v and v["fixed_lot_size"] is not None:
+                    bot_instance.config.pair_configs[sym].fixed_lot_size = round(float(v["fixed_lot_size"]), 2)
+                if "sl" in v and v["sl"] is not None:
+                    bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["sl"]), 1)
+                elif "fixed_sl_pips" in v and v["fixed_sl_pips"] is not None:
+                    bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["fixed_sl_pips"]), 1)
+                if "enabled" in v:
+                    bot_instance.config.pair_configs[sym].enabled = bool(v["enabled"])
+
+                # Sync back to pair1, pair2, pair3 if matches
+                if sym == bot_instance.config.pair1.symbol:
+                    if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+                        bot_instance.config.pair1.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+                    if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+                        bot_instance.config.pair1.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+                elif sym == bot_instance.config.pair2.symbol:
+                    if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+                        bot_instance.config.pair2.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+                    if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+                        bot_instance.config.pair2.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+                elif sym == bot_instance.config.pair3.symbol:
+                    if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+                        bot_instance.config.pair3.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+                    if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+                        bot_instance.config.pair3.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
 
     # Handle enabled strategies update
     if payload.enabled_strategies is not None:
@@ -984,6 +1241,60 @@ async def retrain_temporal_ml_model():
     summary = bot_instance.temporal_svc.train_and_update()
     bot_instance.log("🧠 [TEMPORAL ML] Model retrained on latest trade records and event logs.")
     return {"status": "success", "message": "Temporal ML model retrained successfully", "summary": summary}
+
+
+# =============================================================================
+#  5-Window Daytime Interval & October Shadow Mode Telemetry Endpoints
+# =============================================================================
+
+@app.get("/api/windows/current")
+async def get_current_window_status():
+    """Return active 3-hour daytime window or night guard window with shadow sizing recommendations."""
+    from ml.temporal_window_recorder import window_recorder
+    win_info = window_recorder.get_window_info()
+    return {
+        "status": "ok",
+        "current_window": win_info,
+        "shadow_mode": getattr(bot_instance.config if bot_instance else None, 'temporal_ml_shadow_mode', True),
+    }
+
+
+@app.get("/api/windows/summary")
+async def get_windows_summary():
+    """Return cumulative win rates, trade counts, and PnL for each of the 5 daytime windows + night guard."""
+    from ml.temporal_window_recorder import window_recorder
+    return {
+        "status": "ok",
+        "windows": window_recorder.get_summary_by_window(),
+        "total_records": len(window_recorder.read_all_records()),
+        "csv_path": str(window_recorder.csv_path),
+    }
+
+
+@app.get("/api/windows/export_csv")
+async def export_windows_csv():
+    """Download the October 5-window CSV dataset for lot size manipulation and audit."""
+    from ml.temporal_window_recorder import window_recorder, CSV_FILE_PATH
+    if not CSV_FILE_PATH.exists():
+        window_recorder.backfill_from_database()
+    return FileResponse(
+        path=CSV_FILE_PATH,
+        filename="temporal_windows_october.csv",
+        media_type="text/csv",
+    )
+
+
+@app.post("/api/windows/sync")
+async def sync_windows_from_database():
+    """Trigger incremental backfill of any unsynced closed trades into the October CSV."""
+    from ml.temporal_window_recorder import window_recorder
+    added = window_recorder.backfill_from_database()
+    return {
+        "status": "success",
+        "new_intervals_added": added,
+        "total_intervals": len(window_recorder.read_all_records()),
+    }
+
 
 
 @app.get("/api/ml/partial_tp/status")

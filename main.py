@@ -45,6 +45,7 @@ from execution.position_manager import PositionManager
 
 from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
 from ml.temporal_analyzer import TemporalModelConfig, TemporalEdgeService, EdgeTier
+from ml.temporal_window_recorder import window_recorder, TemporalWindowRecorder
 
 
 # ─────────────────────────────────────────────
@@ -151,6 +152,8 @@ class TradingBot:
             toxic_loss_threshold=getattr(self.config, 'temporal_max_loss_probability', 0.65),
         )
         self.temporal_svc = TemporalEdgeService(temporal_cfg)
+        self.window_recorder = window_recorder
+        self._current_window_id: str | None = None
 
 
         # Execution Quality Metrics Subsystem
@@ -218,6 +221,19 @@ class TradingBot:
                     self.config.pair3.fixed_lot_size = p3.get("fixed_lot_size")
                     self.config.pair3.fixed_sl_pips = p3.get("fixed_sl_pips")
                     self.config.pair3.enabled = p3.get("enabled", True)
+
+                # Multi-pair independent settings (pair_configs)
+                if "pair_configs" in saved and isinstance(saved["pair_configs"], dict):
+                    from core.config import PairSettings
+                    for s_k, s_v in saved["pair_configs"].items():
+                        if isinstance(s_v, dict):
+                            sym_u = str(s_k).upper().strip()
+                            self.config.pair_configs[sym_u] = PairSettings(
+                                symbol=s_v.get("symbol", sym_u),
+                                fixed_lot_size=s_v.get("fixed_lot_size"),
+                                fixed_sl_pips=s_v.get("fixed_sl_pips"),
+                                enabled=s_v.get("enabled", True),
+                            )
 
                 # Enabled strategies
                 if "enabled_strategies" in saved and isinstance(saved["enabled_strategies"], list):
@@ -304,6 +320,15 @@ class TradingBot:
                     "fixed_lot_size": self.config.pair3.fixed_lot_size,
                     "fixed_sl_pips": self.config.pair3.fixed_sl_pips,
                     "enabled": self.config.pair3.enabled,
+                },
+                "pair_configs": {
+                    sym: {
+                        "symbol": p_cfg.symbol,
+                        "fixed_lot_size": p_cfg.fixed_lot_size,
+                        "fixed_sl_pips": p_cfg.fixed_sl_pips,
+                        "enabled": p_cfg.enabled,
+                    }
+                    for sym, p_cfg in getattr(self.config, "pair_configs", {}).items()
                 },
                 "enabled_strategies": self.config.enabled_strategies,
                 "selected_symbols": self.config.selected_symbols,
@@ -602,8 +627,15 @@ class TradingBot:
             pair_lot = self.config.fixed_lot_size
             pair_sl = self.config.fixed_sl_pips
 
-            # Custom override from pair1 / pair2 / pair3 if symbol matches
-            if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym:
+            # Custom override from pair_configs or pair1 / pair2 / pair3 if symbol matches
+            sym_clean = sym.strip().upper()
+            if hasattr(self.config, 'pair_configs') and sym_clean in self.config.pair_configs:
+                p_item = self.config.pair_configs[sym_clean]
+                if p_item.fixed_lot_size is not None:
+                    pair_lot = p_item.fixed_lot_size
+                if p_item.fixed_sl_pips is not None:
+                    pair_sl = p_item.fixed_sl_pips
+            elif getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym:
                 if self.config.pair1.fixed_lot_size is not None:
                     pair_lot = self.config.pair1.fixed_lot_size
                 if self.config.pair1.fixed_sl_pips is not None:
@@ -1045,14 +1077,15 @@ class TradingBot:
                             strategy=strat_key,
                             planned_rr=best_signal.rr_ratio,
                         )
+                        win_ctx = self.window_recorder.get_window_info(getattr(best_signal, 'timestamp', None) or datetime.now(timezone.utc))
                         is_temp_shadow = getattr(self.config, 'temporal_ml_shadow_mode', True)
                         if is_temp_shadow:
                             temporal_risk_mult = 1.0
                             would_veto_str = " (WOULD VETO)" if not temp_verdict.allowed else (f" (WOULD SCALE {temp_verdict.risk_multiplier:.2f}x)" if temp_verdict.risk_multiplier != 1.0 else "")
                             self.log(
-                                f"  ⏰ [TEMPORAL SHADOW MODE]{would_veto_str} {temp_verdict.edge_tier.value} in {temp_verdict.session} "
+                                f"  ⏰ [OCTOBER SHADOW MODE]{would_veto_str} {temp_verdict.edge_tier.value} in {win_ctx['id']} ({win_ctx['time_range']}) "
                                 f"(P(Win)={temp_verdict.p_win*100:.1f}%, P(SL)={temp_verdict.p_loss*100:.1f}%, ExpRet={temp_verdict.expected_r:+.2f}R) | "
-                                f"Executing at full 1.00x sizing.",
+                                f"Executing at full 1.00x base lot.",
                                 level="INFO",
                             )
                         else:
@@ -1215,6 +1248,23 @@ class TradingBot:
                         rejection_reason=order_result.error_message or "Order Failed",
                         retries_used=order_result.retries_used,
                     )
+
+        # Check 5-Window Boundary Transition & Sync October CSV
+        try:
+            current_win = self.window_recorder.get_window_info(now_utc)
+            current_wid = current_win["id"]
+            if self._current_window_id is None:
+                self._current_window_id = current_wid
+            elif self._current_window_id != current_wid:
+                prev_wid = self._current_window_id
+                self._current_window_id = current_wid
+                self.log(
+                    f"⏰ [5-WINDOW TRANSITION] Window {prev_wid} completed -> Entering {current_wid} ({current_win['time_range']}) | October Shadow telemetry logging to CSV.",
+                    level="INFO"
+                )
+                self.window_recorder.backfill_from_database()
+        except Exception as e:
+            logger.debug(f"Window transition error: {e}")
 
         self.log(
             f"─── TICK COMPLETE | "

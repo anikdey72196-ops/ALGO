@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luminous Card Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .luminous-card-container {
+      box-sizing: border-box;
+      --sz: clamp(14px, 1.1vw, 16px);
+      font-size: var(--sz);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      position: relative;
+    }
+
+    .luminous-card {
+      position: relative;
+      background: radial-gradient(circle at 50% 0%, #262933 0%, #11131a 64%);
+      box-shadow:
+        inset 0 1.01rem 0.2rem -1rem #fff0,
+        inset 0 -1.01rem 0.2rem -1rem #0000,
+        0 -1.02rem 0.2rem -1rem #fff0,
+        0 1rem 0.2rem -1rem #0000,
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 8px 24px 0 rgba(0, 0, 0, 0.45),
+        0 0 0 1px #232733;
+      width: 100%;
+      max-width: 20rem;
+      height: 25rem;
+      border-radius: 1.8rem;
+      color: #fff;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.4s ease-in-out, transform 0.4s ease-out;
+    }
+
+    .luminous-card::before {
+      content: "";
+      display: block;
+      --offset: 0.6rem;
+      width: calc(100% + 2 * var(--offset));
+      height: calc(100% + 2 * var(--offset));
+      position: absolute;
+      left: calc(-1 * var(--offset));
+      right: calc(-1 * var(--offset));
+      top: calc(-1 * var(--offset));
+      bottom: calc(-1 * var(--offset));
+      margin: auto;
+      box-shadow: inset 0 0 0px 0.06rem rgba(255, 255, 255, 0.15);
+      border-radius: 2.2rem;
+      --ax: 3rem;
+      clip-path: polygon(
+        var(--ax) 0,
+        0 0,
+        0 var(--ax),
+        var(--ax) var(--ax),
+        var(--ax) calc(100% - var(--ax)),
+        0 calc(100% - var(--ax)),
+        0 100%,
+        var(--ax) 100%,
+        var(--ax) calc(100% - var(--ax)),
+        calc(100% - var(--ax)) calc(100% - var(--ax)),
+        calc(100% - var(--ax)) 100%,
+        100% 100%,
+        100% calc(100% - var(--ax)),
+        calc(100% - var(--ax)) calc(100% - var(--ax)),
+        calc(100% - var(--ax)) var(--ax),
+        100% var(--ax),
+        100% 0,
+        calc(100% - var(--ax)) 0,
+        calc(100% - var(--ax)) var(--ax),
+        var(--ax) var(--ax)
+      );
+      transition: all 0.4s ease-in-out;
+      pointer-events: none;
+    }
+
+    .luminous-card:hover {
+      transform: translateY(-0.3rem);
+    }
+
+    .luminous-card:hover::before {
+      --offset: 0.4rem;
+      --ax: 5rem;
+      border-radius: 2rem;
+      box-shadow: inset 0 0 0 0.08rem rgba(255, 255, 255, 0.25);
+    }
+
+    .luminous-light-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 100%;
+      transform-style: preserve-3d;
+      perspective: 400px;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: 1.8rem;
+    }
+
+    .luminous-slit {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 64%;
+      height: 1.2rem;
+      transform: rotateX(-76deg);
+      background: #121212;
+      box-shadow: 0 0 4px 0 #fff0;
+      transition: all 0.4s ease-in-out;
+    }
+
+    .luminous-lumen {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      perspective: 400px;
+      opacity: 0;
+      transition: opacity 0.4s ease-in-out;
+    }
+
+    .luminous-lumen .min {
+      width: 70%;
+      height: 3rem;
+      background: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0.7));
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 2.5rem;
+      margin: auto;
+      transform: rotateX(-42deg);
+      opacity: 0.4;
+    }
+
+    .luminous-lumen .mid {
+      width: 74%;
+      height: 13rem;
+      background: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0.85));
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 10em;
+      margin: auto;
+      transform: rotateX(-42deg);
+      filter: blur(1rem);
+      opacity: 0.8;
+      border-radius: 100% 100% 0 0;
+    }
+
+    .luminous-lumen .hi {
+      width: 50%;
+      height: 13rem;
+      background: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0.9));
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 12em;
+      margin: auto;
+      transform: rotateX(22deg);
+      filter: blur(1rem);
+      opacity: 0.6;
+      border-radius: 100% 100% 0 0;
+    }
+
+    .luminous-darken {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      perspective: 400px;
+      transition: opacity 0.4s ease-in-out;
+      opacity: 0.5;
+    }
+
+    .luminous-darken > * {
+      transition: opacity 0.4s ease-in-out;
+    }
+
+    .luminous-darken .sl {
+      width: 64%;
+      height: 10rem;
+      background: linear-gradient(#000, rgba(0,0,0,0));
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 9.6em;
+      bottom: 0;
+      margin: auto;
+      filter: blur(0.2rem);
+      opacity: 0.1;
+      border-radius: 0 0 100% 100%;
+      transform: rotateX(-22deg);
+    }
+
+    .luminous-darken .ll {
+      width: 62%;
+      height: 10rem;
+      background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0));
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 11em;
+      bottom: 0;
+      margin: auto;
+      filter: blur(0.8rem);
+      opacity: 0.4;
+      border-radius: 0 0 100% 100%;
+      transform: rotateX(22deg);
+    }
+
+    .luminous-darken .slt {
+      width: 0.5rem;
+      height: 4rem;
+      background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0));
+      position: absolute;
+      left: 0;
+      right: 11.5rem;
+      top: 3.9em;
+      bottom: 0;
+      margin: auto;
+      opacity: 0.6;
+      border-radius: 0 0 100% 100%;
+      transform: skewY(42deg);
+    }
+
+    .luminous-darken .srt {
+      width: 0.5rem;
+      height: 4rem;
+      background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0));
+      position: absolute;
+      right: 0;
+      left: 11.5rem;
+      top: 3.9em;
+      bottom: 0;
+      margin: auto;
+      opacity: 0.6;
+      border-radius: 0 0 100% 100%;
+      transform: skewY(-42deg);
+    }
+
+    .luminous-content {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+    }
+
+    .luminous-icon {
+      position: absolute;
+      top: -13rem;
+      left: 0;
+      right: 0;
+      margin: auto;
+      width: fit-content;
+      filter: drop-shadow(0 -1.2rem 1px transparent);
+      transition: filter 0.4s ease-in-out, transform 0.4s ease-in-out;
+    }
+
+    .luminous-card:hover .luminous-icon {
+      transform: translateY(-4px) scale(1.04);
+    }
+
+    .luminous-bottom {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .luminous-title {
+      margin: 0;
+      margin-bottom: 0.2rem;
+      font-size: 1.15rem;
+      color: #fff;
+      font-weight: 800;
+      font-family: monospace;
+      letter-spacing: -0.02em;
+    }
+
+    .luminous-timeframe-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.65rem;
+      font-weight: 800;
+      font-family: monospace;
+      color: #a78bfa;
+      margin-bottom: 0.4rem;
+    }
+
+    .luminous-description {
+      margin: 0;
+      padding-bottom: 0.6rem;
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      max-width: 68%;
+      line-height: 1.35;
+    }
+
+    .luminous-toggle-input {
+      display: none;
+    }
+
+    .luminous-toggle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      height: 2.1rem;
+      width: 4.8rem;
+      border-radius: 0.65rem;
+      background: #090a0f;
+      box-shadow:
+        inset 0 -8px 8px 0.3rem rgba(0, 0, 0, 0.5),
+        inset 0 0 1px 0.3rem #555,
+        inset 0 -2px 1px 0.3rem rgba(255, 255, 255, 0.2),
+        inset 0 1px 2px 0.3rem rgba(0, 0, 0, 0.7),
+        inset 0 0 1px 0.8rem #222;
+      cursor: pointer;
+      transition: all 0.4s ease-in-out;
+    }
+
+    .luminous-toggle::before {
+      content: "";
+      display: block;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 3.4rem;
+      height: 0.68rem;
+      border-radius: 0.2rem;
+      background: #000;
+      transition: all 0.4s ease-in-out;
+    }
+
+    .luminous-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0.04rem;
+      margin: auto;
+      left: 0.68rem;
+      width: 40%;
+      height: 38%;
+      background: #64748b;
+      border-radius: 0.25rem;
+      box-shadow:
+        inset 0 1px 4px 0 #fff,
+        inset 0 -1px 1px 0 rgba(0,0,0,0.6),
+        0 0 1px 1px rgba(0,0,0,0.2),
+        1px 3px 6px 1px rgba(0,0,0,0.6);
+      transition: all 0.4s ease-in-out;
+      pointer-events: none;
+    }
+
+    .luminous-toggle-label {
+      pointer-events: none;
+      text-align: center;
+      position: absolute;
+      left: 0;
+      right: 0;
+      margin: auto;
+      bottom: calc(100% + 0.35rem);
+      font-size: 0.62rem;
+      font-weight: 800;
+      font-family: monospace;
+      color: #94a3b8;
+      opacity: 0.8;
+      transition: all 0.4s ease-in-out;
+    }
+
+    /* Checked (ACTIVE) State */
+    .luminous-toggle-input:checked ~ .luminous-card {
+      box-shadow:
+        inset 0 1.01rem 0.1rem -1rem rgba(255, 255, 255, 0.8),
+        inset 0 -4rem 3rem -3rem rgba(0, 0, 0, 0.6),
+        0 -1.02rem 0.2rem -1rem rgba(255, 255, 255, 0.6),
+        0 1rem 0.2rem -1rem #000,
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        0 12px 32px 0 rgba(0, 0, 0, 0.6),
+        0 0 18px 2px rgba(124, 58, 237, 0.35);
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-slit {
+      background: #fff;
+      box-shadow: 0 0 8px 1px #fff;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-lumen {
+      opacity: 0.65;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-darken {
+      opacity: 0.85;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-darken .sl {
+      opacity: 0.25;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-darken .ll {
+      opacity: 1;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-darken .slt {
+      opacity: 1;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-darken .srt {
+      opacity: 1;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-icon {
+      filter: drop-shadow(0 -1.2rem 4px rgba(0, 0, 0, 0.4)) brightness(1.75);
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-toggle {
+      box-shadow:
+        inset 0 -8px 8px 0.3rem rgba(0, 0, 0, 0.4),
+        inset 0 0 1px 0.3rem #fff,
+        inset 0 -2px 1px 0.3rem #fff,
+        inset 0 1px 2px 0.3rem rgba(0, 0, 0, 0.6),
+        inset 0 0 1px 0.8rem #444;
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-toggle::before {
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 0.4rem 0.25rem rgba(255, 255, 255, 0.6);
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-handle {
+      transform: translateX(1.58rem);
+      background: #f8fafc;
+      box-shadow:
+        inset 0 1px 12px 0 #fff,
+        inset 0 -1px 1px 0 rgba(255, 255, 255, 0.9),
+        0 0 2px 1px rgba(0, 0, 0, 0.2),
+        1px 3px 6px 1px rgba(0, 0, 0, 0.4);
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card .luminous-toggle-label {
+      color: #34d399;
+      font-weight: 900;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 p-8">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+    
+    <!-- 5M Scalp -->
+    <div class="luminous-card-container">
+      <input type="checkbox" class="luminous-toggle-input" id="luminousToggle_scalp" checked />
+      <label for="luminousToggle_scalp" class="luminous-card">
+        <div class="luminous-light-layer">
+          <div class="luminous-slit"></div>
+          <div class="luminous-lumen">
+            <div class="min"></div>
+            <div class="mid"></div>
+            <div class="hi"></div>
+          </div>
+          <div class="luminous-darken">
+            <div class="sl"></div>
+            <div class="ll"></div>
+            <div class="slt"></div>
+            <div class="srt"></div>
+          </div>
+        </div>
+        <div class="luminous-content">
+          <div class="luminous-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="3.2rem" height="3.2rem" viewBox="0 0 1024 1024">
+              <path fill="url(#iconGrad_scalp)" d="M488.1 414.7V303.4L300.9 428l83.6 55.8zm254.1 137.7v-79.8l-59.8 39.9zM512 64C264.6 64 64 264.6 64 512s200.6 448 448 448s448-200.6 448-448S759.4 64 512 64m278 533c0 1.1-.1 2.1-.2 3.1c0 .4-.1.7-.2 1a14.2 14.2 0 0 1-.8 3.2c-.2.6-.4 1.2-.6 1.7c-.2.4-.4.8-.5 1.2c-.3.5-.5 1.1-.8 1.6c-.2.4-.4.7-.7 1.1c-.3.5-.7 1-1 1.5c-.3.4-.5.7-.8 1c-.4.4-.8.9-1.2 1.3c-.3.3-.6.6-1 .9c-.4.4-.9.8-1.4 1.1c-.4.3-.7.6-1.1.8c-.1.1-.3.2-.4.3L525.2 786c-4 2.7-8.6 4-13.2 4c-4.7 0-9.3-1.4-13.3-4L244.6 616.9c-.1-.1-.3-.2-.4-.3l-1.1-.8c-.5-.4-.9-.7-1.3-1.1c-.3-.3-.6-.6-1-.9c-.4-.4-.8-.8-1.2-1.3a7 7 0 0 1-.8-1c-.4-.5-.7-1-1-1.5c-.2-.4-.5-.7-.7-1.1c-.3-.5-.6-1.1-.8-1.6c-.2-.4-.4-.8-.5-1.2c-.2-.6-.4-1.2-.6-1.7c-.1-.4-.3-.8-.4-1.2c-.2-.7-.3-1.3-.4-2c-.1-.3-.1-.7-.2-1c-.1-1-.2-2.1-.2-3.1V427.9c0-1 .1-2.1.2-3.1c.1-.3.1-.7.2-1a14.2 14.2 0 0 1 .8-3.2c.2-.6.4-1.2.6-1.7c.2-.4.4-.8.5-1.2c.2-.5.5-1.1.8-1.6c.2-.4.4-.7.7-1.1c.6-.9 1.2-1.7 1.8-2.5c.4-.4.8-.9 1.2-1.3c.3-.3.6-.6 1-.9c.4-.4.9-.8 1.3-1.1s.7-.6 1.1-.8c.1-.1.3-.2.4-.3L498.7 239c8-5.3 18.5-5.3 26.5 0l254.1 169.1c.1.1.3.2.4.3l1.1.8l1.4 1.1c.3.3.6.6 1 .9c.4.4.8.8 1.2 1.3c.7.8 1.3 1.6 1.8 2.5c.2.4.5.7.7 1.1c.3.5.6 1 .8 1.6c.2.4.4.8.5 1.2c.2.6.4 1.2.6 1.7c.1.4.3.8.4 1.2c.2.7.3 1.3.4 2c.1.3.1.7.2 1c.1 1 .2 2.1.2 3.1zm-254.1 13.3v111.3L723.1 597l-83.6-55.8zM281.8 472.6v79.8l59.8-39.9zM512 456.1l-84.5 56.4l84.5 56.4l84.5-56.4zM723.1 428L535.9 303.4v111.3l103.6 69.1zM384.5 541.2L300.9 597l187.2 124.6V610.3z"></path>
+              <defs>
+                <linearGradient id="iconGrad_scalp" x1="0" x2="0" y1="-1" y2="0.8">
+                  <stop offset="0%" stop-color="#fff"></stop>
+                  <stop offset="100%" stop-color="#888"></stop>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="luminous-bottom">
+            <div class="luminous-title">5M Scalp</div>
+            <div class="luminous-timeframe-tag">⚡ Timeframe: 5m</div>
+            <p class="luminous-description">Fast Order Block & Fair Value Gap scalping execution engine.</p>
+            <div class="luminous-toggle">
+              <div class="luminous-handle"></div>
+              <span class="luminous-toggle-label">ACTIVE</span>
+            </div>
+          </div>
+        </div>
+      </label>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -214,6 +214,33 @@ class TestTemporalAnalyzer(unittest.TestCase):
         cfg = TradingConfig()
         self.assertTrue(cfg.temporal_ml_shadow_mode, "temporal_ml_shadow_mode should default to True for funded accounts")
 
+    def test_5_window_telemetry_and_csv_endpoints(self):
+        """Verify 5-window interval tracker, current window, summary, and CSV export."""
+        client = TestClient(app)
+
+        # 1. Test /api/windows/current
+        res_cur = client.get("/api/windows/current")
+        self.assertEqual(res_cur.status_code, 200)
+        cur_data = res_cur.json()
+        self.assertIn("current_window", cur_data)
+        self.assertIn("id", cur_data["current_window"])
+        self.assertIn("time_range", cur_data["current_window"])
+        self.assertTrue(cur_data["shadow_mode"])
+
+        # 2. Test /api/windows/summary
+        res_sum = client.get("/api/windows/summary")
+        self.assertEqual(res_sum.status_code, 200)
+        sum_data = res_sum.json()
+        self.assertIn("windows", sum_data)
+        self.assertEqual(len(sum_data["windows"]), 6)  # 5 daytime windows + 1 night guard
+
+        # 3. Test /api/windows/export_csv
+        res_csv = client.get("/api/windows/export_csv")
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn("text/csv", res_csv.headers.get("content-type", ""))
+        self.assertIn("window_id", res_csv.text)
+        self.assertIn("shadow_multiplier", res_csv.text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -249,7 +249,69 @@ def test_mobile_terminal_and_pwa_endpoints():
     print("Mobile Terminal PWA tests passed successfully!")
 
 
+def test_api_update_unified():
+    client = TestClient(app)
+
+    # 1. Toggle strategy
+    res = client.post("/api/update", json={
+        "action": "toggle_strategy",
+        "strategy": "ict",
+        "active": True
+    })
+    assert res.status_code == 200
+    assert "ICT" in res.json()["enabled_strategies"]
+
+    # 2. Toggle pair
+    res = client.post("/api/update", json={
+        "action": "toggle_pair",
+        "pair": "btcusd",
+        "active": True
+    })
+    assert res.status_code == 200
+    assert "BTCUSD" in res.json()["selected_symbols"]
+
+    # 3. Modify Lot Size and SL via update_pair_settings
+    res = client.post("/api/update", json={
+        "action": "update_pair_settings",
+        "pair": "xauusd",
+        "lot": 0.08,
+        "sl": 35.0
+    })
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+    assert res.json()["lot"] == 0.08
+    assert res.json()["sl"] == 35.0
+
+    # Verify state returns updated lot and SL
+    state_res = client.get("/api/state")
+    assert state_res.status_code == 200
+    state_data = state_res.json()
+    assert state_data["pairs_config"]["xauusd"]["lot"] == 0.08
+    assert state_data["pairs_config"]["xauusd"]["sl"] == 35.0
+
+    # 4. Save configuration with full pair settings
+    res = client.post("/api/update", json={
+        "action": "save_configuration",
+        "config": {
+            "aiGateEnabled": True,
+            "strategies": {"smc": True, "scalp5m": True, "ict": True, "orderFlow": True},
+            "pairs": {
+                "xauusd": {"active": True, "lot": 0.05, "sl": 25.0},
+                "eurusd": {"active": True, "lot": 0.10, "sl": 15.0},
+                "gbpusd": {"active": True, "lot": 0.12, "sl": 20.0},
+                "btcusd": {"active": True, "lot": 0.01, "sl": 150.0},
+                "ethusd": {"active": True, "lot": 0.05, "sl": 80.0}
+            }
+        }
+    })
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+
+    print("Unified /api/update and Lot/SL tests passed successfully!")
+
+
 if __name__ == "__main__":
     test_api_workflow()
     test_mobile_terminal_and_pwa_endpoints()
+    test_api_update_unified()
 

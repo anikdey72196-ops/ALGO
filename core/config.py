@@ -672,6 +672,16 @@ class TradingConfig(BaseModel):
         default_factory=lambda: PairSettings(symbol="GBPUSD", fixed_lot_size=0.12, fixed_sl_pips=20.0, enabled=True),
         description="Pair 3 configuration with independent lot size and SL.",
     )
+    pair_configs: dict[str, PairSettings] = Field(
+        default_factory=lambda: {
+            "XAUUSD": PairSettings(symbol="XAUUSD", fixed_lot_size=0.05, fixed_sl_pips=25.0, enabled=True),
+            "EURUSD": PairSettings(symbol="EURUSD", fixed_lot_size=0.10, fixed_sl_pips=15.0, enabled=True),
+            "GBPUSD": PairSettings(symbol="GBPUSD", fixed_lot_size=0.12, fixed_sl_pips=20.0, enabled=True),
+            "BTCUSD": PairSettings(symbol="BTCUSD", fixed_lot_size=0.01, fixed_sl_pips=150.0, enabled=True),
+            "ETHUSD": PairSettings(symbol="ETHUSD", fixed_lot_size=0.05, fixed_sl_pips=80.0, enabled=True),
+        },
+        description="Multi-pair independent settings (lot size, SL, enabled) for all monitored assets.",
+    )
 
     # Legacy compatibility fields
     fixed_lot_size: float | None = Field(
