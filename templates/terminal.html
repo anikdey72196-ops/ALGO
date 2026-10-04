@@ -571,17 +571,6 @@
 
         </div>
 
-        <!-- Monitored Market Pairs with Interactive Lot Size & SL Stepper Inputs -->
-        <div class="pt-2.5 border-t border-[#222d3d]">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-[10px] font-mono font-bold uppercase text-slate-300">Monitored Pairs · Lot &amp; SL Controls</span>
-            <span class="text-[9px] text-slate-400 font-mono">Direct Input / Steppers</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[10px]" id="cockpitPairsGrid">
-            <!-- Dynamically populated with Lot Size and SL Stepper Pods -->
-          </div>
-        </div>
-
       </section>
 
     </div>
@@ -971,7 +960,6 @@
     function syncPairsFromState(pairsConfig, selectedSymbols = []) {
       if (!pairsConfig || Object.keys(pairsConfig).length === 0) {
         if (!pairControlsRendered) {
-          renderRiskPairs();
           renderControlsPairs();
           pairControlsRendered = true;
         }
@@ -995,8 +983,8 @@
           };
         }
         const current = pairSettingsState[key];
-        const isEditingLot = document.activeElement && (document.activeElement.id === `input-lot-${key}` || document.activeElement.id === `risk-lot-${key}`);
-        const isEditingSl = document.activeElement && (document.activeElement.id === `input-sl-${key}` || document.activeElement.id === `risk-sl-${key}`);
+        const isEditingLot = document.activeElement && document.activeElement.id === `input-lot-${key}`;
+        const isEditingSl = document.activeElement && document.activeElement.id === `input-sl-${key}`;
 
         if (!isEditingLot && typeof incoming.lot === 'number' && current.lot !== incoming.lot) {
           current.lot = incoming.lot;
@@ -1014,55 +1002,9 @@
       });
 
       if (changed || !pairControlsRendered) {
-        renderRiskPairs();
         renderControlsPairs();
         pairControlsRendered = true;
       }
-    }
-
-    function renderRiskPairs() {
-      const grid = document.getElementById('cockpitPairsGrid');
-      if (!grid) return;
-
-      const pairs = Object.entries(pairSettingsState);
-      grid.innerHTML = pairs.slice(0, 3).map(([key, pair]) => {
-        const lotVal = typeof pair.lot === 'number' ? pair.lot.toFixed(2) : parseFloat(pair.lot || 0.05).toFixed(2);
-        const slVal = typeof pair.sl === 'number' ? Math.round(pair.sl) : Math.round(parseFloat(pair.sl || 25));
-
-        return `
-          <div class="p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <div class="flex items-center justify-between pb-1.5 border-b border-[#222d3d]">
-              <div class="flex items-center gap-1.5">
-                <span class="font-bold font-mono ${pair.color || 'text-slate-200'} text-xs">${pair.symbol}</span>
-                <span class="text-[9px] text-slate-400 font-sans">${pair.name.split('/')[0].trim()}</span>
-              </div>
-              <span class="text-[9px] px-1.5 py-0.2 rounded font-bold font-mono ${pair.active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'}">
-                ${pair.active ? 'ACTIVE' : 'OFF'}
-              </span>
-            </div>
-
-            <!-- Lot Size Stepper Row -->
-            <div class="flex items-center justify-between mt-2 bg-[#131924] px-2 py-1 rounded-lg border border-[#222d3d]">
-              <span class="text-[9px] uppercase font-bold text-slate-400">LOT</span>
-              <div class="flex items-center gap-1">
-                <button type="button" onclick="updatePairLot('${key}', -0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
-                <input id="risk-lot-${key}" type="number" step="0.01" min="0.01" max="10.0" value="${lotVal}" onchange="onPairLotInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
-                <button type="button" onclick="updatePairLot('${key}', 0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
-              </div>
-            </div>
-
-            <!-- Stop Loss Stepper Row -->
-            <div class="flex items-center justify-between mt-1.5 bg-[#131924] px-2 py-1 rounded-lg border border-[#222d3d]">
-              <span class="text-[9px] uppercase font-bold text-slate-400">SL (pips)</span>
-              <div class="flex items-center gap-1">
-                <button type="button" onclick="updatePairSl('${key}', -${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
-                <input id="risk-sl-${key}" type="number" step="1" min="1" max="500" value="${slVal}" onchange="onPairSlInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
-                <button type="button" onclick="updatePairSl('${key}', ${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
     }
 
     function renderControlsPairs() {
@@ -1120,7 +1062,6 @@
       if (!pair) return;
       let newLot = Math.max(0.01, Math.min(10.0, parseFloat((pair.lot + delta).toFixed(2))));
       pair.lot = newLot;
-      renderRiskPairs();
       renderControlsPairs();
       await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
     }
@@ -1130,7 +1071,6 @@
       if (!pair) return;
       let newSl = Math.max(1, Math.min(500, Math.round(pair.sl + delta)));
       pair.sl = newSl;
-      renderRiskPairs();
       renderControlsPairs();
       await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
     }
@@ -1145,7 +1085,6 @@
         clearTimeout(lotSlDebounceTimer);
         lotSlDebounceTimer = setTimeout(() => {
           persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-          renderRiskPairs();
           renderControlsPairs();
         }, 500);
       }
@@ -1160,7 +1099,6 @@
         clearTimeout(lotSlDebounceTimer);
         lotSlDebounceTimer = setTimeout(() => {
           persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-          renderRiskPairs();
           renderControlsPairs();
         }, 500);
       }
@@ -1170,7 +1108,6 @@
       const pair = pairSettingsState[pairKey.toLowerCase()];
       if (!pair) return;
       pair.active = !pair.active;
-      renderRiskPairs();
       renderControlsPairs();
       try {
         await fetch('/api/update', {
