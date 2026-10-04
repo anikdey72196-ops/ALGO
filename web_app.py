@@ -671,11 +671,6 @@ async def handle_dashboard_update(payload: dict):
         return {"status": "success", "selected_symbols": current}
 
     elif action == "update_pair_settings":
-        if bot_instance.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail="Lot Size and Stop Loss modifications are LOCKED during activation! Deactivate the bot first."
-            )
         pair_id = payload.get("pair")
         lot_val = payload.get("lot")
         sl_val = payload.get("sl")
@@ -709,6 +704,11 @@ async def handle_dashboard_update(payload: dict):
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
         bot_instance.save_settings()
+        if bot_instance.is_active:
+            bot_instance.log(
+                f"⚙️ Live risk update: {sym} lot size set to {bot_instance.config.pair_configs[sym].fixed_lot_size}, "
+                f"SL set to {bot_instance.config.pair_configs[sym].fixed_sl_pips} pips (applies to next trades)."
+            )
         return {
             "status": "success",
             "symbol": sym,

@@ -38,16 +38,16 @@
           },
           colors: {
             brand: {
-              DEFAULT: '#7c3aed',
-              dark: '#6d28d9',
-              light: '#8b5cf6',
+              DEFAULT: '#6366f1',
+              dark: '#4f46e5',
+              light: '#818cf8',
             },
             surface: {
-              DEFAULT: '#090a0f',
-              card: '#11141c',
-              panel: '#161924',
-              border: '#232838',
-              hover: '#1d2232',
+              DEFAULT: '#0c1017',
+              card: '#131924',
+              panel: '#161e2b',
+              border: '#222d3d',
+              hover: '#1a2332',
             }
           }
         }
@@ -59,7 +59,7 @@
     /* Global Mobile Ergonomics & Typography */
     html, body {
       font-family: "Plus Jakarta Sans", sans-serif;
-      background-color: #090a0f;
+      background-color: #0c1017;
       color: #e2e8f0;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
@@ -74,9 +74,19 @@
 
     /* Subtle custom scrollbar */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #0c0e14; }
-    ::-webkit-scrollbar-thumb { background: #232838; border-radius: 9999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #374151; }
+    ::-webkit-scrollbar-track { background: #0c1017; }
+    ::-webkit-scrollbar-thumb { background: #222d3d; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+    /* Number inputs: remove default browser arrows for clean touch steppers */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
 
     /* iOS & Android Safe Areas */
     .safe-top {
@@ -86,14 +96,14 @@
       padding-bottom: max(10px, env(safe-area-inset-bottom));
     }
 
-    /* Glow pulse effects */
-    .pulse-glow-green { box-shadow: 0 0 16px rgba(16, 185, 129, 0.45); }
-    .pulse-glow-amber { box-shadow: 0 0 16px rgba(245, 158, 11, 0.45); }
-    .pulse-glow-red { box-shadow: 0 0 16px rgba(244, 63, 94, 0.45); }
+    /* Soft clean status rings (No harsh neon glow) */
+    .status-ring-green { border-color: rgba(52, 211, 153, 0.4); }
+    .status-ring-amber { border-color: rgba(251, 191, 36, 0.4); }
+    .status-ring-red { border-color: rgba(248, 113, 113, 0.4); }
 
-    /* Active Mobile Nav Pill */
+    /* Active Mobile Nav Pill: Soft & Clean without neon glow */
     .mobile-nav-active {
-      color: #38bdf8 !important;
+      color: #60a5fa !important;
       position: relative;
     }
     .mobile-nav-active::after {
@@ -102,41 +112,41 @@
       bottom: -4px;
       left: 50%;
       transform: translateX(-50%);
-      width: 18px;
-      height: 3px;
-      background: #38bdf8;
+      width: 16px;
+      height: 2.5px;
+      background: #60a5fa;
       border-radius: 9999px;
-      box-shadow: 0 0 8px #38bdf8;
+      box-shadow: none;
     }
 
-    /* Log Stream Left Insets */
+    /* Log Stream Left Insets with Soft Pastels */
     .log-item-reversal {
-      border-left: 3px solid #f43f5e;
-      background: rgba(244, 63, 94, 0.08);
+      border-left: 3px solid #f87171;
+      background: rgba(248, 113, 113, 0.08);
     }
     .log-item-shield {
-      border-left: 3px solid #06b6d4;
-      background: rgba(6, 182, 212, 0.08);
+      border-left: 3px solid #60a5fa;
+      background: rgba(96, 165, 250, 0.08);
     }
     .log-item-trade {
-      border-left: 3px solid #10b981;
-      background: rgba(16, 185, 129, 0.08);
+      border-left: 3px solid #34d399;
+      background: rgba(52, 211, 153, 0.08);
     }
     .log-item-ml {
-      border-left: 3px solid #8b5cf6;
-      background: rgba(139, 92, 246, 0.08);
+      border-left: 3px solid #a78bfa;
+      background: rgba(167, 139, 250, 0.08);
     }
     .log-item-warn {
-      border-left: 3px solid #f59e0b;
-      background: rgba(245, 158, 11, 0.08);
+      border-left: 3px solid #fbbf24;
+      background: rgba(251, 191, 36, 0.08);
     }
     .log-item-normal {
-      border-left: 3px solid #334155;
-      background: #11141c;
+      border-left: 3px solid #222d3d;
+      background: #131924;
     }
   </style>
 </head>
-<body class="bg-[#090a0f] text-slate-100 antialiased h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden selection:bg-purple-900 selection:text-white">
+<body class="bg-[#0c1017] text-slate-100 antialiased h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden selection:bg-slate-700 selection:text-white">
 
   <!-- Toast Notification Container (Mobile Optimized) -->
   <div id="toastContainer" class="fixed top-4 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none items-center"></div>
@@ -144,43 +154,43 @@
   <!-- ========================================================================= -->
   <!-- 1. TOP APP BAR (Optimized for Phone Thumb Reach & Tablet Cockpit)          -->
   <!-- ========================================================================= -->
-  <header class="safe-top w-full bg-[#11141c]/95 backdrop-blur-md border-b border-[#232838] z-40 px-3 md:px-6 py-2.5 flex-shrink-0">
+  <header class="safe-top w-full bg-[#131924]/95 backdrop-blur-md border-b border-[#222d3d] z-40 px-3 md:px-6 py-2.5 flex-shrink-0">
     <div class="max-w-[1440px] mx-auto flex items-center justify-between gap-2">
       
       <!-- Left: Logo & Bot State Status Cluster -->
       <div class="flex items-center gap-2 sm:gap-3 min-w-0">
         <a href="/" class="flex items-center gap-2 group flex-shrink-0">
-          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-700 via-brand to-cyan-500 flex items-center justify-center text-white shadow-md shadow-purple-900/30">
+          <div class="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-sky-300 shadow-sm">
             <span class="material-symbols-outlined text-[19px]">terminal</span>
           </div>
           <div class="hidden xs:block">
-            <div class="font-extrabold text-sm tracking-tight text-white font-mono flex items-center gap-1 leading-none">
-              ALGO<span class="text-brand-light">QUANT</span>
+            <div class="font-bold text-sm tracking-tight text-slate-100 font-mono flex items-center gap-1 leading-none">
+              ALGO<span class="text-sky-300">QUANT</span>
             </div>
-            <div class="text-[9px] font-bold text-cyan-400 tracking-wider font-mono uppercase mt-0.5">Bot Terminal</div>
+            <div class="text-[9px] font-bold text-slate-400 tracking-wider font-mono uppercase mt-0.5">Bot Terminal</div>
           </div>
         </a>
 
-        <div class="h-5 w-px bg-[#232838] mx-0.5"></div>
+        <div class="h-5 w-px bg-[#222d3d] mx-0.5"></div>
 
         <!-- Bot State Badge (Active / Idle / Halted) -->
-        <div id="botStateBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#181b26] border border-[#2a3044] text-[11px] font-bold font-mono">
+        <div id="botStateBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#161f2c] border border-[#26354a] text-[11px] font-bold font-mono">
           <span id="botStateDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
           <span id="botStateLabel" class="text-slate-300 uppercase tracking-wide">IDLE</span>
         </div>
 
         <!-- Ping & Telemetry Indicator -->
-        <div class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0c0e14] border border-[#232838] text-[10px] text-slate-400 font-mono">
+        <div class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0f141f] border border-[#222d3d] text-[10px] text-slate-400 font-mono">
           <span id="connDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
           <span id="connStatus">1s LIVE</span>
         </div>
       </div>
 
       <!-- Center: Execution Edge Summary (Tablet / Desktop Only) -->
-      <div class="hidden md:flex items-center gap-6 border-x border-[#232838] px-6 text-xs font-mono">
+      <div class="hidden md:flex items-center gap-6 border-x border-[#222d3d] px-6 text-xs font-mono">
         <div class="flex flex-col text-left">
           <span class="text-[10px] uppercase text-slate-400 font-bold">Accuracy</span>
-          <span id="statAccuracyHeader" class="font-bold text-emerald-400 text-sm">0.0%</span>
+          <span id="statAccuracyHeader" class="font-bold text-emerald-300 text-sm">0.0%</span>
         </div>
         <div class="flex flex-col text-left">
           <span class="text-[10px] uppercase text-slate-400 font-bold">TP / SL Hits</span>
@@ -188,20 +198,20 @@
         </div>
         <div class="flex flex-col text-left">
           <span class="text-[10px] uppercase text-slate-400 font-bold">Target R:R</span>
-          <span id="statRRHeader" class="font-bold text-cyan-400 text-sm">1:2.50</span>
+          <span id="statRRHeader" class="font-bold text-sky-300 text-sm">1:2.50</span>
         </div>
       </div>
 
       <!-- Right: Master Quick Touch Controls -->
       <div class="flex items-center gap-2">
         <!-- Quick Emergency Halt / Activate Touch Button in Header -->
-        <button id="headerQuickActionBtn" onclick="handleHeaderQuickAction()" class="px-3 py-1.5 rounded-xl text-xs font-extrabold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/40 text-rose-300 border border-rose-800/60 hover:bg-rose-900/60 cursor-pointer min-h-[36px]">
+        <button id="headerQuickActionBtn" onclick="handleHeaderQuickAction()" class="px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/30 text-rose-300 border border-rose-800/40 hover:bg-rose-900/40 cursor-pointer min-h-[36px]">
           <span class="material-symbols-outlined text-[16px]">power_settings_new</span>
           <span id="headerQuickActionText">HALT</span>
         </button>
 
         <!-- Link back to Desktop Full Dashboard -->
-        <a href="/" class="p-2 rounded-xl bg-[#161924] border border-[#232838] text-slate-400 hover:text-white transition-colors flex items-center justify-center min-w-[36px] min-h-[36px]" title="Return to Desktop Dashboard">
+        <a href="/" class="p-2 rounded-xl bg-[#161e2b] border border-[#222d3d] text-slate-400 hover:text-white transition-colors flex items-center justify-center min-w-[36px] min-h-[36px]" title="Return to Desktop Dashboard">
           <span class="material-symbols-outlined text-[18px]">dashboard</span>
         </a>
       </div>
@@ -210,15 +220,15 @@
   </header>
 
   <!-- PWA Install Guide Banner (Mobile Friendly) -->
-  <div id="pwaBanner" class="hidden w-full bg-[#161924] border-b border-cyan-900/40 px-3 py-2 flex items-center justify-between gap-2 z-30 flex-shrink-0 text-xs font-sans">
+  <div id="pwaBanner" class="hidden w-full bg-[#161e2b] border-b border-[#222d3d] px-3 py-2 flex items-center justify-between gap-2 z-30 flex-shrink-0 text-xs font-sans">
     <div class="flex items-center gap-2 min-w-0">
-      <span class="material-symbols-outlined text-cyan-400 text-[18px] flex-shrink-0">install_mobile</span>
+      <span class="material-symbols-outlined text-sky-300 text-[18px] flex-shrink-0">install_mobile</span>
       <p id="pwaInstructions" class="text-slate-300 truncate text-[11px]">
         Add to Home Screen for standalone fullscreen experience.
       </p>
     </div>
     <div class="flex items-center gap-1.5 flex-shrink-0">
-      <button id="pwaInstallBtn" class="hidden px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer" type="button">
+      <button id="pwaInstallBtn" class="hidden px-2.5 py-1 bg-sky-700 hover:bg-sky-600 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer" type="button">
         Install
       </button>
       <button onclick="dismissPwaBanner()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" type="button">
@@ -238,38 +248,38 @@
     <!-- SECTION A: THE LIVE STREAM TERMINAL                                     -->
     <!-- (Left pane on tablet, or Tab 1 on mobile phone)                         -->
     <!-- ======================================================================= -->
-    <section id="panelTerminal" class="w-full flex-1 flex flex-col bg-[#11141c] rounded-2xl border border-[#232838] overflow-hidden min-h-0 md:col-span-7 lg:col-span-7 shadow-lg">
+    <section id="panelTerminal" class="w-full flex-1 flex flex-col bg-[#131924] rounded-2xl border border-[#222d3d] overflow-hidden min-h-0 md:col-span-7 lg:col-span-7 shadow-sm">
       
       <!-- Sub-Bar: Filter Chips & Search -->
-      <div class="px-2.5 py-2 bg-[#161924] border-b border-[#232838] flex flex-col gap-2 flex-shrink-0">
+      <div class="px-2.5 py-2 bg-[#10151f] border-b border-[#222d3d] flex flex-col gap-2 flex-shrink-0">
         
         <!-- Filter Pills Scrollable Row -->
         <div class="flex items-center justify-between gap-1">
           <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-1 pr-1">
-            <button onclick="setFilter('ALL')" id="filterALL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex-shrink-0 cursor-pointer" type="button">
+            <button onclick="setFilter('ALL')" id="filterALL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all bg-slate-700 text-slate-100 border border-slate-600 flex-shrink-0 cursor-pointer" type="button">
               ALL LOGS
             </button>
-            <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#2a3044] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
+            <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
               <span>🚨</span><span>REVERSALS</span>
             </button>
-            <button onclick="setFilter('TRADE')" id="filterTRADE" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#2a3044] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
+            <button onclick="setFilter('TRADE')" id="filterTRADE" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
               <span>✅</span><span>TRADES</span>
             </button>
-            <button onclick="setFilter('ML')" id="filterML" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#2a3044] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
+            <button onclick="setFilter('ML')" id="filterML" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
               <span>🧠</span><span>AI / ML</span>
             </button>
-            <button onclick="setFilter('WARN')" id="filterWARN" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#2a3044] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
+            <button onclick="setFilter('WARN')" id="filterWARN" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
               <span>⚠️</span><span>ALERTS</span>
             </button>
           </div>
 
           <!-- Auto-scroll & Clear Actions -->
           <div class="flex items-center gap-1 flex-shrink-0">
-            <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="h-7 px-2 rounded-lg bg-[#0c0e14] border border-[#232838] text-cyan-400 hover:text-cyan-300 text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Toggle Auto-Scroll" type="button">
+            <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="h-7 px-2 rounded-lg bg-[#0e121a] border border-[#222d3d] text-sky-300 hover:text-sky-200 text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Toggle Auto-Scroll" type="button">
               <span class="material-symbols-outlined text-[14px]">vertical_align_bottom</span>
               <span id="autoScrollLabel" class="hidden xs:inline">Auto</span>
             </button>
-            <button onclick="clearTerminal()" class="h-7 px-2 rounded-lg bg-[#0c0e14] border border-[#232838] text-slate-400 hover:text-white text-[11px] font-mono font-bold transition-all cursor-pointer" title="Clear Screen" type="button">
+            <button onclick="clearTerminal()" class="h-7 px-2 rounded-lg bg-[#0e121a] border border-[#222d3d] text-slate-400 hover:text-white text-[11px] font-mono font-bold transition-all cursor-pointer" title="Clear Screen" type="button">
               Clear
             </button>
           </div>
@@ -322,29 +332,29 @@
     <div id="panelSideCockpit" class="w-full flex-1 flex flex-col gap-3 md:col-span-5 lg:col-span-5 overflow-y-auto min-h-0 pr-0.5">
 
       <!-- 1. TACTILE BOT CONTROL CARD -->
-      <section id="mobileTabCockpitSection" class="bg-[#11141c] rounded-2xl border border-[#232838] p-3.5 sm:p-4 shadow-lg flex flex-col gap-3">
+      <section id="mobileTabCockpitSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
         
-        <div class="flex items-center justify-between border-b border-[#232838] pb-2.5">
+        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2.5">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-brand-light text-[20px]">bolt</span>
-            <span class="text-xs font-black uppercase tracking-wider text-white font-mono">Execution Master</span>
+            <span class="material-symbols-outlined text-indigo-300 text-[20px]">bolt</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Execution Master</span>
           </div>
-          <span id="perfStatusBadge" class="px-2 py-0.5 rounded-md bg-[#181b26] border border-[#2a3044] text-[10px] font-bold text-slate-300 font-mono">
+          <span id="perfStatusBadge" class="px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-slate-300 font-mono">
             IDLE
           </span>
         </div>
 
-        <!-- Master Bot Trigger Buttons (Large touch ergonomics) -->
+        <!-- Master Bot Trigger Buttons (Large touch ergonomics, soft styling) -->
         <div class="grid grid-cols-2 gap-2.5">
           
           <!-- Master Activate Button -->
-          <button id="cockpitActivateBtn" onclick="activateBotMobile()" class="py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-mono font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer min-h-[46px]">
+          <button id="cockpitActivateBtn" onclick="activateBotMobile()" class="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]">
             <span class="material-symbols-outlined text-[18px]">play_circle</span>
             <span id="cockpitActivateText">START BOT</span>
           </button>
 
           <!-- Emergency Halt Button -->
-          <button id="cockpitHaltBtn" onclick="haltBotMobile()" class="py-3 px-3 rounded-xl bg-gradient-to-r from-rose-900/60 to-rose-800/60 hover:from-rose-800 hover:to-rose-700 text-rose-200 border border-rose-700/60 font-mono font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/40 active:scale-95 transition-all cursor-pointer min-h-[46px]">
+          <button id="cockpitHaltBtn" onclick="haltBotMobile()" class="py-3 px-3 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 text-rose-200 border border-rose-800/40 font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]">
             <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
             <span>HALT ENGINE</span>
           </button>
@@ -355,19 +365,19 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
           
           <!-- AI Confirmation Gate Toggle -->
-          <label class="flex items-center justify-between p-2.5 rounded-xl bg-[#0c0e14] border border-[#232838] cursor-pointer hover:border-brand/40 transition-colors">
+          <label class="flex items-center justify-between p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d] cursor-pointer hover:border-slate-600 transition-colors">
             <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-brand-light text-[18px]">psychology</span>
+              <span class="material-symbols-outlined text-indigo-300 text-[18px]">psychology</span>
               <div class="flex flex-col">
                 <span class="text-[11px] font-bold text-slate-200 font-mono">AI Gate Guard</span>
                 <span class="text-[9px] text-slate-400">≥ 75% Confidence</span>
               </div>
             </div>
-            <input type="checkbox" id="aiGateSwitch" onchange="toggleAiGateMobile(this.checked)" checked class="w-4 h-4 text-brand bg-[#11141c] border-[#2a3044] rounded focus:ring-brand accent-purple-600 cursor-pointer">
+            <input type="checkbox" id="aiGateSwitch" onchange="toggleAiGateMobile(this.checked)" checked class="w-4 h-4 bg-[#161f2c] border-[#26354a] rounded accent-indigo-500 cursor-pointer">
           </label>
 
           <!-- Night Limit Window Status -->
-          <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0c0e14] border border-[#232838]">
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d]">
             <div class="flex items-center gap-2">
               <span class="text-base">🌙</span>
               <div class="flex flex-col">
@@ -380,32 +390,49 @@
 
         </div>
 
-        <!-- October 5-Window Schedule & Shadow Mode Telemetry -->
-        <div class="p-3 rounded-xl bg-[#0c0e14] border border-purple-900/40 flex flex-col gap-2.5">
+        <!-- NEW: PAIR LOT SIZE & STOP LOSS CONFIGURATION MANAGER -->
+        <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-brand-light text-[17px]">schedule</span>
-              <span class="text-[11px] font-bold font-mono text-purple-200">October 5-Window Schedule</span>
+              <span class="material-symbols-outlined text-sky-300 text-[18px]">tune</span>
+              <span class="text-[11px] font-bold font-mono text-slate-200 uppercase tracking-wide">Pair Lot &amp; SL Controls</span>
             </div>
-            <span id="termShadowBadge" class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-700/50">
+            <span class="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">Live Precision</span>
+          </div>
+          <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
+            Adjust lot size &amp; stop loss (pips) below. You can use the <span class="text-slate-300 font-bold">+/-</span> buttons or <span class="text-slate-300 font-bold">type directly</span> in the box.
+          </p>
+          <div id="termPairControlsList" class="space-y-2 mt-1">
+            <!-- Dynamically populated with lot & sl inputs for every pair -->
+          </div>
+        </div>
+
+        <!-- October 5-Window Schedule & Shadow Mode Telemetry -->
+        <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-indigo-300 text-[17px]">schedule</span>
+              <span class="text-[11px] font-bold font-mono text-slate-200">October 5-Window Schedule</span>
+            </div>
+            <span id="termShadowBadge" class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-950/40 text-indigo-300 border border-indigo-800/40">
               SHADOW MODE
             </span>
           </div>
 
-          <div class="flex items-center justify-between bg-[#11141c] px-2.5 py-2 rounded-lg border border-[#232838]">
+          <div class="flex items-center justify-between bg-[#131924] px-2.5 py-2 rounded-lg border border-[#222d3d]">
             <div class="flex items-center gap-2 min-w-0">
-              <span id="termCurrentWindowDot" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0"></span>
+              <span id="termCurrentWindowDot" class="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0"></span>
               <div class="flex flex-col min-w-0">
-                <span id="termCurrentWindowLabel" class="text-xs font-mono font-extrabold text-white truncate">W5: 8:01 PM - 11:00 PM</span>
+                <span id="termCurrentWindowLabel" class="text-xs font-mono font-bold text-slate-100 truncate">W5: 8:01 PM - 11:00 PM</span>
                 <span class="text-[9px] text-slate-400 font-mono">3-Hour Intervals (Active 8AM-11PM)</span>
               </div>
             </div>
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button onclick="syncWindowNowMobile()" id="termSyncBtn" class="px-2 py-1 rounded bg-[#161924] hover:bg-[#232838] border border-[#2a3044] text-slate-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Force Sync Interval CSV">
+              <button onclick="syncWindowNowMobile()" id="termSyncBtn" class="px-2 py-1 rounded bg-[#182130] hover:bg-[#222d40] border border-[#26354a] text-slate-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Force Sync Interval CSV">
                 <span class="material-symbols-outlined text-[13px]">sync</span>
                 <span>Sync</span>
               </button>
-              <a href="/api/windows/export_csv" download="temporal_windows_october.csv" class="px-2 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-700/60 text-cyan-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Download October CSV">
+              <a href="/api/windows/export_csv" download="temporal_windows_october.csv" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Download October CSV">
                 <span class="material-symbols-outlined text-[13px]">download</span>
                 <span>CSV</span>
               </a>
@@ -416,12 +443,12 @@
       </section>
 
       <!-- 2. EXECUTION EDGE METRICS CARDS -->
-      <section id="mobileTabMetricsSection" class="bg-[#11141c] rounded-2xl border border-[#232838] p-3.5 sm:p-4 shadow-lg flex flex-col gap-3">
+      <section id="mobileTabMetricsSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
         
-        <div class="flex items-center justify-between border-b border-[#232838] pb-2">
+        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-emerald-400 text-[20px]">analytics</span>
-            <span class="text-xs font-black uppercase tracking-wider text-white font-mono">Mathematical Mechanics</span>
+            <span class="material-symbols-outlined text-emerald-300 text-[20px]">analytics</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Mathematical Mechanics</span>
           </div>
           <span class="text-[10px] text-slate-500 font-mono">Pure R:R</span>
         </div>
@@ -430,49 +457,49 @@
         <div class="grid grid-cols-2 gap-2.5">
           
           <!-- Win Accuracy Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <span class="text-[10px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Win Accuracy
             </span>
             <div class="mt-2 flex items-baseline justify-between">
-              <span id="statAccuracy" class="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono-numbers">0.0%</span>
+              <span id="statAccuracy" class="text-2xl sm:text-3xl font-bold text-emerald-300 font-mono-numbers">0.0%</span>
               <span class="text-[9px] font-mono text-slate-400">Target</span>
             </div>
           </div>
 
           <!-- Target R:R Ratio Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <span class="text-[10px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-brand-light"></span> Target R:R
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-300"></span> Target R:R
             </span>
             <div class="mt-2 flex items-baseline justify-between">
-              <span id="statTargetRR" class="text-2xl sm:text-3xl font-extrabold text-brand-light font-mono-numbers">1:2.50</span>
+              <span id="statTargetRR" class="text-2xl sm:text-3xl font-bold text-indigo-300 font-mono-numbers">1:2.50</span>
               <span class="text-[9px] font-mono text-indigo-400">EDGE</span>
             </div>
           </div>
 
           <!-- TP / SL Hits Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Execution Hits</span>
             <div class="mt-2">
-              <span id="statTPSLCounts" class="text-sm sm:text-base font-extrabold text-white font-mono-numbers">
-                <span class="text-emerald-400">0 TP</span> · <span class="text-rose-400">0 SL</span>
+              <span id="statTPSLCounts" class="text-sm sm:text-base font-bold text-slate-100 font-mono-numbers">
+                <span class="text-emerald-300">0 TP</span> · <span class="text-rose-300">0 SL</span>
               </span>
             </div>
           </div>
 
           <!-- Total Closed Trades Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Total Closed</span>
             <div class="mt-2">
-              <span id="statTradeCount" class="text-sm sm:text-base font-extrabold text-slate-200 font-mono-numbers">0 trades</span>
+              <span id="statTradeCount" class="text-sm sm:text-base font-bold text-slate-200 font-mono-numbers">0 trades</span>
             </div>
           </div>
 
         </div>
 
         <!-- Strategy Win Rate Breakdown (Compact for mobile) -->
-        <div class="mt-1 pt-2 border-t border-[#232838] text-[11px] font-mono">
+        <div class="mt-1 pt-2 border-t border-[#222d3d] text-[11px] font-mono">
           <div class="flex items-center justify-between text-[10px] text-slate-500 uppercase font-bold mb-1.5">
             <span>Strategy</span>
             <span>TP / SL</span>
@@ -482,32 +509,32 @@
             <div class="flex items-center justify-between text-slate-300">
               <span class="font-bold">SMC Swing</span>
               <span class="text-slate-400">7 / 11</span>
-              <span class="text-emerald-400 font-bold">38.9%</span>
+              <span class="text-emerald-300 font-bold">38.9%</span>
             </div>
             <div class="flex items-center justify-between text-slate-300">
               <span class="font-bold">5M Scalp</span>
               <span class="text-slate-400">4 / 10</span>
-              <span class="text-emerald-400 font-bold">28.6%</span>
+              <span class="text-emerald-300 font-bold">28.6%</span>
             </div>
             <div class="flex items-center justify-between text-slate-300">
               <span class="font-bold">ICT Institutional</span>
               <span class="text-slate-400">3 / 5</span>
-              <span class="text-emerald-400 font-bold">37.5%</span>
+              <span class="text-emerald-300 font-bold">37.5%</span>
             </div>
           </div>
         </div>
 
       </section>
 
-      <!-- 3. TRAPSHIELD AI & RISK SAFETY CARD -->
-      <section id="mobileTabRiskSection" class="bg-[#11141c] rounded-2xl border border-[#232838] p-3.5 sm:p-4 shadow-lg flex flex-col gap-3">
+      <!-- 3. TRAPSHIELD AI & RISK SAFETY CARD (Soft, clean, no neon) -->
+      <section id="mobileTabRiskSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
         
-        <div class="flex items-center justify-between border-b border-[#232838] pb-2">
+        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2">
           <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-cyan-400 text-[20px]">shield</span>
-            <span class="text-xs font-black uppercase tracking-wider text-white font-mono">Risk Sentinel & ML</span>
+            <span class="material-symbols-outlined text-sky-300 text-[20px]">shield</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Risk Sentinel &amp; ML</span>
           </div>
-          <span id="cbStatusBadge" class="px-2 py-0.5 rounded-md bg-[#181b26] border border-[#2a3044] text-[10px] font-bold text-emerald-400 font-mono">
+          <span id="cbStatusBadge" class="px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-emerald-300 font-mono">
             NORMAL
           </span>
         </div>
@@ -515,28 +542,28 @@
         <div class="grid grid-cols-2 gap-2.5">
           
           <!-- TrapShield AI Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <div class="flex items-center justify-between">
               <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">TrapShield</span>
-              <span id="mlStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand/20 text-brand-light font-bold">GATED</span>
+              <span id="mlStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold">GATED</span>
             </div>
             <div class="mt-2">
-              <span id="statTrapsCaught" class="text-sm font-bold text-cyan-300 font-mono">0 events</span>
-              <div class="text-[9px] text-slate-500 font-mono mt-0.5">
-                Samples: <span id="statTrapSamples" class="text-slate-400 font-bold">0</span>
+              <span id="statTrapsCaught" class="text-sm font-bold text-slate-100 font-mono">0 events</span>
+              <div class="text-[9px] text-slate-400 font-mono mt-0.5">
+                Samples: <span id="statTrapSamples" class="text-slate-300 font-bold">0</span>
               </div>
             </div>
           </div>
 
           <!-- Circuit Breaker Box -->
-          <div class="p-3 rounded-xl bg-[#0c0e14] border border-[#232838] flex flex-col justify-between">
+          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
             <div class="flex items-center justify-between">
               <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Safety Lock</span>
               <span id="statPrimaryPair" class="text-[9px] text-slate-400 font-mono">None</span>
             </div>
             <div class="mt-2">
-              <span id="statRiskStatus" class="text-sm font-bold text-emerald-400 font-mono">Operational</span>
-              <div class="text-[9px] text-slate-500 font-mono mt-0.5">
+              <span id="statRiskStatus" class="text-sm font-bold text-emerald-300 font-mono">Operational</span>
+              <div class="text-[9px] text-slate-400 font-mono mt-0.5">
                 Circuit Breaker
               </div>
             </div>
@@ -544,22 +571,14 @@
 
         </div>
 
-        <!-- Monitored Pairs Quick Status Chips -->
-        <div class="pt-2 border-t border-[#232838]">
-          <span class="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-2">Monitored Market Pairs</span>
-          <div class="grid grid-cols-3 gap-1.5 font-mono text-[10px]" id="cockpitPairsGrid">
-            <div class="p-2 rounded-lg bg-[#0c0e14] border border-[#232838] flex flex-col items-center text-center">
-              <span class="font-black text-amber-400">XAUUSD</span>
-              <span class="text-slate-400 text-[9px]">0.05 · 25p</span>
-            </div>
-            <div class="p-2 rounded-lg bg-[#0c0e14] border border-[#232838] flex flex-col items-center text-center">
-              <span class="font-black text-cyan-400">EURUSD</span>
-              <span class="text-slate-400 text-[9px]">0.10 · 15p</span>
-            </div>
-            <div class="p-2 rounded-lg bg-[#0c0e14] border border-[#232838] flex flex-col items-center text-center">
-              <span class="font-black text-emerald-400">GBPUSD</span>
-              <span class="text-slate-400 text-[9px]">0.12 · 20p</span>
-            </div>
+        <!-- Monitored Market Pairs with Interactive Lot Size & SL Stepper Inputs -->
+        <div class="pt-2.5 border-t border-[#222d3d]">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] font-mono font-bold uppercase text-slate-300">Monitored Pairs · Lot &amp; SL Controls</span>
+            <span class="text-[9px] text-slate-400 font-mono">Direct Input / Steppers</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[10px]" id="cockpitPairsGrid">
+            <!-- Dynamically populated with Lot Size and SL Stepper Pods -->
           </div>
         </div>
 
@@ -572,8 +591,8 @@
   <!-- ========================================================================= -->
   <!-- 3. MOBILE BOTTOM NAVIGATION DOCK (< 768px ONLY)                           -->
   <!-- ========================================================================= -->
-  <!-- High ergonomics: 4 touch tabs positioned for thumb reach with haptic tap  -->
-  <nav class="safe-bottom w-full bg-[#11141c]/95 backdrop-blur-md border-t border-[#232838] flex items-center justify-around py-2 px-3 z-40 md:hidden flex-shrink-0">
+  <!-- Clean, soft, thumb-reach navigation bar with no neon glow                 -->
+  <nav class="safe-bottom w-full bg-[#131924]/95 backdrop-blur-md border-t border-[#222d3d] flex items-center justify-around py-2 px-3 z-40 md:hidden flex-shrink-0">
     
     <!-- Tab 1: Terminal Feed -->
     <button onclick="switchMobileTab('terminal')" id="mobileNavTerminal" class="mobile-nav-active flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3" type="button">
@@ -892,8 +911,8 @@
       term.innerHTML = filtered.map(log => {
         // Divider row for market ticks
         if (log.includes("─── TICK") || log.includes("─── EURUSD") || log.includes("─── GBPUSD") || log.includes("─── USDJPY")) {
-          return `<div class="my-1 px-2.5 py-1 bg-[#161924] rounded-lg text-slate-400 text-[10px] sm:text-xs flex items-center justify-between font-bold border border-[#232838]">
-            <span class="text-cyan-300 font-mono">${escapeHtml(log)}</span>
+          return `<div class="my-1 px-2.5 py-1 bg-[#131924] rounded-lg text-slate-400 text-[10px] sm:text-xs flex items-center justify-between font-bold border border-[#222d3d]">
+            <span class="text-sky-300 font-mono">${escapeHtml(log)}</span>
           </div>`;
         }
 
@@ -902,15 +921,15 @@
         if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED") || log.includes("REVERSAL")) {
           itemClass = "log-item-reversal text-rose-300 font-bold";
         } else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD") || log.includes("SWEEP")) {
-          itemClass = "log-item-shield text-cyan-300 font-bold";
+          itemClass = "log-item-shield text-sky-300 font-bold";
         } else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED") || log.includes("FILLED") || log.includes("TRADE")) {
           itemClass = "log-item-trade text-emerald-300 font-bold";
         } else if (isMlLog(log)) {
-          itemClass = "log-item-ml text-purple-300 font-medium";
+          itemClass = "log-item-ml text-indigo-300 font-medium";
         } else if (log.includes("⚠️") || log.includes("WARN") || log.includes("REJECTED") || log.includes("SKIPPED") || log.includes("PAUSED")) {
-          itemClass = "log-item-warn text-amber-300 font-medium";
+          itemClass = "log-item-warn text-amber-200 font-medium";
         } else if (log.includes("❌") || log.includes("ERROR") || log.includes("FAILED")) {
-          itemClass = "log-item-reversal text-rose-400 font-bold";
+          itemClass = "log-item-reversal text-rose-300 font-bold";
         }
 
         return `<div class="py-1 px-2.5 rounded-lg ${itemClass} flex items-start gap-2 text-[11px] sm:text-xs transition-colors leading-relaxed">
@@ -934,6 +953,263 @@
         downBtn.classList.remove('flex');
       }
     });
+
+    // -------------------------------------------------------------------------
+    // PAIR LOT SIZE & STOP LOSS STATE & LIVE CONTROLLERS (SOFT & CLEAN STYLING)
+    // -------------------------------------------------------------------------
+    const defaultPairMeta = {
+      xauusd: { symbol: 'XAUUSD', name: 'Gold / US Dollar', lot: 0.05, sl: 25.0, lotStep: 0.01, slStep: 5, color: 'text-amber-300', tag: 'COMMODITY', active: true },
+      eurusd: { symbol: 'EURUSD', name: 'Euro / US Dollar', lot: 0.10, sl: 15.0, lotStep: 0.01, slStep: 5, color: 'text-sky-300', tag: 'MAJOR FX', active: true },
+      gbpusd: { symbol: 'GBPUSD', name: 'Pound / US Dollar', lot: 0.12, sl: 20.0, lotStep: 0.01, slStep: 5, color: 'text-emerald-300', tag: 'MAJOR FX', active: true },
+      btcusd: { symbol: 'BTCUSD', name: 'Bitcoin / US Dollar', lot: 0.01, sl: 150.0, lotStep: 0.01, slStep: 25, color: 'text-orange-300', tag: 'CRYPTO', active: true },
+      ethusd: { symbol: 'ETHUSD', name: 'Ethereum / US Dollar', lot: 0.05, sl: 80.0, lotStep: 0.01, slStep: 10, color: 'text-purple-300', tag: 'CRYPTO', active: true }
+    };
+
+    let pairSettingsState = { ...defaultPairMeta };
+    let pairControlsRendered = false;
+
+    function syncPairsFromState(pairsConfig, selectedSymbols = []) {
+      if (!pairsConfig || Object.keys(pairsConfig).length === 0) {
+        if (!pairControlsRendered) {
+          renderRiskPairs();
+          renderControlsPairs();
+          pairControlsRendered = true;
+        }
+        return;
+      }
+
+      let changed = false;
+      Object.keys(pairsConfig).forEach(k => {
+        const key = k.toLowerCase();
+        const incoming = pairsConfig[k];
+        if (!pairSettingsState[key]) {
+          pairSettingsState[key] = {
+            ...(defaultPairMeta[key] || {
+              symbol: incoming.symbol || key.toUpperCase(),
+              name: incoming.name || key.toUpperCase(),
+              lotStep: 0.01,
+              slStep: 5,
+              color: 'text-slate-200',
+              tag: 'ASSET'
+            })
+          };
+        }
+        const current = pairSettingsState[key];
+        const isEditingLot = document.activeElement && (document.activeElement.id === `input-lot-${key}` || document.activeElement.id === `risk-lot-${key}`);
+        const isEditingSl = document.activeElement && (document.activeElement.id === `input-sl-${key}` || document.activeElement.id === `risk-sl-${key}`);
+
+        if (!isEditingLot && typeof incoming.lot === 'number' && current.lot !== incoming.lot) {
+          current.lot = incoming.lot;
+          changed = true;
+        }
+        if (!isEditingSl && typeof incoming.sl === 'number' && current.sl !== incoming.sl) {
+          current.sl = incoming.sl;
+          changed = true;
+        }
+        const isActive = incoming.active ?? (selectedSymbols.includes(current.symbol));
+        if (current.active !== isActive) {
+          current.active = isActive;
+          changed = true;
+        }
+      });
+
+      if (changed || !pairControlsRendered) {
+        renderRiskPairs();
+        renderControlsPairs();
+        pairControlsRendered = true;
+      }
+    }
+
+    function renderRiskPairs() {
+      const grid = document.getElementById('cockpitPairsGrid');
+      if (!grid) return;
+
+      const pairs = Object.entries(pairSettingsState);
+      grid.innerHTML = pairs.slice(0, 3).map(([key, pair]) => {
+        const lotVal = typeof pair.lot === 'number' ? pair.lot.toFixed(2) : parseFloat(pair.lot || 0.05).toFixed(2);
+        const slVal = typeof pair.sl === 'number' ? Math.round(pair.sl) : Math.round(parseFloat(pair.sl || 25));
+
+        return `
+          <div class="p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
+            <div class="flex items-center justify-between pb-1.5 border-b border-[#222d3d]">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold font-mono ${pair.color || 'text-slate-200'} text-xs">${pair.symbol}</span>
+                <span class="text-[9px] text-slate-400 font-sans">${pair.name.split('/')[0].trim()}</span>
+              </div>
+              <span class="text-[9px] px-1.5 py-0.2 rounded font-bold font-mono ${pair.active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400'}">
+                ${pair.active ? 'ACTIVE' : 'OFF'}
+              </span>
+            </div>
+
+            <!-- Lot Size Stepper Row -->
+            <div class="flex items-center justify-between mt-2 bg-[#131924] px-2 py-1 rounded-lg border border-[#222d3d]">
+              <span class="text-[9px] uppercase font-bold text-slate-400">LOT</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="updatePairLot('${key}', -0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
+                <input id="risk-lot-${key}" type="number" step="0.01" min="0.01" max="10.0" value="${lotVal}" onchange="onPairLotInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
+                <button type="button" onclick="updatePairLot('${key}', 0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
+              </div>
+            </div>
+
+            <!-- Stop Loss Stepper Row -->
+            <div class="flex items-center justify-between mt-1.5 bg-[#131924] px-2 py-1 rounded-lg border border-[#222d3d]">
+              <span class="text-[9px] uppercase font-bold text-slate-400">SL (pips)</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="updatePairSl('${key}', -${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
+                <input id="risk-sl-${key}" type="number" step="1" min="1" max="500" value="${slVal}" onchange="onPairSlInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
+                <button type="button" onclick="updatePairSl('${key}', ${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderControlsPairs() {
+      const container = document.getElementById('termPairControlsList');
+      if (!container) return;
+
+      container.innerHTML = Object.entries(pairSettingsState).map(([key, pair]) => {
+        const lotVal = typeof pair.lot === 'number' ? pair.lot.toFixed(2) : parseFloat(pair.lot || 0.05).toFixed(2);
+        const slVal = typeof pair.sl === 'number' ? Math.round(pair.sl) : Math.round(parseFloat(pair.sl || 25));
+
+        return `
+          <div class="p-2.5 rounded-xl bg-[#131924] border border-[#222d3d] flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="font-bold font-mono ${pair.color || 'text-slate-100'} text-xs">${pair.symbol}</span>
+                <span class="text-[10px] text-slate-400">${pair.name}</span>
+              </div>
+              <button type="button" onclick="togglePairStateMobile('${key}')" class="px-2 py-0.5 rounded text-[9px] font-bold font-mono transition-all cursor-pointer ${
+                pair.active
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }">
+                ${pair.active ? 'ACTIVE' : 'DISABLED'}
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mt-0.5">
+              <!-- Lot Pod -->
+              <div class="bg-[#0f141f] p-2 rounded-lg border border-[#222d3d] flex items-center justify-between">
+                <span class="text-[9px] uppercase font-bold text-slate-400">LOT</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="updatePairLot('${key}', -0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
+                  <input id="input-lot-${key}" type="number" step="0.01" min="0.01" max="10.0" value="${lotVal}" onchange="onPairLotInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
+                  <button type="button" onclick="updatePairLot('${key}', 0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
+                </div>
+              </div>
+
+              <!-- SL Pod -->
+              <div class="bg-[#0f141f] p-2 rounded-lg border border-[#222d3d] flex items-center justify-between">
+                <span class="text-[9px] uppercase font-bold text-slate-400">SL (pips)</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="updatePairSl('${key}', -${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
+                  <input id="input-sl-${key}" type="number" step="1" min="1" max="500" value="${slVal}" onchange="onPairSlInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
+                  <button type="button" onclick="updatePairSl('${key}', ${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function updatePairLot(pairKey, delta) {
+      const pair = pairSettingsState[pairKey.toLowerCase()];
+      if (!pair) return;
+      let newLot = Math.max(0.01, Math.min(10.0, parseFloat((pair.lot + delta).toFixed(2))));
+      pair.lot = newLot;
+      renderRiskPairs();
+      renderControlsPairs();
+      await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
+    }
+
+    async function updatePairSl(pairKey, delta) {
+      const pair = pairSettingsState[pairKey.toLowerCase()];
+      if (!pair) return;
+      let newSl = Math.max(1, Math.min(500, Math.round(pair.sl + delta)));
+      pair.sl = newSl;
+      renderRiskPairs();
+      renderControlsPairs();
+      await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
+    }
+
+    let lotSlDebounceTimer = null;
+    function onPairLotInputChange(pairKey, inputElem) {
+      const pair = pairSettingsState[pairKey.toLowerCase()];
+      if (!pair) return;
+      let val = parseFloat(inputElem.value);
+      if (!isNaN(val) && val >= 0.01) {
+        pair.lot = Math.round(val * 100) / 100;
+        clearTimeout(lotSlDebounceTimer);
+        lotSlDebounceTimer = setTimeout(() => {
+          persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
+          renderRiskPairs();
+          renderControlsPairs();
+        }, 500);
+      }
+    }
+
+    function onPairSlInputChange(pairKey, inputElem) {
+      const pair = pairSettingsState[pairKey.toLowerCase()];
+      if (!pair) return;
+      let val = parseFloat(inputElem.value);
+      if (!isNaN(val) && val >= 1) {
+        pair.sl = Math.round(val);
+        clearTimeout(lotSlDebounceTimer);
+        lotSlDebounceTimer = setTimeout(() => {
+          persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
+          renderRiskPairs();
+          renderControlsPairs();
+        }, 500);
+      }
+    }
+
+    async function togglePairStateMobile(pairKey) {
+      const pair = pairSettingsState[pairKey.toLowerCase()];
+      if (!pair) return;
+      pair.active = !pair.active;
+      renderRiskPairs();
+      renderControlsPairs();
+      try {
+        await fetch('/api/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'toggle_pair',
+            pair: pairKey.toLowerCase(),
+            active: pair.active
+          })
+        });
+        showToast(`${pair.symbol}: ${pair.active ? 'ACTIVATED' : 'DISABLED'}`);
+      } catch (err) {
+        showToast("Error updating pair active state", true);
+      }
+    }
+
+    async function persistPairSettings(pairKey, lot, sl) {
+      try {
+        const res = await fetch('/api/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update_pair_settings',
+            pair: pairKey.toLowerCase(),
+            lot: lot,
+            sl: sl
+          })
+        });
+        const json = await res.json();
+        if (res.ok && json.status === 'success') {
+          showToast(`Saved ${pairKey.toUpperCase()}: ${lot.toFixed(2)} Lot · ${Math.round(sl)}p SL`);
+        } else {
+          showToast(json.detail || json.message || "Failed to update pair settings", true);
+        }
+      } catch (e) {
+        showToast("Network error saving pair settings", true);
+      }
+    }
 
     // -------------------------------------------------------------------------
     // TELEMETRY POLLING & STATE SYNCHRONIZATION
@@ -960,32 +1236,32 @@
         const cockpitActivateText = document.getElementById('cockpitActivateText');
 
         if (isBotActive) {
-          stateDot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
-          stateLabel.className = "text-emerald-400 uppercase tracking-wide font-black";
+          stateDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+          stateLabel.className = "text-emerald-300 uppercase tracking-wide font-bold";
           stateLabel.innerText = "ACTIVE";
           
           perfBadge.innerText = "RUNNING";
-          perfBadge.className = "px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[10px] font-bold font-mono";
+          perfBadge.className = "px-2 py-0.5 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 text-[10px] font-bold font-mono";
 
-          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-extrabold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/60 text-rose-300 border border-rose-700/60 hover:bg-rose-900/60 cursor-pointer min-h-[36px]";
+          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/30 text-rose-300 border border-rose-800/40 hover:bg-rose-900/40 cursor-pointer min-h-[36px]";
           headerQuickText.innerText = "HALT";
 
           cockpitActivateBtn.disabled = true;
-          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-slate-800 text-slate-500 font-mono font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 border border-slate-700 cursor-not-allowed opacity-60 min-h-[46px]";
+          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-slate-800 text-slate-500 font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 border border-slate-700 cursor-not-allowed opacity-60 min-h-[46px]";
           cockpitActivateText.innerText = "ENGINE RUNNING";
         } else {
           stateDot.className = "w-2 h-2 rounded-full bg-amber-400";
-          stateLabel.className = "text-amber-400 uppercase tracking-wide font-black";
+          stateLabel.className = "text-amber-300 uppercase tracking-wide font-bold";
           stateLabel.innerText = "IDLE";
 
           perfBadge.innerText = "IDLE";
-          perfBadge.className = "px-2 py-0.5 rounded-md bg-[#181b26] border border-[#2a3044] text-[10px] font-bold text-slate-300 font-mono";
+          perfBadge.className = "px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-slate-300 font-mono";
 
-          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-extrabold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-emerald-950/60 text-emerald-300 border border-emerald-700/60 hover:bg-emerald-900/60 cursor-pointer min-h-[36px]";
+          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-emerald-950/30 text-emerald-300 border border-emerald-800/40 hover:bg-emerald-900/40 cursor-pointer min-h-[36px]";
           headerQuickText.innerText = "START";
 
           cockpitActivateBtn.disabled = false;
-          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-mono font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 active:scale-95 transition-all cursor-pointer min-h-[46px]";
+          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]";
           cockpitActivateText.innerText = "START BOT";
         }
 
@@ -1011,7 +1287,7 @@
         if (statTrades) statTrades.innerText = `${totalTrades} trades`;
 
         const statTPSL = document.getElementById('statTPSLCounts');
-        if (statTPSL) statTPSL.innerHTML = `<span class="text-emerald-400">${winHits} TP</span> · <span class="text-rose-400">${lossHits} SL</span>`;
+        if (statTPSL) statTPSL.innerHTML = `<span class="text-emerald-300">${winHits} TP</span> · <span class="text-rose-300">${lossHits} SL</span>`;
 
         // 4. TrapShield AI Metrics
         const trapData = data.trap_stats || data.ml_trap_detector;
@@ -1036,20 +1312,23 @@
         const riskStatus = document.getElementById('statRiskStatus');
         if (cbActive) {
           cbBadge.innerText = "TRIPPED";
-          cbBadge.className = "px-2 py-0.5 rounded-md bg-rose-950/60 text-rose-300 border border-rose-800 text-[10px] font-bold font-mono";
+          cbBadge.className = "px-2 py-0.5 rounded-md bg-rose-950/40 text-rose-300 border border-rose-800/40 text-[10px] font-bold font-mono";
           riskStatus.innerText = "Safety Lock Active";
-          riskStatus.className = "text-sm font-bold text-rose-400 font-mono";
+          riskStatus.className = "text-sm font-bold text-rose-300 font-mono";
         } else {
           cbBadge.innerText = "NORMAL";
-          cbBadge.className = "px-2 py-0.5 rounded-md bg-[#181b26] border border-[#2a3044] text-[10px] font-bold text-emerald-400 font-mono";
+          cbBadge.className = "px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-emerald-300 font-mono";
           riskStatus.innerText = "Operational";
-          riskStatus.className = "text-sm font-bold text-emerald-400 font-mono";
+          riskStatus.className = "text-sm font-bold text-emerald-300 font-mono";
         }
 
         // 6. Monitored Symbols & Primary Pair
         const symbols = data.selected_symbols || [];
         document.getElementById('monitoredSymbols').innerText = symbols.length ? `Pairs: ${symbols.join(', ')}` : 'Pairs: None';
         document.getElementById('statPrimaryPair').innerText = symbols.length ? symbols[0] : 'None';
+
+        // 6b. Synchronize Pair Lot Size & Stop Loss Stepper Pods
+        syncPairsFromState(data.pairs_config, symbols);
 
         // 7. AI Gate Switch status sync
         if (typeof data.ai_confirmation_enabled === 'boolean') {
@@ -1077,7 +1356,7 @@
           if (winDot) {
             winDot.className = win.is_night
               ? "w-2 h-2 rounded-full bg-indigo-400 animate-pulse flex-shrink-0"
-              : "w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0";
+              : "w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0";
           }
         }
 

@@ -39,8 +39,8 @@
     ::-webkit-scrollbar-track { background: #f1f5f9; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    .pulse-glow-green { box-shadow: 0 0 16px rgba(16, 185, 129, 0.45); }
-    .pulse-glow-red { box-shadow: 0 0 16px rgba(225, 29, 72, 0.45); }
+    .pulse-glow-green { box-shadow: 0 1px 4px rgba(16, 185, 129, 0.25); }
+    .pulse-glow-red { box-shadow: 0 1px 4px rgba(225, 29, 72, 0.25); }
 
     /* ========================================================================= */
     /* LUMINOUS STRATEGY CARDS STYLING (Uiverse.io Adapted for Project)           */
@@ -599,29 +599,28 @@
     }
 
     .cyber-pair-card.active-gold {
-      border-color: rgba(245, 158, 11, 0.45);
-      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 16px rgba(245, 158, 11, 0.18), inset 0 1px 0 rgba(251, 191, 36, 0.25);
+      border-color: rgba(245, 158, 11, 0.35);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
     }
     .cyber-pair-card.active-cyan {
-      border-color: rgba(6, 182, 212, 0.45);
-      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 16px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(56, 189, 248, 0.25);
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
     }
     .cyber-pair-card.active-emerald {
-      border-color: rgba(16, 185, 129, 0.45);
-      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 16px rgba(16, 185, 129, 0.18), inset 0 1px 0 rgba(52, 211, 153, 0.25);
+      border-color: rgba(16, 185, 129, 0.35);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
     }
     .cyber-pair-card.active-orange {
-      border-color: rgba(249, 115, 22, 0.45);
-      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 16px rgba(249, 115, 22, 0.18), inset 0 1px 0 rgba(251, 146, 60, 0.25);
+      border-color: rgba(249, 115, 22, 0.35);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
     }
     .cyber-pair-card.active-purple {
-      border-color: rgba(139, 92, 246, 0.45);
-      box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 16px rgba(139, 92, 246, 0.18), inset 0 1px 0 rgba(167, 139, 250, 0.25);
+      border-color: rgba(139, 92, 246, 0.35);
+      box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45);
     }
 
     .cyber-pair-card.inactive-pair {
-      opacity: 0.65;
-      filter: grayscale(0.25);
+      opacity: 0.55;
     }
 
     .pair-glow-slit {
@@ -629,28 +628,23 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 3px;
+      height: 2px;
       transition: all 0.3s ease;
     }
     .pair-glow-xauusd {
-      background: linear-gradient(90deg, transparent, #f59e0b, #fbbf24, transparent);
-      box-shadow: 0 0 12px #f59e0b;
+      background: #f59e0b;
     }
     .pair-glow-eurusd {
-      background: linear-gradient(90deg, transparent, #06b6d4, #38bdf8, transparent);
-      box-shadow: 0 0 12px #06b6d4;
+      background: #38bdf8;
     }
     .pair-glow-gbpusd {
-      background: linear-gradient(90deg, transparent, #10b981, #34d399, transparent);
-      box-shadow: 0 0 12px #10b981;
+      background: #10b981;
     }
     .pair-glow-btcusd {
-      background: linear-gradient(90deg, transparent, #f97316, #fb923c, transparent);
-      box-shadow: 0 0 12px #f97316;
+      background: #f97316;
     }
     .pair-glow-ethusd {
-      background: linear-gradient(90deg, transparent, #8b5cf6, #a78bfa, transparent);
-      box-shadow: 0 0 12px #8b5cf6;
+      background: #8b5cf6;
     }
 
     .stepper-btn {
@@ -836,7 +830,7 @@
         </button>
 
         <!-- Master Activate Button -->
-        <button id="activateBtn" class="group px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs sm:text-sm font-black tracking-wider uppercase flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-[0_4px_16px_rgba(16,185,129,0.3)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+        <button id="activateBtn" class="group px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs sm:text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
           <span class="material-symbols-outlined text-[20px]">play_circle</span>
           <span id="activateBtnText">ACTIVATE BOT</span>
         </button>
@@ -1427,7 +1421,7 @@
     function renderPairs() {
       const container = document.getElementById('pairsContainer');
       if (!container) return;
-      const isLocked = state.botStatus === 'RUNNING';
+      const isRunning = state.botStatus === 'RUNNING';
 
       container.innerHTML = Object.values(state.pairs).map(pair => {
         const isActive = pair.active;
@@ -1436,50 +1430,49 @@
 
         return `
           <div class="cyber-pair-card ${pair.accentBorder || ''} ${isActive ? '' : 'inactive-pair'}">
-            <!-- Glowing top slit lighting indicator -->
+            <!-- Top accent slit -->
             <div class="pair-glow-slit ${isActive ? 'pair-glow-' + pair.id : ''}"></div>
 
             <!-- Top Row: Symbol & Category + Active Switch -->
             <div>
               <div class="flex items-center justify-between gap-2 mb-1.5">
                 <div class="flex items-center gap-1.5">
-                  <span class="font-black text-white font-mono text-base tracking-tight">${pair.symbol}</span>
-                  <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${pair.tagColor || 'text-slate-300 bg-slate-800 border-slate-700'}">
+                  <span class="font-bold text-white font-mono text-base tracking-tight">${pair.symbol}</span>
+                  <span class="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border ${pair.tagColor || 'text-slate-300 bg-slate-800/80 border-slate-700'}">
                     ${pair.category || 'ASSET'}
                   </span>
                 </div>
                 <button 
                   type="button"
                   onclick="togglePair('${pair.id}')"
-                  class="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer ${
+                  class="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer ${
                     isActive 
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:bg-emerald-500/25' 
+                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25' 
                       : 'bg-slate-800/70 text-slate-400 border border-slate-700/60 hover:bg-slate-800 hover:text-slate-300'
                   }"
                   title="${isActive ? 'Click to deactivate pair' : 'Click to activate pair'}">
-                  <span>${isActive ? '⚡ ACTIVE' : '— OFF'}</span>
+                  <span>${isActive ? '● ACTIVE' : '— OFF'}</span>
                 </button>
               </div>
               <div class="text-[11px] text-slate-400 font-medium mb-3 truncate">${pair.name}</div>
             </div>
 
-            <!-- Dual Cyber Precision Steppers: Lot Size & Stop Loss -->
+            <!-- Dual Soft Precision Steppers: Lot Size & Stop Loss -->
             <div class="space-y-2.5 my-1">
               
               <!-- 1. LOT SIZE STEPPER POD -->
-              <div class="bg-black/40 border border-white/5 rounded-xl p-2.5 backdrop-blur-sm">
+              <div class="bg-black/30 border border-slate-800 rounded-xl p-2.5">
                 <div class="flex items-center justify-between mb-1.5">
-                  <span class="text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-300 flex items-center gap-1">
-                    <span class="text-cyan-400 text-xs">📊</span> LOT SIZE
+                  <span class="text-[10px] uppercase font-mono font-semibold tracking-wider text-slate-300 flex items-center gap-1">
+                    <span class="text-sky-300 text-xs">📊</span> LOT SIZE
                   </span>
-                  <span class="text-[9px] text-cyan-400 font-mono font-bold">±0.01</span>
+                  <span class="text-[9px] text-sky-300/80 font-mono font-medium">±0.01</span>
                 </div>
                 <div class="flex items-center justify-between gap-1.5">
                   <button 
                     type="button" 
                     onclick="adjustPairLot('${pair.id}', -0.01)" 
-                    class="stepper-btn bg-slate-800/90 hover:bg-slate-700 text-cyan-200 border border-slate-700/80 active:scale-90 disabled:opacity-30 disabled:pointer-events-none"
-                    ${isLocked ? 'disabled' : ''}
+                    class="stepper-btn bg-slate-800/80 hover:bg-slate-700 text-sky-200 border border-slate-700 active:scale-90"
                     title="Decrease Lot Size by 0.01">
                     −
                   </button>
@@ -1491,15 +1484,13 @@
                     value="${lotVal}" 
                     id="pairLotInput_${pair.id}"
                     onchange="onPairLotChange('${pair.id}', this.value)"
-                    ${isLocked ? 'disabled' : ''}
-                    class="w-full bg-slate-950 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-lg py-1 px-1 text-center font-mono font-black text-sm text-cyan-300 outline-none transition-all disabled:opacity-40 disabled:bg-slate-900"
+                    class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-sky-500 focus:ring-1 focus:ring-sky-500/40 rounded-lg py-1 px-1 text-center font-mono font-semibold text-sm text-sky-200 outline-none transition-all"
                     title="Enter custom Lot Size"
                   />
                   <button 
                     type="button" 
                     onclick="adjustPairLot('${pair.id}', 0.01)" 
-                    class="stepper-btn bg-slate-800/90 hover:bg-slate-700 text-cyan-200 border border-slate-700/80 active:scale-90 disabled:opacity-30 disabled:pointer-events-none"
-                    ${isLocked ? 'disabled' : ''}
+                    class="stepper-btn bg-slate-800/80 hover:bg-slate-700 text-sky-200 border border-slate-700 active:scale-90"
                     title="Increase Lot Size by 0.01">
                     +
                   </button>
@@ -1507,19 +1498,18 @@
               </div>
 
               <!-- 2. STOP LOSS (SL) STEPPER POD -->
-              <div class="bg-black/40 border border-white/5 rounded-xl p-2.5 backdrop-blur-sm">
+              <div class="bg-black/30 border border-slate-800 rounded-xl p-2.5">
                 <div class="flex items-center justify-between mb-1.5">
-                  <span class="text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-300 flex items-center gap-1">
-                    <span class="text-amber-400 text-xs">🛡️</span> STOP LOSS
+                  <span class="text-[10px] uppercase font-mono font-semibold tracking-wider text-slate-300 flex items-center gap-1">
+                    <span class="text-amber-300 text-xs">🛡️</span> STOP LOSS
                   </span>
-                  <span class="text-[9px] text-amber-400 font-mono font-bold">pips</span>
+                  <span class="text-[9px] text-amber-300/80 font-mono font-medium">pips</span>
                 </div>
                 <div class="flex items-center justify-between gap-1.5">
                   <button 
                     type="button" 
                     onclick="adjustPairSL('${pair.id}', -${pair.slStep || 5})" 
-                    class="stepper-btn bg-slate-800/90 hover:bg-slate-700 text-amber-200 border border-slate-700/80 active:scale-90 disabled:opacity-30 disabled:pointer-events-none"
-                    ${isLocked ? 'disabled' : ''}
+                    class="stepper-btn bg-slate-800/80 hover:bg-slate-700 text-amber-200 border border-slate-700 active:scale-90"
                     title="Decrease Stop Loss">
                     −
                   </button>
@@ -1531,15 +1521,13 @@
                     value="${slVal}" 
                     id="pairSLInput_${pair.id}"
                     onchange="onPairSLChange('${pair.id}', this.value)"
-                    ${isLocked ? 'disabled' : ''}
-                    class="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 rounded-lg py-1 px-1 text-center font-mono font-black text-sm text-amber-300 outline-none transition-all disabled:opacity-40 disabled:bg-slate-900"
+                    class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 rounded-lg py-1 px-1 text-center font-mono font-semibold text-sm text-amber-200 outline-none transition-all"
                     title="Enter custom Stop Loss in pips"
                   />
                   <button 
                     type="button" 
                     onclick="adjustPairSL('${pair.id}', ${pair.slStep || 5})" 
-                    class="stepper-btn bg-slate-800/90 hover:bg-slate-700 text-amber-200 border border-slate-700/80 active:scale-90 disabled:opacity-30 disabled:pointer-events-none"
-                    ${isLocked ? 'disabled' : ''}
+                    class="stepper-btn bg-slate-800/80 hover:bg-slate-700 text-amber-200 border border-slate-700 active:scale-90"
                     title="Increase Stop Loss">
                     +
                   </button>
@@ -1548,21 +1536,15 @@
 
             </div>
 
-            <!-- Footer: Execution Lock or Ready Status -->
+            <!-- Footer: Live Sync Status -->
             <div class="mt-2.5 pt-2 border-t border-white/5">
-              ${isLocked ? `
-                <div class="flex items-center justify-center gap-1.5 text-[10px] font-mono text-rose-400 font-bold bg-rose-950/40 py-1 px-2 rounded-lg border border-rose-900/40">
-                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                  <span>🔒 LOCKED (BOT RUNNING)</span>
-                </div>
-              ` : `
-                <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 font-semibold px-0.5">
-                  <span class="flex items-center gap-1.5 text-emerald-400">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Unlocked
-                  </span>
-                  <span class="text-slate-500">Auto-Sync</span>
-                </div>
-              `}
+              <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 font-semibold px-0.5">
+                <span class="flex items-center gap-1.5 ${isRunning ? 'text-emerald-300' : 'text-slate-400'}">
+                  <span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-slate-500'}"></span>
+                  ${isRunning ? 'Live Sync Active' : 'Ready'}
+                </span>
+                <span class="text-slate-500 text-[9px]">Adjust Anytime</span>
+              </div>
             </div>
 
           </div>
@@ -1617,10 +1599,6 @@
     }
 
     async function adjustPairLot(pairId, delta) {
-      if (state.botStatus === 'RUNNING') {
-        showToast("⚠️ Cannot modify Lot Size while bot is actively running! Halt bot first.", true);
-        return;
-      }
       const pair = state.pairs[pairId];
       if (!pair) return;
       const currentLot = parseFloat(pair.lot || 0.05);
@@ -1634,10 +1612,6 @@
     }
 
     async function adjustPairSL(pairId, delta) {
-      if (state.botStatus === 'RUNNING') {
-        showToast("⚠️ Cannot modify Stop Loss while bot is actively running! Halt bot first.", true);
-        return;
-      }
       const pair = state.pairs[pairId];
       if (!pair) return;
       const currentSL = parseFloat(pair.sl || 25);
@@ -1651,11 +1625,6 @@
     }
 
     async function onPairLotChange(pairId, val) {
-      if (state.botStatus === 'RUNNING') {
-        showToast("⚠️ Cannot modify Lot Size while bot is actively running! Halt bot first.", true);
-        renderPairs();
-        return;
-      }
       const pair = state.pairs[pairId];
       if (!pair) return;
       let parsed = parseFloat(val);
@@ -1670,11 +1639,6 @@
     }
 
     async function onPairSLChange(pairId, val) {
-      if (state.botStatus === 'RUNNING') {
-        showToast("⚠️ Cannot modify Stop Loss while bot is actively running! Halt bot first.", true);
-        renderPairs();
-        return;
-      }
       const pair = state.pairs[pairId];
       if (!pair) return;
       let parsed = parseFloat(val);
