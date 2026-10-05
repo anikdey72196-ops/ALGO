@@ -116,7 +116,7 @@ class BotStateResponse(BaseModel):
     losing_trades: int = 0
     total_closed_trades: int = 0
     active_session: Optional[dict] = None
-    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
+    available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"]
     stats_by_strategy: dict = {}
     stats_by_pair: dict = {}
     performance_metrics: dict = {}
@@ -425,7 +425,7 @@ async def get_bot_state():
             trap_stats = {"error": str(e)}
 
     # Open positions breakdown by strategy
-    open_positions_by_strategy = {"SMC": 0, "SMC_SCALP_5M": 0, "ICT": 0, "ORDER_FLOW": 0}
+    open_positions_by_strategy = {"SMC": 0, "SMC_SCALP_5M": 0, "ICT": 0, "ORDER_FLOW": 0, "TREND_REVERSAL": 0}
     try:
         open_trades = bot_instance.state.get_open_positions()
         for t in open_trades:
@@ -496,7 +496,7 @@ async def get_bot_state():
         losing_trades=losing_trades,
         total_closed_trades=total_closed,
         active_session=active_session,
-        available_strategies=["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
+        available_strategies=["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"],
         stats_by_strategy=stats_by_strategy,
         stats_by_pair=stats_by_pair,
         performance_metrics=metrics,
@@ -645,7 +645,7 @@ async def handle_dashboard_update(payload: dict):
     elif action == "toggle_strategy":
         strat_id = payload.get("strategy")
         active = payload.get("active", True)
-        strat_map = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW"}
+        strat_map = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW", "reversal": "TREND_REVERSAL"}
         strat_name = strat_map.get(strat_id, str(strat_id).upper())
         current = list(bot_instance.config.enabled_strategies)
         if active and strat_name not in current:
@@ -653,8 +653,12 @@ async def handle_dashboard_update(payload: dict):
         elif not active and strat_name in current:
             current.remove(strat_name)
         bot_instance.config.enabled_strategies = current
+
+        if strat_id == "reversal" or strat_name == "TREND_REVERSAL":
+            bot_instance.config.reversal_strategy_enabled = active
+
         bot_instance.save_settings()
-        return {"status": "success", "enabled_strategies": current}
+        return {"status": "success", "enabled_strategies": current, "reversal_strategy_enabled": getattr(bot_instance.config, "reversal_strategy_enabled", False)}
 
     elif action == "toggle_pair":
         pair_id = payload.get("pair")
@@ -728,9 +732,10 @@ async def handle_dashboard_update(payload: dict):
             enabled_strats = []
             for k, v in strats.items():
                 if v:
-                    strat_name = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW"}.get(k, k.upper())
+                    strat_name = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW", "reversal": "TREND_REVERSAL"}.get(k, k.upper())
                     enabled_strats.append(strat_name)
             bot_instance.config.enabled_strategies = enabled_strats
+            bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in enabled_strats)
 
         pairs = config.get("pairs", {})
         if pairs:
@@ -922,7 +927,7 @@ async def update_configuration(payload: BotConfigUpdate):
 
     # Handle enabled strategies update
     if payload.enabled_strategies is not None:
-        valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW")]
+        valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL")]
         if not valid_strats:
             raise HTTPException(status_code=400, detail="At least 1 strategy must be enabled.")
         if bot_instance.is_active and set(valid_strats) != set(bot_instance.config.enabled_strategies):
@@ -932,6 +937,7 @@ async def update_configuration(payload: BotConfigUpdate):
             )
         bot_instance.config.enabled_strategies = valid_strats
         bot_instance.strategy.set_enabled_strategies(valid_strats)
+        bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in valid_strats)
 
     # Handle selected_symbols (Multi-Pair Concurrent Scanning)
     if payload.selected_symbols is not None:

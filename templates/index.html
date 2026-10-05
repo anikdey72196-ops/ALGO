@@ -251,6 +251,12 @@
       background: linear-gradient(rgba(6, 182, 212, 0), rgba(56, 189, 248, 0.9));
     }
 
+    .luminous-card.lumen-rose .luminous-lumen .min,
+    .luminous-card.lumen-rose .luminous-lumen .mid,
+    .luminous-card.lumen-rose .luminous-lumen .hi {
+      background: linear-gradient(rgba(244, 63, 94, 0), rgba(251, 113, 133, 0.9));
+    }
+
     .luminous-darken {
       position: absolute;
       left: 0;
@@ -506,6 +512,17 @@
         0 0 0 1px rgba(255, 255, 255, 0.25),
         0 12px 32px 0 rgba(0, 0, 0, 0.6),
         0 0 20px 3px rgba(6, 182, 212, 0.35);
+    }
+
+    .luminous-toggle-input:checked ~ .luminous-card.lumen-rose {
+      box-shadow:
+        inset 0 1.01rem 0.1rem -1rem rgba(255, 255, 255, 0.8),
+        inset 0 -4rem 3rem -3rem rgba(0, 0, 0, 0.6),
+        0 -1.02rem 0.2rem -1rem rgba(255, 255, 255, 0.6),
+        0 1rem 0.2rem -1rem #000,
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        0 12px 32px 0 rgba(0, 0, 0, 0.6),
+        0 0 20px 3px rgba(244, 63, 94, 0.4);
     }
 
     .luminous-toggle-input:checked ~ .luminous-card .luminous-slit {
@@ -949,7 +966,7 @@
           <span class="text-xs font-mono font-bold text-slate-500">Interactive Luminous Engines</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="strategiesContainer">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5" id="strategiesContainer">
           <!-- Dynamically populated via JS with Luminous 3D Cards -->
         </div>
       </section>
@@ -1029,6 +1046,12 @@
                 <td class="p-3 text-center" id="strat-orderflow-trades">4</td>
                 <td class="p-3 text-center text-slate-700 font-bold" id="strat-orderflow-tpsl"><span class="text-emerald-700">0</span> / <span class="text-rose-700">4</span></td>
                 <td class="p-3 text-right font-black text-slate-500" id="strat-orderflow-winrate">0.0%</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-bold text-slate-900">Trend Reversal</td>
+                <td class="p-3 text-center" id="strat-reversal-trades">0</td>
+                <td class="p-3 text-center text-slate-700 font-bold" id="strat-reversal-tpsl"><span class="text-emerald-700">0</span> / <span class="text-rose-700">0</span></td>
+                <td class="p-3 text-right font-black text-slate-500" id="strat-reversal-winrate">0.0%</td>
               </tr>
             </tbody>
           </table>
@@ -1243,6 +1266,34 @@
                 </linearGradient>
                 <filter id="filter_orderflow">
                   <feFlood flood-color="rgba(6, 182, 212, 0.5)"></feFlood>
+                  <feComposite operator="out" in2="SourceGraphic"></feComposite>
+                  <feMorphology operator="dilate" radius="6"></feMorphology>
+                  <feGaussianBlur stdDeviation="16"></feGaussianBlur>
+                  <feComposite operator="atop" in2="SourceGraphic"></feComposite>
+                </filter>
+              </defs>
+            </svg>
+          `
+        },
+        reversal: {
+          id: 'reversal',
+          code: 'TREND_REVERSAL',
+          name: 'Trend Reversal',
+          colorClass: 'lumen-rose',
+          badgeColor: 'text-rose-400',
+          active: false,
+          timeframe: '1H / 4H / 1D',
+          desc: 'CHoCH & Multi-TF Reversal Zones & Shield.',
+          svgIcon: `
+            <svg xmlns="http://www.w3.org/2000/svg" width="3.2rem" height="3.2rem" viewBox="0 0 1024 1024">
+              <path fill="url(#iconGrad_reversal)" d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448s448-200.6 448-448S759.4 64 512 64zm176 560c0 44.2-35.8 80-80 80H352v80L176 672l176-132v80h240c17.7 0 32-14.3 32-32V320h80v304zm-80-304h-80V240l-176 132l176 80v-80h160v120h80V320z" filter="url(#filter_reversal)"></path>
+              <defs>
+                <linearGradient id="iconGrad_reversal" x1="0" x2="0" y1="-1" y2="0.8">
+                  <stop offset="0%" stop-color="#fb7185"></stop>
+                  <stop offset="100%" stop-color="#e11d48"></stop>
+                </linearGradient>
+                <filter id="filter_reversal">
+                  <feFlood flood-color="rgba(244, 63, 94, 0.5)"></feFlood>
                   <feComposite operator="out" in2="SourceGraphic"></feComposite>
                   <feMorphology operator="dilate" radius="6"></feMorphology>
                   <feGaussianBlur stdDeviation="16"></feGaussianBlur>
@@ -1797,7 +1848,8 @@
             enabled_strategies: enabledStrats,
             selected_symbols: selectedSyms,
             ai_confirmation_enabled: state.aiGateEnabled,
-            pair_configs: pairSettingsSnapshot
+            pair_configs: pairSettingsSnapshot,
+            reversal_strategy_enabled: state.strategies.reversal ? state.strategies.reversal.active : false
           })
         });
         await apiUpdate('/api/update', { action: 'save_configuration', config: configSnapshot });
@@ -1906,7 +1958,10 @@
         // 5. Active Strategies Sync (without destroying DOM to preserve CSS transitions)
         if (data.enabled_strategies && Array.isArray(data.enabled_strategies)) {
           for (const strat of Object.values(state.strategies)) {
-            const isServerActive = data.enabled_strategies.includes(strat.code);
+            let isServerActive = data.enabled_strategies.includes(strat.code);
+            if (strat.id === 'reversal' && data.reversal_strategy_enabled !== undefined) {
+              isServerActive = isServerActive || !!data.reversal_strategy_enabled;
+            }
             strat.active = isServerActive;
             const chk = document.getElementById('luminousToggle_' + strat.id);
             if (chk && chk.checked !== isServerActive) {
@@ -1983,7 +2038,8 @@
           'SMC': { trades: 'strat-smc-trades', tpsl: 'strat-smc-tpsl', winrate: 'strat-smc-winrate' },
           'SMC_SCALP_5M': { trades: 'strat-scalp5m-trades', tpsl: 'strat-scalp5m-tpsl', winrate: 'strat-scalp5m-winrate' },
           'ICT': { trades: 'strat-ict-trades', tpsl: 'strat-ict-tpsl', winrate: 'strat-ict-winrate' },
-          'ORDER_FLOW': { trades: 'strat-orderflow-trades', tpsl: 'strat-orderflow-tpsl', winrate: 'strat-orderflow-winrate' }
+          'ORDER_FLOW': { trades: 'strat-orderflow-trades', tpsl: 'strat-orderflow-tpsl', winrate: 'strat-orderflow-winrate' },
+          'TREND_REVERSAL': { trades: 'strat-reversal-trades', tpsl: 'strat-reversal-tpsl', winrate: 'strat-reversal-winrate' }
         };
 
         const stratStats = metrics.by_strategy || {};
