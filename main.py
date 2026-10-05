@@ -780,6 +780,17 @@ class TradingBot:
             # ── Step 2b: Generate signals across enabled strategies ──
             htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
 
+            if htf_analysis.fib_50 is not None:
+                pos_str = "DISCOUNT (<0.5 Fib)" if htf_analysis.is_discount else "PREMIUM (>=0.5 Fib)"
+                fail_str = " 🚨 [ALL ZONES FAILED -> BIAS FLIPPED]" if htf_analysis.all_zones_failed else ""
+                zone_str = f" | 1st Zone: [{htf_analysis.first_zone_type}]" if htf_analysis.first_zone_type != "NONE" else ""
+                self.log(
+                    f"  📐 [DEALING RANGE] {symbol}: Bias={htf_analysis.bias.value} | "
+                    f"Range=[{htf_analysis.dealing_range_low:.5f} - {htf_analysis.dealing_range_high:.5f}] | "
+                    f"0.5 Fib={htf_analysis.fib_50:.5f} ({pos_str}){zone_str}{fail_str}",
+                    level="DEBUG"
+                )
+
             # ── Isolate Completed/Closed 1-Hour Candles ──
             # In live MT5 data, the final row of htf_data is often the currently-forming open hour.
             # If current time is before bar_time + 1h, drop the forming candle so only closed bars are evaluated.
@@ -897,10 +908,20 @@ class TradingBot:
 
                 if reversal_analysis.choch_detected and reversal_analysis.reversal_probability >= 50.0:
                     should_block_reversal = True
-                    blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
+                    if htf_analysis.bias == MarketBias.BULLISH and not getattr(htf_analysis, 'all_zones_failed', False):
+                        blocked_direction = Direction.SELL
+                    elif htf_analysis.bias == MarketBias.BEARISH and not getattr(htf_analysis, 'all_zones_failed', False):
+                        blocked_direction = Direction.BUY
+                    else:
+                        blocked_direction = Direction.BUY if reversal_analysis.choch_type == CHoCHType.BEARISH else Direction.SELL
                 elif (reversal_analysis.stage == ReversalStage.PRE_REVERSAL_SWEEP or reversal_analysis.reversal_risk in ("HIGH", "CRITICAL")) and reversal_analysis.reversal_probability >= 45.0:
                     should_block_reversal = True
-                    blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
+                    if htf_analysis.bias == MarketBias.BULLISH and not getattr(htf_analysis, 'all_zones_failed', False):
+                        blocked_direction = Direction.SELL
+                    elif htf_analysis.bias == MarketBias.BEARISH and not getattr(htf_analysis, 'all_zones_failed', False):
+                        blocked_direction = Direction.BUY
+                    else:
+                        blocked_direction = Direction.SELL if reversal_analysis.trend == MarketBias.BEARISH else (Direction.BUY if reversal_analysis.trend == MarketBias.BULLISH else None)
 
                 if should_block_reversal and blocked_direction is not None:
                     prior_len = len(signals)

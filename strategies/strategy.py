@@ -103,6 +103,18 @@ class HTFAnalysis:
     trend_clarity_score: float  # 0-30
     liquidity_pools: list[LiquidityPool] = field(default_factory=list)
     supply_demand_zones: list[SupplyDemandZone] = field(default_factory=list)
+    # Institutional Dealing Range & 0.5 Fib Equilibrium Fields:
+    dealing_range_low: float | None = None
+    dealing_range_high: float | None = None
+    fib_50: float | None = None
+    is_discount: bool = False
+    is_premium: bool = False
+    invalidation_level: float | None = None
+    first_zone_entry: tuple[float, float] | None = None
+    first_zone_type: str = "NONE"
+    all_zones_failed: bool = False
+    sd_40: float | None = None
+    sd_45: float | None = None
 
 
 @dataclass
@@ -323,6 +335,237 @@ class HTFAnalyzer:
                 ))
         return zones
 
+    def detect_dealing_range(
+        self,
+        df: pd.DataFrame,
+        swings: list[SwingPoint],
+        current_atr: float,
+        current_close: float,
+        structure_bias: MarketBias = MarketBias.NEUTRAL,
+        base_bias: MarketBias = MarketBias.NEUTRAL,
+    ) -> dict[str, Any]:
+        """
+        Identify Institutional Dealing Range, Equilibrium (0.5 Fib), and Discount/Premium Zones.
+        - Bullish Dealing Range: Expansion leg from Anchor Low to Swing High.
+          - 0.5 Fib separates Premium from Discount.
+          - In Discount (<0.5 Fib): Look for 1st FVG, liquidity point, and -4 to -4.5 SD zone.
+          - Market Bias remains BULLISH as price pulls back into Discount.
+          - If ALL discount levels fail (price closes below invalidation level), bias flips to BEARISH.
+        - Bearish Dealing Range: Expansion leg from Anchor High to Swing Low.
+          - 0.5 Fib separates Discount from Premium.
+          - In Premium (>0.5 Fib): Look for 1st FVG, liquidity point, and +4 to +4.5 SD zone.
+          - Market Bias remains BEARISH as price pulls back into Premium.
+          - If ALL premium levels fail (price closes above invalidation level), bias flips to BULLISH.
+        """
+        res: dict[str, Any] = {
+            "dealing_range_low": None,
+            "dealing_range_high": None,
+            "fib_50": None,
+            "is_discount": False,
+            "is_premium": False,
+            "invalidation_level": None,
+            "first_zone_entry": None,
+            "first_zone_type": "NONE",
+            "all_zones_failed": False,
+            "sd_40": None,
+            "sd_45": None,
+            "bias_override": None,
+        }
+
+        n = len(df)
+        if n < 5:
+            return res
+
+        high_swings = [sp for sp in swings if sp.is_high]
+        low_swings = [sp for sp in swings if not sp.is_high]
+
+        # Determine dealing range orientation:
+        # 1. Structure bias or macro trend bias from HTF analysis
+        if structure_bias == MarketBias.BULLISH or base_bias == MarketBias.BULLISH:
+            is_bullish_dr = True
+        elif structure_bias == MarketBias.BEARISH or base_bias == MarketBias.BEARISH:
+            is_bullish_dr = False
+        # 2. Sequential swing points analysis (if bias is neutral/unknown)
+        elif high_swings and low_swings:
+            is_bullish_dr = (high_swings[-1].index > low_swings[-1].index)
+        elif high_swings:
+            is_bullish_dr = True
+        elif low_swings:
+            is_bullish_dr = False
+        # 3. Global high/low sequence in window
+        else:
+            high_idx = int(df['high'].argmax())
+            low_idx = int(df['low'].argmin())
+            is_bullish_dr = (high_idx >= low_idx)
+
+        if is_bullish_dr:
+            # Bullish Dealing Range: Anchor Low -> Peak High
+            if high_swings:
+                peak_sp = max(high_swings[-3:], key=lambda sp: sp.price)
+                peak_high = peak_sp.price
+                peak_idx = peak_sp.index
+            else:
+                peak_idx = int(df['high'].argmax())
+                peak_high = float(df['high'].iloc[peak_idx])
+
+            abs_high_idx = int(df['high'].argmax())
+            if float(df['high'].iloc[abs_high_idx]) > peak_high:
+                peak_high = float(df['high'].iloc[abs_high_idx])
+                peak_idx = abs_high_idx
+
+            pre_peak_lows = df['low'].iloc[:max(1, peak_idx)]
+            if not pre_peak_lows.empty:
+                anchor_low_idx = int(pre_peak_lows.values.argmin())
+                anchor_low = float(pre_peak_lows.iloc[anchor_low_idx])
+            elif low_swings:
+                anchor_low = low_swings[0].price
+                anchor_low_idx = low_swings[0].index
+            else:
+                anchor_low = float(df['low'].iloc[0])
+                anchor_low_idx = 0
+
+            impulse = max(peak_high - anchor_low, current_atr * 0.5)
+            fib_50 = anchor_low + 0.50 * impulse
+            is_disc = current_close < fib_50
+            is_prem = current_close >= fib_50
+
+            sd_40 = anchor_low - 0.50 * impulse
+            sd_45 = anchor_low - 0.75 * impulse
+
+            # Invalidation level: breakdown below Anchor Low & extreme discount extensions
+            inval = anchor_low - max(current_atr * 0.5, 0.0005)
+
+            # Find 1st Bullish FVG below 50%
+            first_fvg_below = None
+            start_fvg_idx = max(2, anchor_low_idx)
+            for i in range(start_fvg_idx, n):
+                c_curr = df.iloc[i]
+                c_prev2 = df.iloc[i - 2]
+                if c_curr['low'] > c_prev2['high']:
+                    f_bot = float(c_prev2['high'])
+                    f_top = float(c_curr['low'])
+                    if f_top <= fib_50 or f_bot < fib_50:
+                        if first_fvg_below is None or f_top > first_fvg_below[1]:
+                            first_fvg_below = (f_bot, f_top)
+
+            # Find 1st Liquidity area / swing low below 50%
+            prior_lows_below = [sp.price for sp in low_swings if sp.price < fib_50]
+            first_liq_below = max(prior_lows_below) if prior_lows_below else None
+
+            # Rank candidate zones below 50%
+            first_zone = None
+            first_zone_type = "NONE"
+            if first_fvg_below is not None:
+                first_zone = first_fvg_below
+                first_zone_type = "FIRST_FVG_<0.5"
+            elif first_liq_below is not None:
+                first_zone = (first_liq_below - current_atr * 0.25, first_liq_below + current_atr * 0.25)
+                first_zone_type = "FIRST_LIQUIDITY_<0.5"
+            elif sd_40 is not None:
+                first_zone = (sd_45, sd_40)
+                first_zone_type = "SD_4.0_4.5_EXHAUSTION"
+
+            all_failed = current_close < inval
+
+            res.update({
+                "dealing_range_low": anchor_low,
+                "dealing_range_high": peak_high,
+                "fib_50": fib_50,
+                "is_discount": is_disc,
+                "is_premium": is_prem,
+                "invalidation_level": inval,
+                "first_zone_entry": first_zone,
+                "first_zone_type": first_zone_type,
+                "all_zones_failed": all_failed,
+                "sd_40": sd_40,
+                "sd_45": sd_45,
+                "bias_override": MarketBias.BEARISH if all_failed else MarketBias.BULLISH,
+            })
+        else:
+            # Bearish Dealing Range: Anchor High -> Trough Low
+            if low_swings:
+                trough_sp = min(low_swings[-3:], key=lambda sp: sp.price)
+                trough_low = trough_sp.price
+                trough_idx = trough_sp.index
+            else:
+                trough_idx = int(df['low'].argmin())
+                trough_low = float(df['low'].iloc[trough_idx])
+
+            abs_low_idx = int(df['low'].argmin())
+            if float(df['low'].iloc[abs_low_idx]) < trough_low:
+                trough_low = float(df['low'].iloc[abs_low_idx])
+                trough_idx = abs_low_idx
+
+            pre_trough_highs = df['high'].iloc[:max(1, trough_idx)]
+            if not pre_trough_highs.empty:
+                anchor_high_idx = int(pre_trough_highs.values.argmax())
+                anchor_high = float(pre_trough_highs.iloc[anchor_high_idx])
+            elif high_swings:
+                anchor_high = high_swings[0].price
+                anchor_high_idx = high_swings[0].index
+            else:
+                anchor_high = float(df['high'].iloc[0])
+                anchor_high_idx = 0
+
+            impulse = max(anchor_high - trough_low, current_atr * 0.5)
+            fib_50 = trough_low + 0.50 * impulse
+            is_disc = current_close < fib_50
+            is_prem = current_close >= fib_50
+
+            sd_40 = anchor_high + 0.50 * impulse
+            sd_45 = anchor_high + 0.75 * impulse
+
+            # Invalidation: breakout above Anchor High & extreme premium extensions
+            inval = anchor_high + max(current_atr * 0.5, 0.0005)
+
+            # Find 1st Bearish FVG above 50%
+            first_fvg_above = None
+            start_fvg_idx = max(2, anchor_high_idx)
+            for i in range(start_fvg_idx, n):
+                c_curr = df.iloc[i]
+                c_prev2 = df.iloc[i - 2]
+                if c_curr['high'] < c_prev2['low']:
+                    f_bot = float(c_curr['high'])
+                    f_top = float(c_prev2['low'])
+                    if f_bot >= fib_50 or f_top > fib_50:
+                        if first_fvg_above is None or f_bot < first_fvg_above[0]:
+                            first_fvg_above = (f_bot, f_top)
+
+            # Find 1st Liquidity area / swing high above 50%
+            prior_highs_above = [sp.price for sp in high_swings if sp.price > fib_50]
+            first_liq_above = min(prior_highs_above) if prior_highs_above else None
+
+            first_zone = None
+            first_zone_type = "NONE"
+            if first_fvg_above is not None:
+                first_zone = first_fvg_above
+                first_zone_type = "FIRST_FVG_>0.5"
+            elif first_liq_above is not None:
+                first_zone = (first_liq_above - current_atr * 0.25, first_liq_above + current_atr * 0.25)
+                first_zone_type = "FIRST_LIQUIDITY_>0.5"
+            elif sd_40 is not None:
+                first_zone = (sd_40, sd_45)
+                first_zone_type = "SD_4.0_4.5_EXHAUSTION"
+
+            all_failed = current_close > inval
+
+            res.update({
+                "dealing_range_low": trough_low,
+                "dealing_range_high": anchor_high,
+                "fib_50": fib_50,
+                "is_discount": is_disc,
+                "is_premium": is_prem,
+                "invalidation_level": inval,
+                "first_zone_entry": first_zone,
+                "first_zone_type": first_zone_type,
+                "all_zones_failed": all_failed,
+                "sd_40": sd_40,
+                "sd_45": sd_45,
+                "bias_override": MarketBias.BULLISH if all_failed else MarketBias.BEARISH,
+            })
+
+        return res
+
     def analyze(self, df: pd.DataFrame) -> HTFAnalysis:
         """Run complete HTF macro trend & institutional liquidity analysis."""
         ema_series = self.compute_ema(df['close'])
@@ -345,13 +588,25 @@ class HTFAnalyzer:
             bias = MarketBias.BEARISH
             trend_clarity_score = 30.0
         elif structure_bias == MarketBias.NEUTRAL and is_below_ema:
-            # Macro downtrend: established below 200 EMA with consolidating swings
-            bias = MarketBias.BEARISH
-            trend_clarity_score = 20.0
+            # Check if EMA is rising (discount pullback in uptrend) vs falling (macro downtrend)
+            ema_lookback = min(10, len(ema_series) - 1)
+            ema_slope_rising = (current_ema >= float(ema_series.iloc[-1 - ema_lookback])) if ema_lookback > 0 else False
+            if ema_slope_rising:
+                bias = MarketBias.BULLISH
+                trend_clarity_score = 20.0
+            else:
+                bias = MarketBias.BEARISH
+                trend_clarity_score = 20.0
         elif structure_bias == MarketBias.NEUTRAL and is_above_ema:
-            # Macro uptrend: established above 200 EMA with consolidating swings
-            bias = MarketBias.BULLISH
-            trend_clarity_score = 20.0
+            # Check if EMA is falling (premium pullback in downtrend) vs rising (macro uptrend)
+            ema_lookback = min(10, len(ema_series) - 1)
+            ema_slope_rising = (current_ema >= float(ema_series.iloc[-1 - ema_lookback])) if ema_lookback > 0 else True
+            if not ema_slope_rising:
+                bias = MarketBias.BEARISH
+                trend_clarity_score = 20.0
+            else:
+                bias = MarketBias.BULLISH
+                trend_clarity_score = 20.0
         elif structure_bias == MarketBias.BULLISH and is_below_ema:
             # Leading price action: Swing structure is making higher highs and higher lows (reversal/pullback rally)
             bias = MarketBias.BULLISH
@@ -367,6 +622,19 @@ class HTFAnalyzer:
         atr_series = compute_atr(df, 14)
         current_atr = float(atr_series.iloc[-1]) if not atr_series.empty else 0.0
 
+        # Institutional Dealing Range & 0.5 Fib Equilibrium Rule
+        dr_info = self.detect_dealing_range(
+            df,
+            swings,
+            current_atr,
+            current_close,
+            structure_bias=structure_bias,
+            base_bias=bias,
+        )
+        if dr_info["bias_override"] is not None:
+            bias = dr_info["bias_override"]
+            trend_clarity_score = max(trend_clarity_score, 25.0)
+
         liquidity_pools = self.find_liquidity_pools(swings, current_atr)
         sd_zones = self.find_supply_demand_zones(df, swings)
 
@@ -381,6 +649,17 @@ class HTFAnalyzer:
             trend_clarity_score=trend_clarity_score,
             liquidity_pools=liquidity_pools,
             supply_demand_zones=sd_zones,
+            dealing_range_low=dr_info["dealing_range_low"],
+            dealing_range_high=dr_info["dealing_range_high"],
+            fib_50=dr_info["fib_50"],
+            is_discount=dr_info["is_discount"],
+            is_premium=dr_info["is_premium"],
+            invalidation_level=dr_info["invalidation_level"],
+            first_zone_entry=dr_info["first_zone_entry"],
+            first_zone_type=dr_info["first_zone_type"],
+            all_zones_failed=dr_info["all_zones_failed"],
+            sd_40=dr_info["sd_40"],
+            sd_45=dr_info["sd_45"],
         )
 
 
@@ -2402,15 +2681,68 @@ class TrendReversalStrategy(BaseStrategy):
         if analysis.reversal_probability < 40.0:
             return []
 
-        # Determine biased direction of reversal
+        # Determine biased direction of reversal or dealing range retracement
         rev_type = getattr(analysis, "reversal_type", None) or analysis.choch_type
-        from strategies.trend_reversal import CHoCHType
-        if rev_type == CHoCHType.BULLISH:
+        from strategies.trend_reversal import CHoCHType, ReversalStage
+        if bias == MarketBias.BULLISH and getattr(htf_an, 'is_discount', False):
             direction = Direction.BUY
+            dr_entry_zone = getattr(htf_an, 'first_zone_entry', None)
+        elif bias == MarketBias.BEARISH and getattr(htf_an, 'is_premium', False):
+            direction = Direction.SELL
+            dr_entry_zone = getattr(htf_an, 'first_zone_entry', None)
+        elif rev_type == CHoCHType.BULLISH:
+            direction = Direction.BUY
+            dr_entry_zone = None
         elif rev_type == CHoCHType.BEARISH:
             direction = Direction.SELL
+            dr_entry_zone = None
         else:
             return []
+
+        # ── Dealing Range & 0.5 Fib Equilibrium Rule ──
+        # 1. Buy trades ONLY executed in Discount (below 0.5 level)
+        # 2. Sell trades ONLY executed in Premium (above 0.5 level)
+        # 3. Setup invalidated if all levels fail
+        if direction == Direction.BUY:
+            if getattr(htf_an, 'fib_50', None) is not None and curr_price > htf_an.fib_50 + 1e-5:
+                return []
+            if getattr(htf_an, 'all_zones_failed', False):
+                return []
+        elif direction == Direction.SELL:
+            if getattr(htf_an, 'fib_50', None) is not None and curr_price < htf_an.fib_50 - 1e-5:
+                return []
+            if getattr(htf_an, 'all_zones_failed', False):
+                return []
+
+        # Sizing and price calculation
+        atr_series = compute_atr(ltf_data, 14)
+        ltf_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 0.001
+
+        # ── Zone Mitigation Check: Price must reach the 1st FVG, liquidity area, or SD zone ──
+        is_stage_confirmed = analysis.stage in (
+            ReversalStage.RETRACEMENT_IN_ZONE,
+            ReversalStage.REVERSAL_ZONE_TESTED,
+            ReversalStage.CONFIRMED_MSS,
+            ReversalStage.CHOCH_DISPLACEMENT,
+        ) or getattr(analysis.confluence, 'in_retracement_zone', False)
+
+        entry_zone = dr_entry_zone or analysis.entry_zone or getattr(htf_an, 'first_zone_entry', None)
+        if not is_stage_confirmed and entry_zone is not None:
+            z_low, z_high = min(entry_zone), max(entry_zone)
+            atr_buf = ltf_atr * 0.35
+            candle_low = float(ltf_data['low'].iloc[-1])
+            candle_high = float(ltf_data['high'].iloc[-1])
+            prev_low = float(ltf_data['low'].iloc[-2]) if len(ltf_data) >= 2 else candle_low
+            prev_high = float(ltf_data['high'].iloc[-2]) if len(ltf_data) >= 2 else candle_high
+
+            if direction == Direction.BUY:
+                tested_zone = (min(candle_low, prev_low) <= z_high + atr_buf) and (curr_price >= z_low - atr_buf)
+                if not tested_zone and not getattr(analysis.confluence, 'is_first_zone_below_50', False):
+                    return []
+            elif direction == Direction.SELL:
+                tested_zone = (max(candle_high, prev_high) >= z_low - atr_buf) and (curr_price <= z_high + atr_buf)
+                if not tested_zone and not getattr(analysis.confluence, 'is_first_zone_above_50', False):
+                    return []
 
         # Directional Candlestick Confirmation on current LTF candle
         is_confirmed, body_ratio, conf_desc = check_candle_body_confirmation(
@@ -2418,10 +2750,6 @@ class TrendReversalStrategy(BaseStrategy):
         )
         if not is_confirmed:
             return []
-
-        # Sizing and price calculation
-        atr_series = compute_atr(ltf_data, 14)
-        ltf_atr = float(atr_series.iloc[-1]) if not atr_series.empty and not np.isnan(atr_series.iloc[-1]) else 0.001
         point_size = 10 ** -instrument.digits
 
         entry = curr_price
@@ -2431,22 +2759,39 @@ class TrendReversalStrategy(BaseStrategy):
             pip_unit = 10 * point_size if instrument.digits in (3, 5) else point_size
             sl_dist = fixed_sl_pips * pip_unit
             sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
-        elif analysis.suggested_sl:
+        elif analysis.suggested_sl and (
+            (direction == Direction.BUY and analysis.suggested_sl < entry) or
+            (direction == Direction.SELL and analysis.suggested_sl > entry)
+        ):
             sl = analysis.suggested_sl
             sl_dist = abs(entry - sl)
         else:
-            sl_dist = max(2.0 * ltf_atr, 15.0 * point_size)
-            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
+            # Use dealing range invalidation level or ATR buffer
+            if direction == Direction.BUY and getattr(htf_an, 'invalidation_level', None) and htf_an.invalidation_level < entry:
+                sl = htf_an.invalidation_level
+            elif direction == Direction.SELL and getattr(htf_an, 'invalidation_level', None) and htf_an.invalidation_level > entry:
+                sl = htf_an.invalidation_level
+            else:
+                sl_dist = max(2.0 * ltf_atr, 15.0 * point_size)
+                sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
 
         sl_dist = abs(entry - sl)
         if sl_dist <= 0:
             return []
 
-        # Take Profit targeting equilibrium or opposing liquidity pool (minimum 2.0R to 3.0R)
-        if analysis.suggested_tp and abs(analysis.suggested_tp - entry) >= 2.0 * sl_dist:
+        # Take Profit targeting equilibrium or opposing liquidity pool (minimum 1.5R to 2.5R)
+        if analysis.suggested_tp and (
+            (direction == Direction.BUY and analysis.suggested_tp > entry and (analysis.suggested_tp - entry) >= 1.5 * sl_dist) or
+            (direction == Direction.SELL and analysis.suggested_tp < entry and (entry - analysis.suggested_tp) >= 1.5 * sl_dist)
+        ):
             tp = analysis.suggested_tp
         else:
-            tp = entry + 2.5 * sl_dist if direction == Direction.BUY else entry - 2.5 * sl_dist
+            if direction == Direction.BUY and getattr(htf_an, 'dealing_range_high', None) and htf_an.dealing_range_high > entry + 1.5 * sl_dist:
+                tp = htf_an.dealing_range_high
+            elif direction == Direction.SELL and getattr(htf_an, 'dealing_range_low', None) and htf_an.dealing_range_low < entry - 1.5 * sl_dist:
+                tp = htf_an.dealing_range_low
+            else:
+                tp = entry + 2.5 * sl_dist if direction == Direction.BUY else entry - 2.5 * sl_dist
 
         tp_dist = abs(tp - entry)
         rr_ratio = round(tp_dist / sl_dist, 2)

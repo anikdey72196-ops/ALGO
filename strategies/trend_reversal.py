@@ -755,9 +755,10 @@ class TrendReversalDetector:
             first_liquidity_level=first_liq_level,
         )
 
+        active_trend = htf_analysis.bias if (htf_analysis and htf_analysis.bias is not None) else MarketBias.BULLISH
         return TrendReversalAnalysis(
             symbol=symbol,
-            trend=MarketBias.BULLISH,
+            trend=active_trend,
             is_trending=True,
             choch_detected=reversal_detected,
             choch_type=CHoCHType.BEARISH if reversal_detected else CHoCHType.NONE,
@@ -1171,9 +1172,10 @@ class TrendReversalDetector:
             first_liquidity_level=first_liq_level,
         )
 
+        active_trend = htf_analysis.bias if (htf_analysis and htf_analysis.bias is not None) else MarketBias.BEARISH
         return TrendReversalAnalysis(
             symbol=symbol,
-            trend=MarketBias.BEARISH,
+            trend=active_trend,
             is_trending=True,
             choch_detected=reversal_detected,
             choch_type=CHoCHType.BULLISH if reversal_detected else CHoCHType.NONE,
