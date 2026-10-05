@@ -71,6 +71,20 @@ class ReversalConfluence:
     timeframes_confluent: List[str] = field(default_factory=list)
     score: float = 0.0
     details: List[str] = field(default_factory=list)
+    # Institutional Priority Order Fields (Under 50% Fib Rule):
+    priority_rank: int = 1
+    priority_zone_type: str = "NONE"
+    is_first_zone_below_50: bool = False
+    is_first_zone_above_50: bool = False
+    sd_4_to_4_5_hit: bool = False
+    sd_40: Optional[float] = None
+    sd_45: Optional[float] = None
+    all_fvgs_below_50: List[Tuple[float, float]] = field(default_factory=list)
+    all_fvgs_above_50: List[Tuple[float, float]] = field(default_factory=list)
+    primary_fvg: Optional[Tuple[float, float]] = None
+    secondary_fvg: Optional[Tuple[float, float]] = None
+    priority_order_list: List[str] = field(default_factory=list)
+    first_liquidity_level: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,6 +118,15 @@ class TrendReversalAnalysis:
     is_below_fib_50: bool = False
     sd_level: Optional[float] = None
     tf_confluences: Dict[str, Any] = field(default_factory=dict)
+    # Institutional Priority Order Fields (Under 50% Fib Rule):
+    priority_rank: int = 1
+    priority_zone_type: str = "NONE"
+    is_first_zone_below_50: bool = False
+    is_first_zone_above_50: bool = False
+    sd_4_to_4_5_hit: bool = False
+    primary_fvg: Optional[Tuple[float, float]] = None
+    secondary_fvg: Optional[Tuple[float, float]] = None
+    priority_order_list: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.choch_detected and not self.reversal_detected:
@@ -152,7 +175,7 @@ class TrendReversalDetector:
         self.volume_surge_multiplier = volume_surge_multiplier
         self.fvg_min_atr_multiple = fvg_min_atr_multiple
         self.displacement_atr_mult = displacement_atr_mult
-        self.sd_multiples = sd_multiples or [2.0, 2.5, 4.0]
+        self.sd_multiples = sd_multiples or [2.0, 2.5, 4.0, 4.5]
 
     def analyze_multitf(
         self,
@@ -432,7 +455,7 @@ class TrendReversalDetector:
         is_below_50 = curr_fib_pos < 0.50
         in_fib_50_60 = (min(fib_50, fib_60) <= current_close <= max(fib_50, fib_60))
 
-        # 3. ICT Standard Deviation Projections (+2.0, +2.5, +4.0 SD above anchor range)
+        # 3. ICT Standard Deviation Projections (+2.0, +2.5, +4.0, +4.5 SD above anchor range)
         prior_highs = [sp for sp in high_swings if sp.index < peak_idx]
         if prior_highs:
             anchor_range = max(prior_highs[-1].price - anchor_low, current_atr * 0.5)
@@ -442,15 +465,24 @@ class TrendReversalDetector:
         sd_20 = anchor_low + 2.0 * anchor_range
         sd_25 = anchor_low + 2.5 * anchor_range
         sd_40 = anchor_low + 4.0 * anchor_range
+        sd_45 = anchor_low + 4.5 * anchor_range
 
-        # Check if peak or current price hit SD exhaustion target
+        # Check if peak or current price hit SD exhaustion target (4.0 to 4.5 SD zone)
         sd_multiple = (peak_price - anchor_low) / anchor_range if anchor_range > 0 else 1.0
         sd_hit = False
         sd_hit_level = None
         sd_hit_multiple = None
+        sd_4_to_4_5_hit = False
+
+        if (sd_multiple >= 4.0 - 1e-4) or (peak_price >= sd_40 - current_atr * 0.25):
+            sd_4_to_4_5_hit = True
+
         if sd_multiple >= 2.0 - 1e-4 or peak_price >= (sd_20 - current_atr * 0.25):
             sd_hit = True
-            if sd_multiple >= 4.0 - 1e-4 or peak_price >= sd_40 - current_atr * 0.25:
+            if sd_multiple >= 4.5 - 1e-4 or peak_price >= sd_45 - current_atr * 0.25:
+                sd_hit_level = sd_45
+                sd_hit_multiple = 4.5
+            elif sd_multiple >= 4.0 - 1e-4 or peak_price >= sd_40 - current_atr * 0.25:
                 sd_hit_level = sd_40
                 sd_hit_multiple = 4.0
             elif sd_multiple >= 2.5 - 1e-4 or peak_price >= sd_25 - current_atr * 0.25:
@@ -460,18 +492,38 @@ class TrendReversalDetector:
                 sd_hit_level = sd_20
                 sd_hit_multiple = 2.0
 
-        # 4. Bearish Fair Value Gap (FVG)
-        fvg_present, fvg_top, fvg_bottom = self._detect_bearish_fvg(df, peak_idx, current_atr)
+        # 4. Bearish Fair Value Gaps (FVG) with Priority Ranking above 50% Fib
+        all_bearish_fvgs = self._detect_bearish_fvgs_all(df, peak_idx, current_atr, fib_50=fib_50)
+        fvgs_above_50 = [f for f in all_bearish_fvgs if f[0] >= fib_50 or f[1] >= fib_50]
+        # Sorted ascending by bottom price: lowest bottom closest to 50% = Rank 1 First FVG above 50%
+        fvgs_above_50.sort(key=lambda f: f[0])
+        primary_fvg = fvgs_above_50[0] if fvgs_above_50 else (all_bearish_fvgs[0] if all_bearish_fvgs else None)
+        secondary_fvg = fvgs_above_50[1] if len(fvgs_above_50) > 1 else (all_bearish_fvgs[1] if len(all_bearish_fvgs) > 1 else None)
+        fvg_present = (primary_fvg is not None)
+        fvg_top = primary_fvg[1] if primary_fvg else None
+        fvg_bottom = primary_fvg[0] if primary_fvg else None
 
-        # 5. Liquidity Sweep at Peak
+        # 5. Liquidity Sweep at Peak / Prior Highs (Priority above 50% Fib)
         sweep_detected = False
         sweep_level = None
+        first_liq_level = None
+        liq_sweep_above_50 = False
+        prior_highs_above_50 = [sp for sp in prior_highs if sp.price >= fib_50]
+        if prior_highs_above_50:
+            # Lowest swing high above 50% is the FIRST liquidity zone encountered above 50%
+            prior_highs_above_50.sort(key=lambda sp: sp.price)
+            first_liq_level = prior_highs_above_50[0].price
+        elif prior_highs:
+            first_liq_level = prior_highs[-1].price
+
         if prior_highs:
             prev_high_level = prior_highs[-1].price
             peak_bar = df.iloc[peak_idx]
             if peak_bar['high'] > prev_high_level:
                 sweep_detected = True
                 sweep_level = float(peak_bar['high'])
+                if first_liq_level is not None and peak_bar['high'] >= first_liq_level:
+                    liq_sweep_above_50 = True
 
         # 6. Volume / Displacement Surge
         vol_ratio = self._calculate_volume_ratio(df, min(n - 1, peak_idx + 1))
@@ -479,6 +531,52 @@ class TrendReversalDetector:
 
         # 7. Check Legacy Break (Break below anchor low) for full MSS confirmation
         legacy_break = any(df['close'].iloc[peak_idx:] < anchor_low)
+
+        # ── Priority Order Engine (Above 50% Premium Zone) ──
+        # As price rallies above 50% Fib, zones encountered are ranked by proximity:
+        rank_candidates = []
+        if fvgs_above_50:
+            rank_candidates.append({
+                "type": "FIRST_FVG_>0.5",
+                "desc": f"First Bearish FVG above 50% Fib [{fvgs_above_50[0][0]:.5f} - {fvgs_above_50[0][1]:.5f}]",
+                "trigger_price": fvgs_above_50[0][0],
+                "zone": fvgs_above_50[0],
+            })
+            if len(fvgs_above_50) > 1:
+                rank_candidates.append({
+                    "type": "SECONDARY_FVG_>0.5",
+                    "desc": f"Secondary (Higher) FVG above 50% Fib [{fvgs_above_50[1][0]:.5f} - {fvgs_above_50[1][1]:.5f}]",
+                    "trigger_price": fvgs_above_50[1][0],
+                    "zone": fvgs_above_50[1],
+                })
+
+        if liq_sweep_above_50 and first_liq_level is not None:
+            rank_candidates.append({
+                "type": "FIRST_LIQUIDITY_>0.5",
+                "desc": f"First Liquidity Sweep above 50% Fib @ {first_liq_level:.5f} (Swept to {peak_price:.5f})",
+                "trigger_price": first_liq_level,
+                "zone": (first_liq_level, peak_price),
+            })
+
+        if sd_4_to_4_5_hit:
+            rank_candidates.append({
+                "type": "SD_4.0_4.5_EXHAUSTION",
+                "desc": f"Extreme Standard Deviation +4.0 to +4.5 Exhaustion Zone [{sd_40:.5f} - {sd_45:.5f}]",
+                "trigger_price": sd_40,
+                "zone": (sd_40, sd_45),
+            })
+
+        # Sort ascending by trigger_price (closest above 50% is Rank 1 Top Priority)
+        rank_candidates.sort(key=lambda x: x["trigger_price"])
+        priority_order_list: List[str] = []
+        for idx, rc in enumerate(rank_candidates, start=1):
+            role = "PRIMARY ENTRY ZONE" if idx == 1 else f"SECONDARY ZONE (RANK {idx})"
+            priority_order_list.append(f"[RANK {idx}] {rc['desc']} -> {role}")
+
+        priority_rank = 1
+        priority_zone_type = rank_candidates[0]["type"] if rank_candidates else "NONE"
+        is_first_zone_above_50 = len(rank_candidates) > 0
+        primary_entry_candidate = rank_candidates[0]["zone"] if rank_candidates else None
 
         # ── Score & Confluence Compilation ──
         confluence_details: List[str] = []
@@ -490,17 +588,28 @@ class TrendReversalDetector:
             reversal_zone_types.append(f"SD_{sd_hit_multiple}x")
             confluence_details.append(f"ICT Standard Deviation Exhaustion hit (+{sd_hit_multiple:.1f} SD @ {sd_hit_level:.5f})")
 
+        if sd_4_to_4_5_hit:
+            score += 15.0
+            reversal_zone_types.append("SD_4.0_4.5_EXHAUSTION")
+            confluence_details.append(f"Extreme SD +4.0 to +4.5 Exhaustion Zone reached [{sd_40:.5f} - {sd_45:.5f}]")
+
         if in_fib_50_60:
             score += 25.0
             reversal_zone_types.append("FIB_0.5_0.6")
             confluence_details.append(f"Price inside Golden 0.5-0.6 Fib Retracement Zone [{fib_50:.5f} - {fib_60:.5f}]")
         elif is_above_50 and current_close >= fib_60:
-            # In premium zone above 0.5 fib where bearish reversal risk is elevated
             score += 15.0
             confluence_details.append(f"Price in Premium zone (Fib {curr_fib_pos:.2f} > 0.50)")
 
-        if is_above_50 and (fvg_present or sweep_detected or sd_hit):
+        if is_first_zone_above_50:
             score += 25.0
+            reversal_zone_types.append(f"PRIORITY_1_{priority_zone_type}")
+            confluence_details.append(
+                f"Priority 1 Zone Active: First zone above 50% Fib [{priority_zone_type}] "
+                f"established (Order: {' | '.join(priority_order_list)})"
+            )
+        elif is_above_50 and (fvg_present or sweep_detected or sd_hit):
+            score += 20.0
             confluence_details.append("Premium level above 0.5 Fib established (prime Bearish Reversal chance)")
 
         if fvg_present:
@@ -536,12 +645,13 @@ class TrendReversalDetector:
             or in_fib_50_60
             or (is_above_50 and (fvg_present or sweep_detected or (sd_hit and current_close < peak_price - current_atr * 0.25)))
             or (fvg_present and (is_above_50 or sweep_detected or volume_surge))
+            or is_first_zone_above_50
+            or sd_4_to_4_5_hit
             or legacy_break
             or (score >= 45.0 and current_close < peak_price - current_atr * 0.25)
         )
 
-        # An active new high without rejection, FVG, sweep, or zone test is trend continuation
-        if current_close >= peak_price - current_atr * 0.25 and not (sweep_detected or fvg_present or legacy_break or in_fib_50_60):
+        if current_close >= peak_price - current_atr * 0.25 and not (sweep_detected or fvg_present or legacy_break or in_fib_50_60 or is_first_zone_above_50):
             reversal_detected = False
             score = min(score, 20.0)
 
@@ -565,7 +675,7 @@ class TrendReversalDetector:
                 stage = ReversalStage.PRE_REVERSAL_SWEEP
                 warning = (
                     f"⚠️ [PRE-REVERSAL ALERT] {symbol} ({timeframe}): Liquidity sweep / premium extension at {peak_price:.5f}. "
-                    f"Monitoring for Bearish Reversal Zone (SD / Fib 0.5-0.6 / FVG)."
+                    f"Monitoring for Bearish Reversal Zone (SD / Fib 0.5-0.6 / FVG above 0.5)."
                 )
             else:
                 stage = ReversalStage.TREND_HEALTHY
@@ -583,13 +693,16 @@ class TrendReversalDetector:
             zone_str = "+".join(reversal_zone_types) if reversal_zone_types else "REVERSAL_ZONE"
             warning = (
                 f"🚨 [BEARISH REVERSAL ZONE] {symbol} ({timeframe}): Reversal Zone triggered ({zone_str}). "
-                f"Reversal Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
+                f"Priority: {priority_zone_type} (Rank {priority_rank}). Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
             )
 
-        # Setup Parameters for Sell Reversal Trade
+        # Setup Parameters for Sell Reversal Trade (Anchored to Primary / First Zone)
         suggested_sl = peak_price + max(0.5 * current_atr, 0.0005)
-        if fvg_present and fvg_bottom is not None and fvg_top is not None:
-            entry_zone = (fvg_bottom, fvg_top)
+        if primary_fvg is not None:
+            # First FVG above 50% is primary trade entry priority!
+            entry_zone = primary_fvg
+        elif primary_entry_candidate is not None:
+            entry_zone = primary_entry_candidate
         elif in_fib_50_60:
             entry_zone = (min(fib_50, fib_60), max(fib_50, fib_60))
         else:
@@ -600,7 +713,7 @@ class TrendReversalDetector:
         reward_dist = abs(current_close - suggested_tp) if suggested_tp else 0.0
         suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 2.5
 
-        primary_zone_type = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
+        primary_zone_type_str = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
 
         confluence_obj = ReversalConfluence(
             liquidity_sweep=sweep_detected,
@@ -622,12 +735,24 @@ class TrendReversalDetector:
             standard_deviation_hit=sd_hit,
             sd_level=sd_hit_level,
             sd_multiple=sd_hit_multiple,
-            reversal_zone_type=primary_zone_type,
+            reversal_zone_type=primary_zone_type_str,
             in_retracement_zone=in_fib_50_60 or stage == ReversalStage.RETRACEMENT_IN_ZONE,
             htf_alignment=htf_align,
             timeframes_confluent=[timeframe],
             score=reversal_prob,
             details=confluence_details,
+            priority_rank=priority_rank,
+            priority_zone_type=priority_zone_type,
+            is_first_zone_below_50=False,
+            is_first_zone_above_50=is_first_zone_above_50,
+            sd_4_to_4_5_hit=sd_4_to_4_5_hit,
+            sd_40=sd_40,
+            sd_45=sd_45,
+            all_fvgs_above_50=fvgs_above_50,
+            primary_fvg=primary_fvg,
+            secondary_fvg=secondary_fvg,
+            priority_order_list=priority_order_list,
+            first_liquidity_level=first_liq_level,
         )
 
         return TrendReversalAnalysis(
@@ -652,10 +777,18 @@ class TrendReversalDetector:
             closed_candle_time=candle_time,
             reversal_detected=reversal_detected,
             reversal_type=CHoCHType.BEARISH if reversal_detected else CHoCHType.NONE,
-            reversal_zone_type=primary_zone_type,
+            reversal_zone_type=primary_zone_type_str,
             fib_level=round(curr_fib_pos, 3),
             is_below_fib_50=is_below_50,
             sd_level=sd_hit_level,
+            priority_rank=priority_rank,
+            priority_zone_type=priority_zone_type,
+            is_first_zone_below_50=False,
+            is_first_zone_above_50=is_first_zone_above_50,
+            sd_4_to_4_5_hit=sd_4_to_4_5_hit,
+            primary_fvg=primary_fvg,
+            secondary_fvg=secondary_fvg,
+            priority_order_list=priority_order_list,
         )
 
     def _analyze_downtrend_reversal(
@@ -733,7 +866,7 @@ class TrendReversalDetector:
         is_above_50 = curr_fib_pos >= 0.50
         in_fib_50_60 = (min(fib_50, fib_60) <= current_close <= max(fib_50, fib_60))
 
-        # 3. ICT Standard Deviation Projections (-2.0, -2.5, -4.0 SD below anchor range)
+        # 3. ICT Standard Deviation Projections (-2.0, -2.5, -4.0, -4.5 SD below anchor range)
         prior_lows = [sp for sp in low_swings if sp.index < trough_idx]
         if prior_lows:
             anchor_range = max(anchor_high - prior_lows[-1].price, current_atr * 0.5)
@@ -743,14 +876,23 @@ class TrendReversalDetector:
         sd_20 = anchor_high - 2.0 * anchor_range
         sd_25 = anchor_high - 2.5 * anchor_range
         sd_40 = anchor_high - 4.0 * anchor_range
+        sd_45 = anchor_high - 4.5 * anchor_range
 
         sd_multiple = (anchor_high - trough_price) / anchor_range if anchor_range > 0 else 1.0
         sd_hit = False
         sd_hit_level = None
         sd_hit_multiple = None
+        sd_4_to_4_5_hit = False
+
+        if (sd_multiple >= 4.0 - 1e-4) or (trough_price <= sd_40 + current_atr * 0.25):
+            sd_4_to_4_5_hit = True
+
         if sd_multiple >= 2.0 - 1e-4 or trough_price <= (sd_20 + current_atr * 0.25):
             sd_hit = True
-            if sd_multiple >= 4.0 - 1e-4 or trough_price <= sd_40 + current_atr * 0.25:
+            if sd_multiple >= 4.5 - 1e-4 or trough_price <= sd_45 + current_atr * 0.25:
+                sd_hit_level = sd_45
+                sd_hit_multiple = -4.5
+            elif sd_multiple >= 4.0 - 1e-4 or trough_price <= sd_40 + current_atr * 0.25:
                 sd_hit_level = sd_40
                 sd_hit_multiple = -4.0
             elif sd_multiple >= 2.5 - 1e-4 or trough_price <= sd_25 + current_atr * 0.25:
@@ -760,18 +902,38 @@ class TrendReversalDetector:
                 sd_hit_level = sd_20
                 sd_hit_multiple = -2.0
 
-        # 4. Bullish Fair Value Gap (FVG)
-        fvg_present, fvg_top, fvg_bottom = self._detect_bullish_fvg(df, trough_idx, current_atr)
+        # 4. Bullish Fair Value Gaps (FVG) with Priority Ranking below 50% Fib
+        all_bullish_fvgs = self._detect_bullish_fvgs_all(df, trough_idx, current_atr, fib_50=fib_50)
+        fvgs_below_50 = [f for f in all_bullish_fvgs if f[1] <= fib_50 or f[0] <= fib_50]
+        # Sorted descending by top price: highest top closest to 50% = Rank 1 First FVG below 50%
+        fvgs_below_50.sort(key=lambda f: f[1], reverse=True)
+        primary_fvg = fvgs_below_50[0] if fvgs_below_50 else (all_bullish_fvgs[0] if all_bullish_fvgs else None)
+        secondary_fvg = fvgs_below_50[1] if len(fvgs_below_50) > 1 else (all_bullish_fvgs[1] if len(all_bullish_fvgs) > 1 else None)
+        fvg_present = (primary_fvg is not None)
+        fvg_top = primary_fvg[1] if primary_fvg else None
+        fvg_bottom = primary_fvg[0] if primary_fvg else None
 
-        # 5. Liquidity Sweep at Trough
+        # 5. Liquidity Sweep at Trough / Prior Lows (Priority below 50% Fib)
         sweep_detected = False
         sweep_level = None
+        first_liq_level = None
+        liq_sweep_below_50 = False
+        prior_lows_below_50 = [sp for sp in prior_lows if sp.price <= fib_50]
+        if prior_lows_below_50:
+            # Highest swing low below 50% is the FIRST liquidity zone encountered below 50%
+            prior_lows_below_50.sort(key=lambda sp: sp.price, reverse=True)
+            first_liq_level = prior_lows_below_50[0].price
+        elif prior_lows:
+            first_liq_level = prior_lows[-1].price
+
         if prior_lows:
             prev_low_level = prior_lows[-1].price
             trough_bar = df.iloc[trough_idx]
             if trough_bar['low'] < prev_low_level:
                 sweep_detected = True
                 sweep_level = float(trough_bar['low'])
+                if first_liq_level is not None and trough_bar['low'] <= first_liq_level:
+                    liq_sweep_below_50 = True
 
         # 6. Volume / Displacement Surge
         vol_ratio = self._calculate_volume_ratio(df, min(n - 1, trough_idx + 1))
@@ -779,6 +941,52 @@ class TrendReversalDetector:
 
         # 7. Check Legacy Break (Break above anchor high) for full MSS confirmation
         legacy_break = any(df['close'].iloc[trough_idx:] > anchor_high)
+
+        # ── Priority Order Engine (Below 50% Discount Zone) ──
+        # As price drops below 50% Fib, zones encountered are ranked by proximity:
+        rank_candidates = []
+        if fvgs_below_50:
+            rank_candidates.append({
+                "type": "FIRST_FVG_<0.5",
+                "desc": f"First Bullish FVG below 50% Fib [{fvgs_below_50[0][0]:.5f} - {fvgs_below_50[0][1]:.5f}]",
+                "trigger_price": fvgs_below_50[0][1], # Top of FVG (first contacted from above)
+                "zone": fvgs_below_50[0],
+            })
+            if len(fvgs_below_50) > 1:
+                rank_candidates.append({
+                    "type": "SECONDARY_FVG_<0.5",
+                    "desc": f"Secondary (Deeper) FVG below 50% Fib [{fvgs_below_50[1][0]:.5f} - {fvgs_below_50[1][1]:.5f}]",
+                    "trigger_price": fvgs_below_50[1][1],
+                    "zone": fvgs_below_50[1],
+                })
+
+        if liq_sweep_below_50 and first_liq_level is not None:
+            rank_candidates.append({
+                "type": "FIRST_LIQUIDITY_<0.5",
+                "desc": f"First Liquidity Sweep below 50% Fib @ {first_liq_level:.5f} (Swept to {trough_price:.5f})",
+                "trigger_price": first_liq_level,
+                "zone": (trough_price, first_liq_level),
+            })
+
+        if sd_4_to_4_5_hit:
+            rank_candidates.append({
+                "type": "SD_4.0_4.5_EXHAUSTION",
+                "desc": f"Extreme Standard Deviation -4.0 to -4.5 Exhaustion Zone [{sd_45:.5f} - {sd_40:.5f}]",
+                "trigger_price": sd_40,
+                "zone": (sd_45, sd_40),
+            })
+
+        # Sort descending by trigger_price (closest below 50% comes first as Rank 1 Top Priority)
+        rank_candidates.sort(key=lambda x: x["trigger_price"], reverse=True)
+        priority_order_list: List[str] = []
+        for idx, rc in enumerate(rank_candidates, start=1):
+            role = "PRIMARY ENTRY ZONE" if idx == 1 else f"SECONDARY ZONE (RANK {idx})"
+            priority_order_list.append(f"[RANK {idx}] {rc['desc']} -> {role}")
+
+        priority_rank = 1
+        priority_zone_type = rank_candidates[0]["type"] if rank_candidates else "NONE"
+        is_first_zone_below_50 = len(rank_candidates) > 0
+        primary_entry_candidate = rank_candidates[0]["zone"] if rank_candidates else None
 
         # ── Score & Confluence Compilation ──
         confluence_details: List[str] = []
@@ -790,8 +998,19 @@ class TrendReversalDetector:
             reversal_zone_types.append(f"SD_{abs(sd_hit_multiple):.1f}x")
             confluence_details.append(f"ICT Standard Deviation Exhaustion hit ({sd_hit_multiple:.1f} SD @ {sd_hit_level:.5f})")
 
-        # "when any level (fvg, liquidity sweep, standard deviation) below .5 level of fibonacci there can be a chance to reversal"
-        if is_below_50:
+        if sd_4_to_4_5_hit:
+            score += 15.0
+            reversal_zone_types.append("SD_4.0_4.5_EXHAUSTION")
+            confluence_details.append(f"Extreme SD -4.0 to -4.5 Exhaustion Zone reached [{sd_45:.5f} - {sd_40:.5f}]")
+
+        if is_first_zone_below_50:
+            score += 25.0
+            reversal_zone_types.append(f"PRIORITY_1_{priority_zone_type}")
+            confluence_details.append(
+                f"Priority 1 Zone Active: First zone below 50% Fib [{priority_zone_type}] "
+                f"established (Order: {' | '.join(priority_order_list)})"
+            )
+        elif is_below_50:
             discount_levels: List[str] = []
             if fvg_present:
                 discount_levels.append("Bullish FVG")
@@ -845,6 +1064,8 @@ class TrendReversalDetector:
         reversal_detected = (
             sd_hit
             or in_fib_50_60
+            or is_first_zone_below_50
+            or sd_4_to_4_5_hit
             or (is_below_50 and (fvg_present or sweep_detected or sd_hit))
             or (fvg_present and (is_below_50 or sweep_detected or volume_surge))
             or legacy_break
@@ -888,13 +1109,16 @@ class TrendReversalDetector:
             zone_str = "+".join(reversal_zone_types) if reversal_zone_types else "REVERSAL_ZONE"
             warning = (
                 f"🚨 [BULLISH REVERSAL ZONE] {symbol} ({timeframe}): Reversal Zone triggered ({zone_str}). "
-                f"Reversal Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
+                f"Priority: {priority_zone_type} (Rank {priority_rank}). Risk: {reversal_risk} ({reversal_prob:.0f}%). Stage: {stage.value}."
             )
 
-        # Setup Parameters for Buy Reversal Trade
+        # Setup Parameters for Buy Reversal Trade (Anchored to Primary / First Zone)
         suggested_sl = trough_price - max(0.5 * current_atr, 0.0005)
-        if fvg_present and fvg_bottom is not None and fvg_top is not None:
-            entry_zone = (fvg_bottom, fvg_top)
+        if primary_fvg is not None:
+            # First FVG below 50% is primary trade entry priority!
+            entry_zone = primary_fvg
+        elif primary_entry_candidate is not None:
+            entry_zone = primary_entry_candidate
         elif in_fib_50_60:
             entry_zone = (min(fib_50, fib_60), max(fib_50, fib_60))
         else:
@@ -905,7 +1129,7 @@ class TrendReversalDetector:
         reward_dist = abs(suggested_tp - current_close) if suggested_tp else 0.0
         suggested_rr = round(reward_dist / risk_dist, 2) if risk_dist > 0 else 2.5
 
-        primary_zone_type = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
+        primary_zone_type_str = "+".join(reversal_zone_types) if reversal_zone_types else ("FVG" if fvg_present else "FIB_50_60")
 
         confluence_obj = ReversalConfluence(
             liquidity_sweep=sweep_detected,
@@ -927,12 +1151,24 @@ class TrendReversalDetector:
             standard_deviation_hit=sd_hit,
             sd_level=sd_hit_level,
             sd_multiple=sd_hit_multiple,
-            reversal_zone_type=primary_zone_type,
+            reversal_zone_type=primary_zone_type_str,
             in_retracement_zone=in_fib_50_60 or stage == ReversalStage.RETRACEMENT_IN_ZONE,
             htf_alignment=htf_align,
             timeframes_confluent=[timeframe],
             score=reversal_prob,
             details=confluence_details,
+            priority_rank=priority_rank,
+            priority_zone_type=priority_zone_type,
+            is_first_zone_below_50=is_first_zone_below_50,
+            is_first_zone_above_50=False,
+            sd_4_to_4_5_hit=sd_4_to_4_5_hit,
+            sd_40=sd_40,
+            sd_45=sd_45,
+            all_fvgs_below_50=fvgs_below_50,
+            primary_fvg=primary_fvg,
+            secondary_fvg=secondary_fvg,
+            priority_order_list=priority_order_list,
+            first_liquidity_level=first_liq_level,
         )
 
         return TrendReversalAnalysis(
@@ -957,10 +1193,18 @@ class TrendReversalDetector:
             closed_candle_time=candle_time,
             reversal_detected=reversal_detected,
             reversal_type=CHoCHType.BULLISH if reversal_detected else CHoCHType.NONE,
-            reversal_zone_type=primary_zone_type,
+            reversal_zone_type=primary_zone_type_str,
             fib_level=round(curr_fib_pos, 3),
             is_below_fib_50=is_below_50,
             sd_level=sd_hit_level,
+            priority_rank=priority_rank,
+            priority_zone_type=priority_zone_type,
+            is_first_zone_below_50=is_first_zone_below_50,
+            is_first_zone_above_50=False,
+            sd_4_to_4_5_hit=sd_4_to_4_5_hit,
+            primary_fvg=primary_fvg,
+            secondary_fvg=secondary_fvg,
+            priority_order_list=priority_order_list,
         )
 
     def _calculate_volume_ratio(self, df: pd.DataFrame, target_idx: int) -> float:
@@ -986,48 +1230,112 @@ class TrendReversalDetector:
             return float(target_vol / avg_vol)
         return 1.0
 
-    def _detect_bearish_fvg(
+    def _detect_bearish_fvgs_all(
         self,
         df: pd.DataFrame,
         pivot_idx: int,
         current_atr: float,
-    ) -> Tuple[bool, Optional[float], Optional[float]]:
-        """Detect Bearish Fair Value Gap (candle i-2 low > candle i high) around the pivot/displacement."""
+        fib_50: Optional[float] = None,
+    ) -> List[Tuple[float, float]]:
+        """
+        Detect all Bearish Fair Value Gaps (candle i-2 low > candle i high) around pivot/displacement.
+        Returns list of (fvg_bottom, fvg_top) tuples.
+        If fib_50 is provided, FVGs above 50% (in Premium) are prioritized and sorted in ascending order of
+        bottom price (i.e. the first FVG encountered above 50% comes FIRST as Rank 1 Primary FVG).
+        """
         n = len(df)
         min_gap = self.fvg_min_atr_multiple * current_atr
+        start = max(2, pivot_idx - 4)
+        end = min(n, pivot_idx + 12)
 
-        start = max(2, pivot_idx - 2)
-        end = min(n, pivot_idx + 8)
-
+        fvgs: List[Tuple[float, float]] = []
         for i in range(start, end):
             c_curr = df.iloc[i]
             c_prev2 = df.iloc[i - 2]
             if c_prev2['low'] > c_curr['high']:
                 gap = float(c_prev2['low'] - c_curr['high'])
                 if gap >= min_gap:
-                    return True, float(c_prev2['low']), float(c_curr['high'])
+                    bot = float(c_curr['high'])
+                    top = float(c_prev2['low'])
+                    fvgs.append((bot, top))
 
-        return False, None, None
+        if not fvgs:
+            return []
 
-    def _detect_bullish_fvg(
+        if fib_50 is not None:
+            # Premium is above fib_50. Sort FVGs above 50% by proximity to 50% (ascending by bottom)
+            above_50 = [f for f in fvgs if f[0] >= fib_50 or f[1] >= fib_50]
+            below_50 = [f for f in fvgs if f not in above_50]
+            above_50.sort(key=lambda f: f[0])  # First FVG encountered above 50%
+            below_50.sort(key=lambda f: abs(f[1] - fib_50))
+            return above_50 + below_50
+        return fvgs
+
+    def _detect_bearish_fvg(
         self,
         df: pd.DataFrame,
         pivot_idx: int,
         current_atr: float,
+        fib_50: Optional[float] = None,
     ) -> Tuple[bool, Optional[float], Optional[float]]:
-        """Detect Bullish Fair Value Gap (candle i low > candle i-2 high) around the pivot/displacement."""
+        """Detect Bearish Fair Value Gap. Returns (found, fvg_top, fvg_bottom) for the primary FVG."""
+        all_fvgs = self._detect_bearish_fvgs_all(df, pivot_idx, current_atr, fib_50=fib_50)
+        if all_fvgs:
+            primary = all_fvgs[0]
+            return True, primary[1], primary[0]
+        return False, None, None
+
+    def _detect_bullish_fvgs_all(
+        self,
+        df: pd.DataFrame,
+        pivot_idx: int,
+        current_atr: float,
+        fib_50: Optional[float] = None,
+    ) -> List[Tuple[float, float]]:
+        """
+        Detect all Bullish Fair Value Gaps (candle i low > candle i-2 high) around pivot/displacement.
+        Returns list of (fvg_bottom, fvg_top) tuples.
+        If fib_50 is provided, FVGs below 50% (in Discount) are prioritized and sorted in descending order of
+        top price (i.e. the first FVG encountered below 50% comes FIRST as Rank 1 Primary FVG).
+        """
         n = len(df)
         min_gap = self.fvg_min_atr_multiple * current_atr
+        start = max(2, pivot_idx - 4)
+        end = min(n, pivot_idx + 12)
 
-        start = max(2, pivot_idx - 2)
-        end = min(n, pivot_idx + 8)
-
+        fvgs: List[Tuple[float, float]] = []
         for i in range(start, end):
             c_curr = df.iloc[i]
             c_prev2 = df.iloc[i - 2]
             if c_curr['low'] > c_prev2['high']:
                 gap = float(c_curr['low'] - c_prev2['high'])
                 if gap >= min_gap:
-                    return True, float(c_curr['low']), float(c_prev2['high'])
+                    bot = float(c_prev2['high'])
+                    top = float(c_curr['low'])
+                    fvgs.append((bot, top))
 
+        if not fvgs:
+            return []
+
+        if fib_50 is not None:
+            # Discount is below fib_50. Sort FVGs below 50% by proximity to 50% (descending by top)
+            below_50 = [f for f in fvgs if f[1] <= fib_50 or f[0] <= fib_50]
+            above_50 = [f for f in fvgs if f not in below_50]
+            below_50.sort(key=lambda f: f[1], reverse=True)  # First FVG encountered below 50%
+            above_50.sort(key=lambda f: abs(f[0] - fib_50))
+            return below_50 + above_50
+        return fvgs
+
+    def _detect_bullish_fvg(
+        self,
+        df: pd.DataFrame,
+        pivot_idx: int,
+        current_atr: float,
+        fib_50: Optional[float] = None,
+    ) -> Tuple[bool, Optional[float], Optional[float]]:
+        """Detect Bullish Fair Value Gap. Returns (found, fvg_top, fvg_bottom) for the primary FVG."""
+        all_fvgs = self._detect_bullish_fvgs_all(df, pivot_idx, current_atr, fib_50=fib_50)
+        if all_fvgs:
+            primary = all_fvgs[0]
+            return True, primary[1], primary[0]
         return False, None, None

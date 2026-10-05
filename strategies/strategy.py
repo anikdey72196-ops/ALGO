@@ -2455,7 +2455,7 @@ class TrendReversalStrategy(BaseStrategy):
 
         # Determine LTF Confirmation enum
         z_type = getattr(analysis, "reversal_zone_type", "") or ""
-        if "SD" in z_type:
+        if "SD" in z_type or getattr(analysis.confluence, "sd_4_to_4_5_hit", False):
             conf = LTFConfirmation.REVERSAL_ZONE_SD
         elif "FIB" in z_type or getattr(analysis.confluence, "in_fib_50_60_zone", False):
             conf = LTFConfirmation.REVERSAL_ZONE_FIB
@@ -2463,6 +2463,19 @@ class TrendReversalStrategy(BaseStrategy):
             conf = LTFConfirmation.REVERSAL_ZONE_FVG
         else:
             conf = LTFConfirmation.REVERSAL_CONFLUENCE
+
+        # Priority metadata enrichment
+        p_rank = getattr(analysis, "priority_rank", 1)
+        p_type = getattr(analysis, "priority_zone_type", "") or ""
+        enhanced_conf_desc = conf_desc
+        if p_type and p_type != "NONE":
+            enhanced_conf_desc = f"[P{p_rank}:{p_type}] {conf_desc}"
+
+        quality_sc = analysis.reversal_probability
+        if getattr(analysis.confluence, "is_first_zone_below_50", False) or getattr(analysis.confluence, "is_first_zone_above_50", False):
+            quality_sc = max(quality_sc, 75.0)
+        if getattr(analysis.confluence, "sd_4_to_4_5_hit", False):
+            quality_sc = min(98.0, quality_sc + 5.0)
 
         # Timestamp
         raw_time = ltf_data['time'].iloc[-1] if 'time' in ltf_data.columns else datetime.now(timezone.utc)
@@ -2482,14 +2495,14 @@ class TrendReversalStrategy(BaseStrategy):
             htf_bias=MarketBias.BULLISH if direction == Direction.BUY else MarketBias.BEARISH,
             ltf_confirmation=conf,
             rr_ratio=rr_ratio,
-            quality_score=min(95.0, analysis.reversal_probability),
+            quality_score=min(98.0, quality_sc),
             timestamp=ts,
             sl_distance=sl_dist,
             tp_distance=tp_dist,
             strategy_id=self.id,
             strategy_name=self.name,
             magic_number=123456 + self.magic_offset,
-            candle_confirmation=conf_desc,
+            candle_confirmation=enhanced_conf_desc,
         )]
 
 

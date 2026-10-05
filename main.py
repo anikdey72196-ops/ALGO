@@ -835,9 +835,12 @@ class TradingBot:
                 if reversal_analysis.is_trending:
                     if reversal_analysis.choch_detected:
                         confluence_str = ", ".join(reversal_analysis.confluence.details) if reversal_analysis.confluence.details else "Reversal Zone Active"
+                        priority_str = f" | Priority: [{reversal_analysis.priority_zone_type}] (Rank {reversal_analysis.priority_rank})"
+                        if reversal_analysis.priority_order_list:
+                            priority_str += f" | Order: [{' -> '.join(reversal_analysis.priority_order_list)}]"
                         self.log(
                             f"  🚨 [{reversal_analysis.timeframe} REVERSAL ZONE ALERT] {symbol} ({reversal_analysis.trend.value}): {reversal_analysis.choch_type.value} REVERSAL DETECTED! "
-                            f"Zone Type: {reversal_analysis.reversal_zone_type} | Stage: {reversal_analysis.stage.value} | "
+                            f"Zone Type: {reversal_analysis.reversal_zone_type}{priority_str} | Stage: {reversal_analysis.stage.value} | "
                             f"Reversal Prob: {reversal_analysis.reversal_probability:.0f}% ({reversal_analysis.reversal_risk}) | "
                             f"Confluence: [{confluence_str}]",
                             level="WARNING"
@@ -1006,6 +1009,11 @@ class TradingBot:
                                 c = rev_analysis.confluence
                                 if c.is_below_fib_50:
                                     extra_confluence["is_below_fib_50"] = 1.0
+                                    extra_confluence["priority_discount"] = 1.0
+                                if getattr(c, "is_first_zone_below_50", False) or getattr(c, "is_first_zone_above_50", False):
+                                    extra_confluence["first_zone_priority"] = 1.0
+                                if getattr(c, "sd_4_to_4_5_hit", False):
+                                    extra_confluence["sd_exhaustion_4x_45x"] = 1.0
                                     extra_confluence["priority_discount"] = 1.0
                                 if c.in_fib_50_60_zone:
                                     extra_confluence["in_fib_50_60"] = 1.0

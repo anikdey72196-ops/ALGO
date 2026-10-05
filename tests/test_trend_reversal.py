@@ -586,6 +586,144 @@ class TestTrendReversalDetector(unittest.TestCase):
         self.assertAlmostEqual(called_sl, 2000.1, places=1)
         self.assertIn(777, pos_mgr._be_applied)
 
+    def test_priority_order_first_fvg_below_50_fib(self):
+        """
+        Test that when multiple FVGs exist below 50% Fib in a downtrend,
+        the FIRST FVG below 50% (closest to 50%) is given Rank 1 Top Priority,
+        assigned as the primary entry zone, and the deeper FVG is ranked secondary.
+        """
+        timestamps = pd.date_range("2026-09-01 00:00:00", periods=50, freq="1h", tz="UTC")
+        data = []
+        # Dealing range: Anchor High at 110.0 (bar 10), Trough at 90.0 (bar 28).
+        # Range = 20.0 -> Fib 0.5 is 100.0.
+        # Below 50% Fib (price < 100.0):
+        # FVG 1 at [98.0, 99.5] (first FVG below 50%)
+        # FVG 2 at [92.0, 93.5] (deeper FVG below 50%)
+        for i in range(11):
+            p = 105.0 + i * 0.5
+            data.append({'open': p - 0.1, 'high': p + 0.3, 'low': p - 0.2, 'close': p, 'volume': 150})
+        for i in range(11, 20):
+            p = 110.0 - (i - 10) * 1.5
+            data.append({'open': p + 0.1, 'high': p + 0.2, 'low': p - 0.3, 'close': p, 'volume': 200})
+        for i in range(20, 29):
+            p = 96.5 - (i - 19) * 0.7
+            if i == 28:
+                p = 90.0
+            data.append({'open': p + 0.1, 'high': p + 0.2, 'low': p - 0.3, 'close': p, 'volume': 250})
+
+        # Craft 2 bullish FVGs:
+        # Bar 29: candle i-2 for first FVG (high = 92.0)
+        data.append({'open': 90.5, 'high': 92.0, 'low': 90.0, 'close': 91.5, 'volume': 300})
+        # Bar 30: big impulse up (low 91.8, high 95.0)
+        data.append({'open': 91.8, 'high': 95.0, 'low': 91.6, 'close': 94.5, 'volume': 500})
+        # Bar 31: candle i for first FVG: low = 93.5 > bar 29 high (92.0) -> FVG at [92.0, 93.5]!
+        # And bar 31 high is 98.0 (will serve as i-2 for second FVG)
+        data.append({'open': 94.6, 'high': 98.0, 'low': 93.5, 'close': 97.5, 'volume': 600})
+        # Bar 32: big surge up (low 97.6, high 101.0)
+        data.append({'open': 97.6, 'high': 101.0, 'low': 97.5, 'close': 100.5, 'volume': 700})
+        # Bar 33: candle i for second FVG: low = 99.5 > bar 31 high (98.0) -> FVG at [98.0, 99.5]!
+        data.append({'open': 100.6, 'high': 102.0, 'low': 99.5, 'close': 101.5, 'volume': 800})
+        # Subsequent bars consolidating around 99.8
+        for i in range(34, 40):
+            data.append({'open': 99.8, 'high': 100.2, 'low': 99.6, 'close': 99.8, 'volume': 200})
+
+        df = pd.DataFrame(data, index=timestamps[:len(data)])
+        analysis = self.detector.analyze(df=df, trend=MarketBias.BEARISH, symbol="EURUSD", timeframe="1H", current_price=99.8)
+
+        self.assertTrue(analysis.choch_detected)
+        self.assertEqual(analysis.choch_type, CHoCHType.BULLISH)
+        self.assertTrue(analysis.is_first_zone_below_50)
+        self.assertEqual(analysis.priority_rank, 1)
+        self.assertEqual(analysis.priority_zone_type, "FIRST_FVG_<0.5")
+
+        # Verify that First FVG below 50% ([98.0, 99.5]) is Primary, and deeper FVG ([92.0, 93.5]) is Secondary!
+        self.assertIsNotNone(analysis.primary_fvg)
+        self.assertAlmostEqual(analysis.primary_fvg[0], 98.0, places=1)
+        self.assertAlmostEqual(analysis.primary_fvg[1], 99.5, places=1)
+
+        self.assertIsNotNone(analysis.secondary_fvg)
+        self.assertAlmostEqual(analysis.secondary_fvg[0], 95.0, places=1)
+        self.assertAlmostEqual(analysis.secondary_fvg[1], 97.5, places=1)
+
+        # Verify entry zone is anchored to the First FVG!
+        self.assertEqual(analysis.entry_zone, analysis.primary_fvg)
+
+        # Verify Priority Order List
+        self.assertGreaterEqual(len(analysis.priority_order_list), 2)
+        self.assertIn("First Bullish FVG below 50% Fib", analysis.priority_order_list[0])
+        self.assertIn("PRIMARY ENTRY ZONE", analysis.priority_order_list[0])
+        self.assertIn("Secondary (Deeper) FVG below 50% Fib", analysis.priority_order_list[1])
+
+    def test_priority_order_sd_4_to_4_5_exhaustion(self):
+        """
+        Test that when market price extends to the extreme 4.0 to 4.5 Standard Deviation zone,
+        it is recognized as sd_4_to_4_5_hit and ranked with high institutional priority.
+        """
+        timestamps = pd.date_range("2026-09-01 00:00:00", periods=55, freq="1h", tz="UTC")
+        data = []
+        # Dealing range: Anchor High at 100.0 (bar 10), Prior Low at 90.0 (bar 20).
+        # Anchor range = 10.0.
+        # SD -4.0 = 100.0 - 4.0 * 10 = 60.0.
+        # SD -4.5 = 100.0 - 4.5 * 10 = 55.0.
+        # If trough reaches 58.0, SD multiple = (100 - 58) / 10 = 4.2 (inside 4.0 - 4.5 zone!)
+        for i in range(11):
+            p = 95.0 + i * 0.5
+            data.append({'open': p - 0.1, 'high': p + 0.3, 'low': p - 0.2, 'close': p, 'volume': 150})
+        for i in range(11, 21):
+            p = 100.0 - (i - 10) * 1.0
+            data.append({'open': p + 0.1, 'high': p + 0.2, 'low': p - 0.3, 'close': p, 'volume': 200})
+        # Pullback to 93.0
+        for i in range(21, 26):
+            p = 90.0 + (i - 20) * 0.6
+            data.append({'open': p - 0.1, 'high': p + 0.2, 'low': p - 0.1, 'close': p, 'volume': 150})
+        # Intense selloff down to 58.0 (4.2 SD)
+        for i in range(26, 45):
+            p = 93.0 - (i - 25) * 1.84
+            if i == 44:
+                p = 58.0
+            data.append({'open': p + 0.2, 'high': p + 0.3, 'low': p - 0.3, 'close': p, 'volume': 400})
+        # Bounce
+        for i in range(45, 52):
+            p = 58.5
+            data.append({'open': p - 0.1, 'high': p + 0.3, 'low': p - 0.2, 'close': p, 'volume': 250})
+
+        df = pd.DataFrame(data, index=timestamps[:len(data)])
+        analysis = self.detector.analyze(df=df, trend=MarketBias.BEARISH, symbol="EURUSD", timeframe="1H")
+
+        self.assertTrue(analysis.choch_detected)
+        self.assertEqual(analysis.choch_type, CHoCHType.BULLISH)
+        self.assertTrue(analysis.sd_4_to_4_5_hit)
+        self.assertTrue(analysis.confluence.sd_4_to_4_5_hit)
+        self.assertTrue(analysis.is_first_zone_below_50)
+
+    def test_priority_order_strategy_signal_incorporation(self):
+        """Test that TrendReversalStrategy reflects the priority rank in TradeSignal."""
+        from strategy import TrendReversalStrategy, HTFAnalyzer
+        from config import InstrumentConfig
+
+        df_htf = create_uptrend_with_bearish_choch(bars_before_peak=35)
+        ltf_timestamps = pd.date_range("2026-09-01 03:00:00", periods=20, freq="15min", tz="UTC")
+        ltf_data = pd.DataFrame([
+            {'time': t, 'open': 106.8, 'high': 106.8, 'low': 106.2, 'close': 106.3, 'volume': 150}
+            for t in ltf_timestamps
+        ], index=ltf_timestamps)
+
+        inst = InstrumentConfig(symbol="XAUUSD", point_value=1.0, pip_size=0.01, digits=2)
+        strat = TrendReversalStrategy(HTFAnalyzer())
+        signals = strat.evaluate(
+            symbol="XAUUSD",
+            htf_data=df_htf,
+            ltf_data=ltf_data,
+            instrument=inst,
+            current_spread=0.05,
+        )
+
+        self.assertGreaterEqual(len(signals), 1)
+        sig = signals[0]
+        self.assertEqual(sig.strategy_id, "TREND_REVERSAL")
+        self.assertIn("[P1:", sig.candle_confirmation)
+        self.assertGreaterEqual(sig.quality_score, 75.0)
+
 
 if __name__ == '__main__':
     unittest.main()
