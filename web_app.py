@@ -284,8 +284,11 @@ async def get_network_info():
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
-    """Serve the single-page control dashboard."""
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(
+        request=request, 
+        name="index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+    )
 
 
 
