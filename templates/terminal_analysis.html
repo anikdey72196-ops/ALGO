@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><title>Glacier Terminal — Analysis</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "tertiary": "#c8a0f0", "primary-fixed-dim": "#7dd3fc", "primary-container": "#0e4d6e", "tertiary-fixed": "#e8d0ff", "background": "#0a0e1a", "on-surface-variant": "#a0b4c4", "on-tertiary": "#1a002e", "secondary-fixed": "#c0d8e8", "surface-tint": "#7dd3fc", "on-primary": "#001f2e", "on-primary-container": "#c8eaff", "outline": "#4a6070", "on-secondary-fixed": "#0d1f2b", "on-surface": "#e0e8f0", "on-error-container": "#ffb3b3", "on-secondary": "#001f2e", "surface-container-lowest": "#0a0e1a", "inverse-surface": "#e0e8f0", "on-secondary-fixed-variant": "#2a4a5e", "secondary-container": "#1a3a4e", "surface": "#0f1524", "error": "#ff6b6b", "on-background": "#e0e8f0", "surface-dim": "#0f1524", "surface-container-highest": "#202c42", "primary-fixed": "#c8eaff", "outline-variant": "#2a3a48", "on-tertiary-fixed": "#1a002e", "inverse-on-surface": "#0a0e1a", "surface-container-low": "#111828", "on-tertiary-fixed-variant": "#4d2a73", "on-primary-fixed-variant": "#004d73", "secondary": "#88b4cc", "on-tertiary-container": "#e8d0ff", "surface-container": "#141c2e", "surface-container-high": "#1a2438", "on-primary-fixed": "#001f2e", "secondary-fixed-dim": "#88b4cc", "surface-bright": "#1a2438", "surface-variant": "#1a2438", "tertiary-fixed-dim": "#c8a0f0", "on-secondary-container": "#c0d8e8", "error-container": "#3d1414", "inverse-primary": "#0a4c6e", "tertiary-container": "#3d2060", "primary": "#7dd3fc", "on-error": "#1a0000" }, "borderRadius": { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" }, "spacing": {}, "fontFamily": { "headline": ["Inter"], "display": ["Inter"], "body": ["Inter"], "label": ["Inter"] }, "fontSize": {} } } }</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#0a0e1a;color:#e0e8f0;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-primary"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>LIVE</span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Analysis</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="analysisLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="analysisAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 py-4 space-y-5 max-w-xl mx-auto">
+<!-- Ambient Frozen Glow Orbs (Subtle Depth) -->
+<div class="relative w-full">
+<div class="absolute -top-10 -left-12 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute top-28 -right-12 w-40 h-40 bg-tertiary/10 rounded-full blur-3xl pointer-events-none"></div>
+</div>
+<!-- Section 1: KPI Metric Strip (Horizontal Scroll on Small Screens) -->
+<section class="flex flex-col space-y-2.5">
+<div class="flex items-center justify-between px-0.5">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">query_stats</span>
+<span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Execution Telemetry</span>
+</div>
+<span class="text-[10px] text-on-surface-variant font-mono" id="analysisCycleBadge">CYCLE: W48-LIVE</span>
+</div>
+<!-- Scrollable Snapshot Row -->
+<div class="flex gap-2.5 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none snap-x">
+<!-- Metric 1: Overall Accuracy -->
+<div class="snap-start shrink-0 w-44 p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col justify-between shadow-sm">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-medium text-on-surface-variant">Accuracy</span>
+<span class="inline-flex items-center text-[10px] font-semibold text-primary bg-primary-container/40 px-1.5 py-0.5 rounded" id="accBadge">
+            +3.2%
+          </span>
+</div>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="text-2xl font-bold tracking-tight text-on-surface" id="overallAccuracyVal">68.5%</span>
+<span class="text-[10px] text-on-surface-variant">win-rate</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full mt-2.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full transition-all duration-500" id="overallAccuracyBar" style="width: 68.5%"></div>
+</div>
+</div>
+<!-- Metric 2: Risk-Reward -->
+<div class="snap-start shrink-0 w-44 p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col justify-between shadow-sm">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-medium text-on-surface-variant">Avg Risk/Reward</span>
+<span class="material-symbols-outlined text-[15px] text-secondary">balance</span>
+</div>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="text-2xl font-bold tracking-tight text-on-surface" id="avgRRVal">1 : 2.6</span>
+</div>
+<div class="flex items-center gap-1 text-[10px] text-on-surface-variant mt-2.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span>Optimal asymmetric band</span>
+</div>
+</div>
+<!-- Metric 3: Total Trades -->
+<div class="snap-start shrink-0 w-40 p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col justify-between shadow-sm">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-medium text-on-surface-variant">Closed Positions</span>
+<span class="material-symbols-outlined text-[15px] text-on-surface-variant">lock</span>
+</div>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="text-2xl font-bold tracking-tight text-on-surface" id="closedPositionsVal">412</span>
+<span class="text-[10px] text-on-surface-variant font-mono" id="closedPositionsSub">FLAT</span>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-2.5 truncate">Zero overnight drift</span>
+</div>
+<!-- Metric 4: Today's Bias -->
+<div class="snap-start shrink-0 w-48 p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col justify-between shadow-sm">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-medium text-on-surface-variant">Market Structure</span>
+<span class="text-[10px] font-mono text-primary font-bold" id="marketBiasIndex">+0.72 IX</span>
+</div>
+<div class="mt-2 flex items-baseline gap-1.5">
+<span class="text-lg font-bold tracking-tight text-on-surface" id="marketBiasDirection">BULLISH</span>
+<span class="text-[10px] text-primary uppercase font-semibold" id="marketBiasFlow">Inst. Flow</span>
+</div>
+<div class="flex items-center gap-1 text-[10px] text-secondary mt-2.5">
+<span class="material-symbols-outlined text-[13px]" id="marketBiasIcon">north_east</span>
+<span id="marketBiasSession">NY AM Liquidity Run</span>
+</div>
+</div>
+</div>
+<!-- AI Shadow Prediction Banner Card -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container-high/60 backdrop-blur-lg p-3.5 shadow-sm border border-tertiary/20">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-tertiary-container/40 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary text-[18px]">psychology</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="text-xs font-semibold text-on-surface">AI Shadow Benchmark</span>
+<span class="text-[9px] uppercase tracking-wider font-bold text-tertiary bg-tertiary-container/50 px-1.5 py-0.2 rounded-full" id="shadowModelBadge">
+                SHADOW v4.2
+              </span>
+</div>
+<p class="text-[11px] text-on-surface-variant mt-0.5 leading-snug" id="shadowSignalsText">
+              Real-time Shadow Benchmark • 89 Signals Evaluated
+            </p>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="text-xl font-bold tracking-tight text-tertiary" id="shadowAccuracyVal">74.8%</div>
+<span class="text-[9px] uppercase tracking-wider text-on-surface-variant font-mono">Accuracy</span>
+</div>
+</div>
+<div class="mt-2.5 pt-2 flex items-center justify-between text-[10px] text-on-surface-variant bg-surface-container/40 -mx-3.5 -mb-3.5 px-3.5 py-2">
+<span class="flex items-center gap-1" id="shadowAlphaDriftText">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+          Traps Caught: <strong class="text-tertiary font-semibold" id="shadowTrapsRate">59.9%</strong> • Alpha drift: <strong class="text-primary font-semibold" id="shadowDrift">+6.3%</strong>
+        </span>
+<button class="text-primary hover:text-on-surface transition-colors font-medium inline-flex items-center gap-0.5 cursor-pointer" id="inspectShadowBtn">
+          Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Section 2: Strategy Allocation Donut Chart -->
+<section class="rounded-xl bg-surface-container/70 backdrop-blur-md p-4 shadow-sm flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Strategy Distribution</span>
+<span class="text-[11px] text-on-surface-variant">Volume allocation &amp; historical win rate</span>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono text-secondary bg-secondary-container/30">
+        5 ENGINES ACTIVE
+      </span>
+</div>
+<!-- Donut SVG & Legend Layout -->
+<div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-2">
+<!-- Circular Graphic -->
+<div class="sm:col-span-5 flex justify-center relative">
+<div class="relative w-36 h-36 flex items-center justify-center">
+<svg aria-label="Strategy distribution donut chart" class="w-full h-full -rotate-90" role="img" viewbox="0 0 120 120">
+<!-- Background Ring -->
+<circle class="text-surface-container-highest" cx="60" cy="60" fill="none" r="46" stroke="currentColor" stroke-width="13"></circle>
+<!-- 5m Scalp: 32% -->
+<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#7dd3fc" stroke-dasharray="92.49 196.53" stroke-dashoffset="0" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- ICT Inst: 28% -->
+<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#88b4cc" stroke-dasharray="80.93 208.09" stroke-dashoffset="-92.49" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Swing: 20% -->
+<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c8a0f0" stroke-dasharray="57.80 231.22" stroke-dashoffset="-173.42" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Order Flow: 12% -->
+<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c0d8e8" stroke-dasharray="34.68 254.34" stroke-dashoffset="-231.22" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Reversal: 8% -->
+<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#4a6070" stroke-dasharray="23.12 265.90" stroke-dashoffset="-265.90" stroke-linecap="butt" stroke-width="13"></circle>
+</svg>
+<!-- Center Metric Counter -->
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+<span class="text-[9px] uppercase tracking-wider text-on-surface-variant font-medium">Primary</span>
+<span class="text-base font-bold text-on-surface tracking-tight" id="donutPrimaryName">Scalp</span>
+<span class="text-[10px] font-mono text-primary font-semibold" id="donutPrimaryPct">32%</span>
+</div>
+</div>
+</div>
+<!-- Donut Legend & Sub-Metrics -->
+<div class="sm:col-span-7 flex flex-col gap-2">
+<!-- 5m Scalp -->
+<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-primary shrink-0"></span>
+<span class="font-medium text-on-surface truncate">5m Scalp Engine</span>
+</div>
+<div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+<span class="text-on-surface-variant" id="stratVol1">32% vol</span>
+<span class="text-primary font-semibold" id="stratWin1">72.4% win</span>
+</div>
+</div>
+<!-- ICT Institutional -->
+<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary shrink-0"></span>
+<span class="font-medium text-on-surface truncate">ICT Institutional</span>
+</div>
+<div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+<span class="text-on-surface-variant" id="stratVol2">28% vol</span>
+<span class="text-primary font-semibold" id="stratWin2">69.1% win</span>
+</div>
+</div>
+<!-- Swing -->
+<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-tertiary shrink-0"></span>
+<span class="font-medium text-on-surface truncate">Swing Liquidity</span>
+</div>
+<div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+<span class="text-on-surface-variant" id="stratVol3">20% vol</span>
+<span class="text-tertiary font-semibold" id="stratWin3">75.2% win</span>
+</div>
+</div>
+<!-- Order Flow -->
+<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed shrink-0"></span>
+<span class="font-medium text-on-surface truncate">Order Flow Depth</span>
+</div>
+<div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+<span class="text-on-surface-variant" id="stratVol4">12% vol</span>
+<span class="text-on-surface font-semibold" id="stratWin4">64.3% win</span>
+</div>
+</div>
+<!-- Reversal -->
+<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-outline shrink-0"></span>
+<span class="font-medium text-on-surface truncate">Mean Reversal</span>
+</div>
+<div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
+<span class="text-on-surface-variant" id="stratVol5">8% vol</span>
+<span class="text-on-surface-variant font-semibold" id="stratWin5">58.0% win</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Pair Performance SVG Bar Chart -->
+<section class="rounded-xl bg-surface-container/70 backdrop-blur-md p-4 shadow-sm flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Asset Profitability Index</span>
+<span class="text-[11px] text-on-surface-variant">Normalized net yield &amp; win rate per ticker</span>
+</div>
+<div class="flex items-center gap-1 text-[10px] text-on-surface-variant">
+<span class="w-2 h-2 rounded bg-primary"></span> Win Rate %
+      </div>
+</div>
+<!-- Clean SVG Bar Graph -->
+<div class="w-full pt-2">
+<svg aria-label="Asset win rate bar chart" class="w-full h-40 select-none overflow-visible" role="img" viewbox="0 0 340 150">
+<!-- Horizontal Grid Reference Lines -->
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="20" y2="20"></line>
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="60" y2="60"></line>
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="100" y2="100"></line>
+<line class="text-outline-variant/80" stroke="currentColor" stroke-width="1" x1="0" x2="340" y1="125" y2="125"></line>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="23">80%</text>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="63">60%</text>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="103">40%</text>
+<!-- Bar 1: XAUUSD -->
+<g class="group cursor-pointer">
+<rect fill="#7dd3fc" height="102" opacity="0.9" rx="4" width="30" x="22" y="23" id="barRect1"></rect>
+<text class="text-[9px] fill-primary font-bold font-mono" text-anchor="middle" x="37" y="17" id="barVal1">78.4%</text>
+<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="37" y="140">XAUUSD</text>
+</g>
+<!-- Bar 2: GBPUSD -->
+<g class="group cursor-pointer">
+<rect fill="#88b4cc" height="93" opacity="0.85" rx="4" width="30" x="88" y="32" id="barRect2"></rect>
+<text class="text-[9px] fill-secondary font-bold font-mono" text-anchor="middle" x="103" y="26" id="barVal2">71.2%</text>
+<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="103" y="140">GBPUSD</text>
+</g>
+<!-- Bar 3: EURUSD -->
+<g class="group cursor-pointer">
+<rect fill="#7dd3fc" height="85" opacity="0.7" rx="4" width="30" x="154" y="40" id="barRect3"></rect>
+<text class="text-[9px] fill-primary-fixed font-bold font-mono" text-anchor="middle" x="169" y="34" id="barVal3">65.0%</text>
+<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="169" y="140">EURUSD</text>
+</g>
+<!-- Bar 4: BTCUSD -->
+<g class="group cursor-pointer">
+<rect fill="#c8a0f0" height="81" opacity="0.85" rx="4" width="30" x="220" y="44" id="barRect4"></rect>
+<text class="text-[9px] fill-tertiary font-bold font-mono" text-anchor="middle" x="235" y="38" id="barVal4">62.5%</text>
+<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="235" y="140">BTCUSD</text>
+</g>
+<!-- Bar 5: ETHUSD -->
+<g class="group cursor-pointer">
+<rect fill="#4a6070" height="74" opacity="0.9" rx="4" width="30" x="286" y="51" id="barRect5"></rect>
+<text class="text-[9px] fill-on-surface-variant font-bold font-mono" text-anchor="middle" x="301" y="45" id="barVal5">56.8%</text>
+<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="301" y="140">ETHUSD</text>
+</g>
+</svg>
+</div>
+<!-- Subtext Breakdown -->
+<div class="flex items-center justify-between pt-1 text-[11px] text-on-surface-variant border-t border-surface-container-high/60">
+<span id="topYieldLabel">Top Yield: <strong class="text-primary font-semibold">XAUUSD (+14.8R)</strong></span>
+<span id="lowDrawdownLabel">Lowest Drawdown: <strong class="text-on-surface font-semibold">EURUSD (3.1%)</strong></span>
+</div>
+</section>
+<!-- Section 4: Detailed Strategy Breakdown List -->
+<section class="flex flex-col space-y-3">
+<div class="flex items-center justify-between px-0.5">
+<div class="flex flex-col">
+<span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Engine Performance Matrix</span>
+<span class="text-[11px] text-on-surface-variant">Validated SL / TP execution ratios</span>
+</div>
+</div>
+<!-- 5 Strategies Cards -->
+<div class="flex flex-col gap-2.5" id="strategyCardsContainer">
+<!-- Strategy 1: 5m Scalp -->
+<div class="p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col gap-2.5 shadow-sm" id="cardStratScalp">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-xs font-semibold text-on-surface">5m Scalp</span>
+<span class="text-[10px] font-mono text-on-surface-variant px-1.5 py-0.2 rounded bg-surface-container-high">M5</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold font-mono text-primary" id="scalpWR">72.4%</span>
+<span class="text-[10px] text-on-surface-variant">WR</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden flex">
+<div class="bg-primary h-full rounded-l-full transition-all duration-500" id="scalpBarTP" style="width: 75%"></div>
+<div class="bg-error/70 h-full rounded-r-full transition-all duration-500" id="scalpBarSL" style="width: 25%"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+<span class="text-primary font-medium flex items-center gap-1" id="scalpTPText">
+<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: 54
+</span>
+<span class="text-error/90 font-medium flex items-center gap-1" id="scalpSLText">
+<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: 18
+</span>
+</div>
+</div>
+</div>
+<!-- Strategy 2: ICT Institutional -->
+<div class="p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col gap-2.5 shadow-sm" id="cardStratICT">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-xs font-semibold text-on-surface">ICT Institutional</span>
+<span class="text-[10px] font-mono text-on-surface-variant px-1.5 py-0.2 rounded bg-surface-container-high">H1/M15</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold font-mono text-secondary" id="ictWR">69.1%</span>
+<span class="text-[10px] text-on-surface-variant">WR</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden flex">
+<div class="bg-secondary h-full rounded-l-full transition-all duration-500" id="ictBarTP" style="width: 75%"></div>
+<div class="bg-error/70 h-full rounded-r-full transition-all duration-500" id="ictBarSL" style="width: 25%"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+<span class="text-secondary font-medium flex items-center gap-1" id="ictTPText">
+<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: 42
+</span>
+<span class="text-error/90 font-medium flex items-center gap-1" id="ictSLText">
+<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: 14
+</span>
+</div>
+</div>
+</div>
+<!-- Strategy 3: Swing -->
+<div class="p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col gap-2.5 shadow-sm" id="cardStratSwing">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="text-xs font-semibold text-on-surface">Swing</span>
+<span class="text-[10px] font-mono text-on-surface-variant px-1.5 py-0.2 rounded bg-surface-container-high">H4/D1</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold font-mono text-tertiary" id="swingWR">75.2%</span>
+<span class="text-[10px] text-on-surface-variant">WR</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden flex">
+<div class="bg-tertiary h-full rounded-l-full transition-all duration-500" id="swingBarTP" style="width: 78.4%"></div>
+<div class="bg-error/70 h-full rounded-r-full transition-all duration-500" id="swingBarSL" style="width: 21.6%"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+<span class="text-tertiary font-medium flex items-center gap-1" id="swingTPText">
+<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: 29
+</span>
+<span class="text-error/90 font-medium flex items-center gap-1" id="swingSLText">
+<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: 8
+</span>
+</div>
+</div>
+</div>
+<!-- Strategy 4: Order Flow Engine -->
+<div class="p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col gap-2.5 shadow-sm" id="cardStratOF">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed"></span>
+<span class="text-xs font-semibold text-on-surface">Order Flow Engine</span>
+<span class="text-[10px] font-mono text-on-surface-variant px-1.5 py-0.2 rounded bg-surface-container-high">DELTA</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold font-mono text-on-surface" id="ofWR">64.3%</span>
+<span class="text-[10px] text-on-surface-variant">WR</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden flex">
+<div class="bg-secondary-fixed h-full rounded-l-full transition-all duration-500" id="ofBarTP" style="width: 68.1%"></div>
+<div class="bg-error/70 h-full rounded-r-full transition-all duration-500" id="ofBarSL" style="width: 31.9%"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+<span class="text-on-surface font-medium flex items-center gap-1" id="ofTPText">
+<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: 32
+</span>
+<span class="text-error/90 font-medium flex items-center gap-1" id="ofSLText">
+<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: 15
+</span>
+</div>
+</div>
+</div>
+<!-- Strategy 5: Reversal -->
+<div class="p-3.5 rounded-xl bg-surface-container/70 backdrop-blur-md flex flex-col gap-2.5 shadow-sm" id="cardStratRev">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="text-xs font-semibold text-on-surface">Reversal</span>
+<span class="text-[10px] font-mono text-on-surface-variant px-1.5 py-0.2 rounded bg-surface-container-high">EXHAUST</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold font-mono text-on-surface-variant" id="revWR">58.0%</span>
+<span class="text-[10px] text-on-surface-variant">WR</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden flex">
+<div class="bg-outline h-full rounded-l-full transition-all duration-500" id="revBarTP" style="width: 59.4%"></div>
+<div class="bg-error/70 h-full rounded-r-full transition-all duration-500" id="revBarSL" style="width: 40.6%"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+<span class="text-on-surface-variant font-medium flex items-center gap-1" id="revTPText">
+<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: 38
+</span>
+<span class="text-error/90 font-medium flex items-center gap-1" id="revSLText">
+<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: 26
+</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 5: Real-time Context Card / Server Timestamp -->
+<div class="rounded-xl bg-surface-container-low/80 p-3 flex items-center justify-between text-[11px] text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="font-mono">ANALYTICS ENGINE: SYNCED</span>
+</div>
+<span class="font-mono text-[10px] text-secondary" id="engineFooterLatency">LATENCY: 14ms NY4</span>
+</div>
+</div>
+
+<!-- Modal Drawer: AI Shadow Benchmark Log Inspector -->
+<div id="shadowModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+  <div class="bg-surface border border-outline-variant/60 w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 flex flex-col max-h-[85vh] shadow-2xl">
+    <div class="flex items-center justify-between pb-3 border-b border-surface-container-highest">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-tertiary text-[20px]">psychology</span>
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-on-surface">AI Shadow Signals Log</h3>
+          <p class="text-[10px] text-on-surface-variant font-mono" id="modalSubhead">Live Evaluated Predictions</p>
+        </div>
+      </div>
+      <button id="closeShadowModalBtn" class="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant cursor-pointer">
+        <span class="material-symbols-outlined text-[16px]">close</span>
+      </button>
+    </div>
+    
+    <div class="py-2.5 grid grid-cols-3 gap-2 text-center border-b border-surface-container-highest/60">
+      <div class="bg-surface-container-low p-2 rounded-lg">
+        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Accuracy</span>
+        <div class="text-sm font-bold font-mono text-tertiary" id="modalAcc">--</div>
+      </div>
+      <div class="bg-surface-container-low p-2 rounded-lg">
+        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Traps Caught</span>
+        <div class="text-sm font-bold font-mono text-primary" id="modalTraps">--</div>
+      </div>
+      <div class="bg-surface-container-low p-2 rounded-lg">
+        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Win Precision</span>
+        <div class="text-sm font-bold font-mono text-secondary" id="modalWins">--</div>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto space-y-2 py-3 pr-1" id="shadowLogEntries">
+      <!-- Rendered dynamically -->
+      <div class="text-center py-6 text-xs text-on-surface-variant font-mono">Loading shadow evaluations...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Micro-interaction: Strategy card click highlight toggle
+  document.querySelectorAll('section div.rounded-xl').forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      card.classList.add('bg-surface-container-high/90');
+    });
+    card.addEventListener('mouseleave', () => {
+      card.classList.remove('bg-surface-container-high/90');
+    });
+  });
+
+  // Modal logic
+  const modal = document.getElementById('shadowModal');
+  const inspectBtn = document.getElementById('inspectShadowBtn');
+  const closeModalBtn = document.getElementById('closeShadowModalBtn');
+
+  if (inspectBtn) {
+    inspectBtn.addEventListener('click', () => {
+      modal.classList.remove('hidden');
+    });
+  }
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+  }
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+  }
+
+  // Live data sync from /api/state and /api/ml/shadow-stats
+  async function loadAnalysisData() {
+    try {
+      // 1. Fetch live bot state
+      const stateRes = await fetch('/api/state');
+      if (stateRes.ok) {
+        const s = await stateRes.json();
+        
+        // Accuracy & Metrics
+        if (s.accuracy !== undefined) {
+          const accVal = parseFloat(s.accuracy).toFixed(1);
+          document.getElementById('overallAccuracyVal').textContent = `${accVal}%`;
+          const accBar = document.getElementById('overallAccuracyBar');
+          if (accBar) accBar.style.width = `${Math.min(100, Math.max(0, accVal))}%`;
+        }
+        if (s.total_closed_trades !== undefined) {
+          document.getElementById('closedPositionsVal').textContent = s.total_closed_trades;
+        }
+
+        // Account info
+        if (s.broker_info && s.broker_info.account_id) {
+          const accEl = document.getElementById('analysisAccount');
+          if (accEl) accEl.textContent = `ACC: #${s.broker_info.account_id}`;
+        }
+
+        // Market daily bias
+        if (s.daily_bias && s.daily_bias.bias) {
+          const biasDir = s.daily_bias.bias.toUpperCase();
+          document.getElementById('marketBiasDirection').textContent = biasDir;
+          const score = s.daily_bias.score !== undefined ? (s.daily_bias.score > 0 ? `+${s.daily_bias.score.toFixed(2)}` : s.daily_bias.score.toFixed(2)) : '+0.72';
+          document.getElementById('marketBiasIndex').textContent = `${score} IX`;
+          const icon = document.getElementById('marketBiasIcon');
+          if (icon) {
+            icon.textContent = biasDir === 'BEARISH' ? 'south_east' : (biasDir === 'BULLISH' ? 'north_east' : 'sync_alt');
+          }
+        }
+
+        // Performance by strategy
+        if (s.stats_by_strategy) {
+          const strats = s.stats_by_strategy;
+          function updateStrat(cardPrefix, names) {
+            let found = null;
+            for (const n of names) {
+              if (strats[n]) { found = strats[n]; break; }
+            }
+            if (found) {
+              const wr = found.win_rate !== undefined ? parseFloat(found.win_rate).toFixed(1) : '0.0';
+              const wrEl = document.getElementById(cardPrefix + 'WR');
+              if (wrEl) wrEl.textContent = `${wr}%`;
+              const wins = found.winning_trades || found.wins || 0;
+              const losses = found.losing_trades || found.losses || 0;
+              const total = wins + losses || 1;
+              const tpRatio = ((wins / total) * 100).toFixed(1);
+              const slRatio = (100 - tpRatio).toFixed(1);
+
+              const barTP = document.getElementById(cardPrefix + 'BarTP');
+              const barSL = document.getElementById(cardPrefix + 'BarSL');
+              if (barTP) barTP.style.width = `${tpRatio}%`;
+              if (barSL) barSL.style.width = `${slRatio}%`;
+
+              const tpText = document.getElementById(cardPrefix + 'TPText');
+              const slText = document.getElementById(cardPrefix + 'SLText');
+              if (tpText) tpText.innerHTML = `<span class="material-symbols-outlined text-[12px]">done</span> TP Hit: ${wins}`;
+              if (slText) slText.innerHTML = `<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: ${losses}`;
+            }
+          }
+          updateStrat('scalp', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m']);
+          updateStrat('ict', ['ICT Institutional', 'ICT', 'ict']);
+          updateStrat('swing', ['SMC Swing', 'SMC', 'smc']);
+          updateStrat('of', ['Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
+          updateStrat('rev', ['Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
+        }
+
+        // Performance by pair
+        if (s.stats_by_pair) {
+          const pairs = s.stats_by_pair;
+          const pairKeys = ['XAUUSD', 'GBPUSD', 'EURUSD', 'BTCUSD', 'ETHUSD'];
+          pairKeys.forEach((sym, idx) => {
+            const p = pairs[sym];
+            if (p) {
+              const wr = parseFloat(p.win_rate || 0).toFixed(1);
+              const valEl = document.getElementById(`barVal${idx + 1}`);
+              const rectEl = document.getElementById(`barRect${idx + 1}`);
+              if (valEl) valEl.textContent = `${wr}%`;
+              if (rectEl) {
+                const h = Math.max(10, Math.min(115, Math.round(wr * 1.3)));
+                rectEl.setAttribute('height', h);
+                rectEl.setAttribute('y', 125 - h);
+              }
+            }
+          });
+        }
+      }
+
+      // 2. Fetch AI Shadow Mode Prediction Stats
+      const shadowRes = await fetch('/api/ml/shadow-stats');
+      if (shadowRes.ok) {
+        const shadow = await shadowRes.json();
+        if (shadow && shadow.status === 'success') {
+          // Model badge & accuracy
+          const accVal = parseFloat(shadow.prediction_accuracy_pct || 0).toFixed(1);
+          document.getElementById('shadowAccuracyVal').textContent = `${accVal}%`;
+          document.getElementById('modalAcc').textContent = `${accVal}%`;
+
+          const evaluated = shadow.evaluated_events || shadow.predicted_events || 0;
+          document.getElementById('shadowSignalsText').textContent = `Real-time Shadow Benchmark • ${evaluated} Signals Evaluated`;
+          document.getElementById('modalSubhead').textContent = `Evaluated: ${evaluated} setups across active pairs`;
+
+          const trapsRate = parseFloat(shadow.trap_detection_rate_pct || 0).toFixed(1);
+          const trapsCaught = shadow.traps_caught || 0;
+          const totalTraps = shadow.total_traps || 0;
+          const trapEl = document.getElementById('shadowTrapsRate');
+          if (trapEl) trapEl.textContent = `${trapsRate}%`;
+          document.getElementById('modalTraps').textContent = `${trapsCaught}/${totalTraps}`;
+
+          const winRate = parseFloat(shadow.win_prediction_rate_pct || 0).toFixed(1);
+          document.getElementById('modalWins').textContent = `${winRate}%`;
+
+          // Render recent predictions log
+          const logContainer = document.getElementById('shadowLogEntries');
+          if (logContainer && shadow.recent_predictions && shadow.recent_predictions.length > 0) {
+            logContainer.innerHTML = shadow.recent_predictions.map(p => {
+              const isCorrect = p.was_correct;
+              const outcomeBadge = p.outcome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${p.outcome.toUpperCase() === 'TP' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${p.outcome.toUpperCase()}</span>` : `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-surface-container text-on-surface-variant">PENDING</span>`;
+              const predBadge = p.predicted_action === 'VETO' ? `<span class="text-rose-400 font-bold">VETO (SL Risk ${(p.p_sl * 100).toFixed(0)}%)</span>` : `<span class="text-primary font-bold">ALLOW (${(p.p_genuine * 100).toFixed(0)}% Win)</span>`;
+              const correctIcon = isCorrect === true ? `<span class="material-symbols-outlined text-emerald-400 text-[14px]">check_circle</span>` : (isCorrect === false ? `<span class="material-symbols-outlined text-rose-400 text-[14px]">cancel</span>` : `<span class="material-symbols-outlined text-on-surface-variant text-[14px]">schedule</span>`);
+
+              const timeFormatted = p.ts ? p.ts.replace('T', ' ').substring(5, 16) : '--';
+              return `
+                <div class="p-2.5 rounded-lg bg-surface-container-low/90 border border-surface-container-highest flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    ${correctIcon}
+                    <div class="flex flex-col min-w-0">
+                      <div class="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span class="font-bold text-on-surface">${p.symbol}</span>
+                        <span class="text-[10px] text-on-surface-variant uppercase">${p.direction}</span>
+                        <span class="text-[9px] text-on-surface-variant/70">(${p.strategy || 'AI'})</span>
+                      </div>
+                      <span class="text-[10px] text-on-surface-variant mt-0.5">${predBadge}</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-end shrink-0 gap-1">
+                    ${outcomeBadge}
+                    <span class="text-[9px] text-on-surface-variant font-mono">${timeFormatted}</span>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          } else if (logContainer) {
+            logContainer.innerHTML = `<div class="text-center py-6 text-xs text-on-surface-variant font-mono">No shadow signals evaluated yet.</div>`;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error loading analysis data:', err);
+    }
+  }
+
+  loadAnalysisData();
+  setInterval(loadAnalysisData, 5000);
+</script>
+</main>
+<!-- Clean Institutional Tab Bar -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-2px_12px_rgba(0,0,0,0.2)]" data-active-classes="text-primary bg-surface-container/60">
+<div class="flex items-center justify-around h-16 px-4 max-w-lg mx-auto">
+<a class="flex flex-col items-center justify-center min-w-[72px] h-12 rounded-xl text-on-surface-variant hover:text-on-surface transition-all gap-0.5" data-path="controls" href="/terminal/controls">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+<span class="text-[11px] font-medium tracking-wide uppercase">Controls</span>
+</a>
+<a class="flex flex-col items-center justify-center min-w-[72px] h-12 rounded-xl text-on-surface-variant hover:text-on-surface transition-all gap-0.5" data-path="strategy" href="/terminal/strategy">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+<span class="text-[11px] font-medium tracking-wide uppercase">Strategy</span>
+</a>
+<a aria-current="page" class="flex flex-col items-center justify-center min-w-[72px] h-12 rounded-xl transition-all gap-0.5 text-primary bg-surface-container/60" data-path="analysis" href="/terminal/analysis">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="text-[11px] font-medium tracking-wide uppercase">Analysis</span>
+</a>
+</div>
+</nav>
+</body></html>
