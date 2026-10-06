@@ -1447,8 +1447,9 @@ class TradingBot:
         if htf_data is None or len(htf_data) < 10:
             existing = self.state.get_daily_bias(symbol, today_str)
             if existing:
+                self._daily_bias_cache[symbol] = existing
                 return existing
-            return {
+            fallback_res = {
                 "symbol": symbol,
                 "bias": "NEUTRAL",
                 "trend_clarity_score": 10.0,
@@ -1473,6 +1474,8 @@ class TradingBot:
                 "summary": f"Awaiting market streaming data for {symbol}.",
                 "updated_at": now.isoformat(),
             }
+            self._daily_bias_cache[symbol] = fallback_res
+            return fallback_res
 
         # 2. Run HTF analysis
         htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)

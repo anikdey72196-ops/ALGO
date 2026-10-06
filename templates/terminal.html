@@ -725,7 +725,7 @@
         try {
           const endpoint = nextState ? '/api/activate' : '/api/deactivate';
           await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-          showToast(nextState ? 'Execution Core ARMED — Features Locked' : 'Execution Core STANDBY — Features Unlocked');
+          showToast(nextState ? 'Trading Engine ACTIVE — Features Locked' : 'Trading Engine STANDBY — Features Unlocked');
         } catch (err) {
           console.warn('Bot toggle API sync error:', err);
         }

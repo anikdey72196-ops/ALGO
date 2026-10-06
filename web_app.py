@@ -12,12 +12,22 @@ Features:
 from __future__ import annotations
 
 import os
+import time
 import socket
 import asyncio
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Lightweight in-memory cache for /api/state to prevent redundant SQLite & MT5 query storms
+_state_cache: dict[str, Any] = {"response": None, "ts": 0.0}
+_STATE_CACHE_TTL = 1.5  # seconds
+
+def invalidate_state_cache():
+    global _state_cache
+    _state_cache["ts"] = 0.0
+    _state_cache["response"] = None
 
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -322,6 +332,11 @@ async def get_bot_state():
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+    global _state_cache
+    now = time.time()
+    if _state_cache["response"] is not None and (now - _state_cache["ts"]) < _STATE_CACHE_TTL:
+        return _state_cache["response"]
+
     equity = bot_instance.broker.get_account_equity()
     daily_pnl = bot_instance.state.get_daily_pnl()
     trade_count = bot_instance.state.get_trade_count()
@@ -548,6 +563,9 @@ async def get_bot_state():
         temporal_ml_shadow_mode=getattr(bot_instance.config, "temporal_ml_shadow_mode", True),
         daily_bias=bot_instance.get_daily_bias_summary() if hasattr(bot_instance, "get_daily_bias_summary") else {},
     )
+    _state_cache["response"] = res
+    _state_cache["ts"] = time.time()
+    return res
 
 
 @app.get("/api/logs")
@@ -640,6 +658,7 @@ async def activate_bot():
     bot_instance.config.selected_symbols = active_syms
 
     bot_instance.is_active = True
+    invalidate_state_cache()
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols,
         lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'} | P3:{bot_instance.config.pair3.fixed_lot_size or 'Dyn'}",
@@ -672,6 +691,7 @@ async def deactivate_bot():
         return {"status": "already_inactive", "message": "Bot is already deactivated."}
 
     bot_instance.is_active = False
+    invalidate_state_cache()
     closed_id = bot_instance.state.record_deactivation("Manual User Stop")
     bot_instance.log(f"🔴 BOT DEACTIVATED by user (Session #{closed_id or '---'}). No trade execution will occur.")
     return {
@@ -690,6 +710,7 @@ async def handle_dashboard_update(payload: dict):
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+    invalidate_state_cache()
     action = payload.get("action")
     if action == "set_status":
         status = payload.get("status")
@@ -735,13 +756,13 @@ async def handle_dashboard_update(payload: dict):
             current.remove(strat_name)
         bot_instance.config.enabled_strategies = current
 
-        if lookup_key in ("reversal", "trend_reversal", "trend-reversal") or strat_name == "TREND_REVERSAL":
-            bot_instance.config.reversal_strategy_enabled = active
+        bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in current)
 
         if hasattr(bot_instance, "strategy") and hasattr(bot_instance.strategy, "set_enabled_strategies"):
             bot_instance.strategy.set_enabled_strategies(current)
 
         bot_instance.save_settings()
+        invalidate_state_cache()
         return {
             "status": "success",
             "enabled_strategies": current,
@@ -911,6 +932,8 @@ async def update_configuration(payload: BotConfigUpdate):
     """
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    invalidate_state_cache()
 
     # Handle Pair 1 & Pair 2 update
     if payload.pair1 is not None:
