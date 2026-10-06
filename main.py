@@ -1691,5 +1691,13 @@ def main() -> None:
     asyncio.run(run_scheduled())
 
 
+def __getattr__(name: str):
+    """Enable ASGI runners targeting `main:app` (e.g. uvicorn main:app) to resolve FastAPI app seamlessly."""
+    if name == "app":
+        import web_app
+        return web_app.app
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
 if __name__ == "__main__":
     main()

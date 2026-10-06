@@ -30,8 +30,11 @@ def invalidate_state_cache():
     _state_cache["response"] = None
 
 # pyrefly: ignore [missing-import]
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+import io
+import csv
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -142,7 +145,27 @@ class BotStateResponse(BaseModel):
     daily_bias: dict = {}
 
 
-
+class CompactBotState(BaseModel):
+    """Ultra-lightweight state DTO optimized for high-frequency mobile polling and WebSockets."""
+    is_active: bool
+    equity: float
+    daily_pnl: float
+    trades_today: int
+    circuit_breaker_active: bool
+    accuracy: float = 0.0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    total_closed_trades: int = 0
+    performance_metrics: dict = {}
+    current_window: dict = {}
+    daily_bias: dict = {}
+    ai_confirmation_enabled: bool = True
+    ai_confidence_threshold: float = 0.75
+    enabled_strategies: List[str] = []
+    reversal_strategy_enabled: bool = False
+    selected_symbols: List[str] = []
+    pairs_config: dict = {}
+    broker_info: Optional[dict] = None
 
 
 # ─────────────────────────────────────────────
@@ -206,6 +229,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=300, compresslevel=5)
 
 # Templates and static directories
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -1689,22 +1713,22 @@ async def export_sessions_csv():
 
         with bot_instance.state._lock:
             cursor = bot_instance.state.conn.execute(
-                "SELECT id, activated_at, deactivated_at, duration_seconds, "
-                "symbols, lot_size, trigger_source, deactivation_reason, is_active FROM bot_sessions ORDER BY id ASC"
+                "SELECT id, activation_time, deactivation_time, duration_seconds, "
+                "symbols, lot_size, trigger_source, deactivation_reason, status FROM bot_sessions ORDER BY id ASC"
             )
             for row in cursor:
                 dur_sec = row["duration_seconds"]
                 dur_fmt = format_duration(dur_sec) if dur_sec else ""
                 writer.writerow({
                     "id": row["id"],
-                    "activation_time": row["activated_at"] or "",
-                    "deactivation_time": row["deactivated_at"] or "",
+                    "activation_time": row["activation_time"] or "",
+                    "deactivation_time": row["deactivation_time"] or "",
                     "formatted_duration": dur_fmt,
                     "symbols": row["symbols"] or "",
                     "lot_size": row["lot_size"] or "",
                     "trigger_source": row["trigger_source"] or "",
                     "notes": row["deactivation_reason"] or "",
-                    "is_active": "YES" if row["is_active"] else "NO",
+                    "is_active": "YES" if row["status"] == "ACTIVE" else "NO",
                 })
                 yield output.getvalue()
                 output.seek(0)
