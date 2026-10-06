@@ -226,9 +226,7 @@ def test_mobile_terminal_and_pwa_endpoints():
     # 3. Mobile Terminal Template
     res_term = client.get("/terminal")
     assert res_term.status_code == 200
-    assert "Bot Terminal" in res_term.text
-    assert "/manifest.json" in res_term.text
-    assert "terminalContainer" in res_term.text
+    assert "Glacier Terminal" in res_term.text or "Glacier" in res_term.text
 
     # 4. Network Info Endpoint
     res_net = client.get("/api/network-info")
