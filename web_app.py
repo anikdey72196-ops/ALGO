@@ -15,12 +15,12 @@ import os
 import socket
 import asyncio
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 # pyrefly: ignore [missing-import]
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -1456,7 +1456,7 @@ async def get_smart_partial_tp_events(limit: int = 50):
 
 @app.post("/api/ml/partial_tp/retrain")
 async def retrain_smart_partial_tp_model():
-    """Trigger retraining or baseline recalibration for the Smart Partial TP Model."""
+    """Trigger retraining on historical trade logs or pre-calibrated baseline."""
     svc = None
     if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
         svc = bot_instance.position_manager.smart_partial_tp_service
@@ -1466,10 +1466,43 @@ async def retrain_smart_partial_tp_model():
     if not svc:
         raise HTTPException(status_code=500, detail="Smart Partial TP service unavailable")
 
-    svc.model._train_synthetic_baseline()
+    retrained_on_real = False
+    if bot_instance and hasattr(bot_instance, "state"):
+        trade_records = bot_instance.state.get_all_trades(limit=2000)
+        if len(trade_records) >= 10:
+            retrained_on_real = svc.model.train_from_trade_records(trade_records)
+
+    if not retrained_on_real:
+        svc.model._train_synthetic_baseline()
+
+    msg = "Retrained on real historical trades." if retrained_on_real else "Retrained on synthetic pre-calibrated baseline."
     if bot_instance:
-        bot_instance.log("🧠 [SMART PARTIAL TP ML] Baseline model retrained and recalibrated.")
-    return {"status": "success", "message": "Smart Partial TP model retrained successfully", "status_info": svc.get_status()}
+        bot_instance.log(f"🧠 [SMART PARTIAL TP ML] {msg}")
+
+    return {"status": "success", "message": msg, "status_info": svc.get_status()}
+
+
+@app.post("/api/ml/partial_tp/explain")
+async def explain_smart_partial_tp_prediction(payload: Dict[str, Any] = Body(...)):
+    """Return SHAP feature importances and drivers for a given feature set or position."""
+    svc = None
+    if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+        svc = bot_instance.position_manager.smart_partial_tp_service
+    elif SmartPartialTPService is not None:
+        svc = SmartPartialTPService.get_instance()
+
+    if not svc:
+        raise HTTPException(status_code=500, detail="Smart Partial TP service unavailable")
+
+    features = payload.get("features", {})
+    if not features:
+        # Default mock features for testing / UI preview if none provided
+        from ml.smart_partial_tp import FEATURE_NAMES
+        features = {name: 1.0 for name in FEATURE_NAMES}
+
+    explanation = svc.model.explain_prediction(features)
+    return {"status": "success", **explanation}
+
 
 
 

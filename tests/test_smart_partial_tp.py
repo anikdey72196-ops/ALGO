@@ -24,7 +24,9 @@ import pytest
 from core.config import Direction, PositionManagementRuleConfig, TradingConfig
 from core.state import StateManager, TradeRecord
 from execution.position_manager import PositionManager
+from core.state import TradeRecord, Direction
 from ml.smart_partial_tp import (
+    FEATURE_NAMES,
     SmartPartialTPModel,
     SmartPartialTPService,
     StructuralLevels,
@@ -365,3 +367,51 @@ def test_target_50_pct_partial_profit_and_cost_to_cost_sl():
                 pm.shutdown()
             state.close()
 
+
+
+def test_smart_partial_tp_optimization_and_explainability():
+    """Verify hyperparameter tuning, calibration, trade record training, and SHAP explanation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "test_opt_model.joblib"
+        model = SmartPartialTPModel(artifact_path=model_path)
+
+        # 1. Model version & sample count
+        assert model.version == "v2.0-tuned-calibrated"
+        assert model.total_trained_samples == 5000
+        assert model.classifier is not None
+        assert model.regressor is not None
+
+        # 2. Probability calibration
+        dummy_feat = {name: 1.0 for name in FEATURE_NAMES}
+        p_rev, p_full, pred_max_r = model.predict(dummy_feat)
+        assert 0.0 <= p_rev <= 1.0
+        assert 0.0 <= p_full <= 1.0
+        assert pred_max_r >= dummy_feat["r_multiple"]
+
+        # 3. SHAP Explainability
+        exp = model.explain_prediction(dummy_feat)
+        assert exp["model_version"] == model.version
+        assert len(exp["feature_importances"]) == len(FEATURE_NAMES)
+        assert len(exp["top_drivers"]) == 5
+
+        # 4. Retraining on historical TradeRecord list
+        records = []
+        for i in range(20):
+            t = TradeRecord(
+                id=i + 1,
+                timestamp=datetime.now(timezone.utc),
+                symbol="EURUSD",
+                direction=Direction.BUY if i % 2 == 0 else Direction.SELL,
+                entry_price=1.0800,
+                stop_loss=1.0770,
+                take_profit=1.0860,
+                lot_size=0.1,
+                realized_pnl=60.0 if i % 2 == 0 else -30.0,
+                status="CLOSED_TP" if i % 2 == 0 else "CLOSED_SL",
+                strategy_name="ICT",
+            )
+            records.append(t)
+
+        success = model.train_from_trade_records(records, n_iter=3, cv=2)
+        assert success is True
+        assert "v2.0-real-20trades" in model.version
