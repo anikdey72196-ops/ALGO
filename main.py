@@ -628,29 +628,29 @@ class TradingBot:
             pair_lot = self.config.fixed_lot_size
             pair_sl = self.config.fixed_sl_pips
 
-            # Custom override from pair_configs or pair1 / pair2 / pair3 if symbol matches
+            # Custom override from pair1 / pair2 / pair3 or pair_configs if symbol matches
             sym_clean = sym.strip().upper()
-            if hasattr(self.config, 'pair_configs') and sym_clean in self.config.pair_configs:
+            if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym_clean:
+                if self.config.pair1.fixed_lot_size is not None:
+                    pair_lot = self.config.pair1.fixed_lot_size
+                if self.config.pair1.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair1.fixed_sl_pips
+            elif getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == sym_clean:
+                if self.config.pair2.fixed_lot_size is not None:
+                    pair_lot = self.config.pair2.fixed_lot_size
+                if self.config.pair2.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair2.fixed_sl_pips
+            elif getattr(self.config, 'pair3', None) and self.config.pair3.enabled and self.config.pair3.symbol.strip().upper() == sym_clean:
+                if self.config.pair3.fixed_lot_size is not None:
+                    pair_lot = self.config.pair3.fixed_lot_size
+                if self.config.pair3.fixed_sl_pips is not None:
+                    pair_sl = self.config.pair3.fixed_sl_pips
+            elif hasattr(self.config, 'pair_configs') and sym_clean in self.config.pair_configs:
                 p_item = self.config.pair_configs[sym_clean]
                 if p_item.fixed_lot_size is not None:
                     pair_lot = p_item.fixed_lot_size
                 if p_item.fixed_sl_pips is not None:
                     pair_sl = p_item.fixed_sl_pips
-            elif getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym:
-                if self.config.pair1.fixed_lot_size is not None:
-                    pair_lot = self.config.pair1.fixed_lot_size
-                if self.config.pair1.fixed_sl_pips is not None:
-                    pair_sl = self.config.pair1.fixed_sl_pips
-            elif getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == sym:
-                if self.config.pair2.fixed_lot_size is not None:
-                    pair_lot = self.config.pair2.fixed_lot_size
-                if self.config.pair2.fixed_sl_pips is not None:
-                    pair_sl = self.config.pair2.fixed_sl_pips
-            elif getattr(self.config, 'pair3', None) and self.config.pair3.enabled and self.config.pair3.symbol.strip().upper() == sym:
-                if self.config.pair3.fixed_lot_size is not None:
-                    pair_lot = self.config.pair3.fixed_lot_size
-                if self.config.pair3.fixed_sl_pips is not None:
-                    pair_sl = self.config.pair3.fixed_sl_pips
 
             active_pairs.append({
                 "pair_num": i,
