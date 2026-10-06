@@ -125,6 +125,30 @@ class StateManager:
                 )
             ''')
 
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS daily_bias_log (
+                    date TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    bias TEXT NOT NULL,
+                    trend_clarity REAL DEFAULT 0.0,
+                    ema_value REAL DEFAULT 0.0,
+                    current_price REAL DEFAULT 0.0,
+                    dealing_range_low REAL,
+                    dealing_range_high REAL,
+                    fib_50 REAL,
+                    is_discount INTEGER DEFAULT 0,
+                    is_premium INTEGER DEFAULT 0,
+                    zone_status TEXT DEFAULT 'EQUILIBRIUM',
+                    first_zone_type TEXT DEFAULT 'NONE',
+                    all_zones_failed INTEGER DEFAULT 0,
+                    reversal_risk TEXT DEFAULT 'LOW',
+                    choch_detected INTEGER DEFAULT 0,
+                    summary TEXT DEFAULT '',
+                    updated_at TEXT,
+                    PRIMARY KEY (date, symbol)
+                )
+            ''')
+
             # Ensure migrations for existing databases
             try:
                 self.conn.execute("ALTER TABLE trade_log ADD COLUMN strategy_name TEXT DEFAULT 'SMC'")
@@ -1201,6 +1225,111 @@ class StateManager:
                 """,
                 (realized_max_r, outcome_label, event_id),
             )
+
+    def save_daily_bias(self, bias_data: dict) -> None:
+        """Persist or update daily directional bias record for a symbol and date."""
+        with self._lock, self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO daily_bias_log (
+                    date, symbol, bias, trend_clarity, ema_value, current_price,
+                    dealing_range_low, dealing_range_high, fib_50, is_discount,
+                    is_premium, zone_status, first_zone_type, all_zones_failed,
+                    reversal_risk, choch_detected, summary, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date, symbol) DO UPDATE SET
+                    bias = excluded.bias,
+                    trend_clarity = excluded.trend_clarity,
+                    ema_value = excluded.ema_value,
+                    current_price = excluded.current_price,
+                    dealing_range_low = excluded.dealing_range_low,
+                    dealing_range_high = excluded.dealing_range_high,
+                    fib_50 = excluded.fib_50,
+                    is_discount = excluded.is_discount,
+                    is_premium = excluded.is_premium,
+                    zone_status = excluded.zone_status,
+                    first_zone_type = excluded.first_zone_type,
+                    all_zones_failed = excluded.all_zones_failed,
+                    reversal_risk = excluded.reversal_risk,
+                    choch_detected = excluded.choch_detected,
+                    summary = excluded.summary,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    bias_data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+                    str(bias_data.get("symbol", "UNKNOWN")).upper(),
+                    str(bias_data.get("bias", "NEUTRAL")).upper(),
+                    float(bias_data.get("trend_clarity_score") or bias_data.get("trend_clarity") or 0.0),
+                    float(bias_data.get("ema_value") or 0.0),
+                    float(bias_data.get("current_price") or 0.0),
+                    bias_data.get("dealing_range_low"),
+                    bias_data.get("dealing_range_high"),
+                    bias_data.get("fib_50"),
+                    1 if bias_data.get("is_discount") else 0,
+                    1 if bias_data.get("is_premium") else 0,
+                    str(bias_data.get("zone_status", "EQUILIBRIUM")),
+                    str(bias_data.get("first_zone_type", "NONE")),
+                    1 if bias_data.get("all_zones_failed") else 0,
+                    str(bias_data.get("reversal_risk", "LOW")),
+                    1 if bias_data.get("choch_detected") else 0,
+                    str(bias_data.get("summary", "")),
+                    bias_data.get("updated_at", datetime.now(timezone.utc).isoformat()),
+                ),
+            )
+
+    def get_daily_bias(self, symbol: str, date_str: str | None = None) -> dict | None:
+        """Retrieve daily bias for a symbol on a specific date."""
+        target_date = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                SELECT * FROM daily_bias_log
+                WHERE date = ? AND symbol = ?
+                """,
+                (target_date, symbol.upper()),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_all_daily_biases(self, date_str: str | None = None) -> dict[str, dict]:
+        """Retrieve all recorded daily biases for a date, keyed by symbol."""
+        target_date = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._lock:
+            cur = self.conn.execute(
+                """
+                SELECT * FROM daily_bias_log
+                WHERE date = ?
+                ORDER BY symbol ASC
+                """,
+                (target_date,),
+            )
+            rows = cur.fetchall()
+            return {row["symbol"]: dict(row) for row in rows}
+
+    def get_daily_bias_history(self, symbol: str | None = None, limit: int = 14) -> list[dict]:
+        """Retrieve historical daily bias records."""
+        with self._lock:
+            if symbol:
+                cur = self.conn.execute(
+                    """
+                    SELECT * FROM daily_bias_log
+                    WHERE symbol = ?
+                    ORDER BY date DESC
+                    LIMIT ?
+                    """,
+                    (symbol.upper(), limit),
+                )
+            else:
+                cur = self.conn.execute(
+                    """
+                    SELECT * FROM daily_bias_log
+                    ORDER BY date DESC, symbol ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close DB connection."""

@@ -11,3 +11,5 @@ sessions_history.csv
 trades_history.csv
 .agents/
 graphify-out
+.gsd
+.gemini

@@ -186,6 +186,7 @@ class TradingBot:
         # Price data cache (in production, fetch from broker or data provider)
         self._htf_cache: dict[str, object] = {}
         self._ltf_cache: dict[str, object] = {}
+        self._daily_bias_cache: dict[str, dict] = {}
 
         # Load persisted settings if present
         if load_saved_settings:
@@ -779,6 +780,12 @@ class TradingBot:
 
             # ── Step 2b: Generate signals across enabled strategies ──
             htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
+
+            # Update daily bias cache & database for this symbol
+            try:
+                self.compute_daily_bias(symbol)
+            except Exception as e:
+                logger.debug(f"Daily bias tick update error for {symbol}: {e}")
 
             if htf_analysis.fib_50 is not None:
                 pos_str = "DISCOUNT (<0.5 Fib)" if htf_analysis.is_discount else "PREMIUM (>=0.5 Fib)"
@@ -1418,6 +1425,178 @@ class TradingBot:
         """Manually inject OHLCV data (useful for backtesting)."""
         cache_key = f"{symbol}_{timeframe}"
         self._htf_cache[cache_key] = df
+
+    # ── Daily Directional Bias Subsystem ──
+
+    def compute_daily_bias(self, symbol: str) -> dict:
+        """
+        Compute higher-timeframe daily directional bias for a symbol.
+        Synthesizes 200 EMA trend, market structure, institutional dealing range
+        (0.5 Fib equilibrium), zone failures, and trend reversal alerts.
+        """
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        formatted_date = now.strftime("%A, %b %d")
+
+        # 1. Fetch HTF candle data (1H preferred, fallback 1D)
+        htf_data = self._get_ohlcv(symbol, "1H")
+        if htf_data is None or len(htf_data) < 20:
+            htf_data = self._get_ohlcv(symbol, "1D")
+
+        # Fallback if no data available
+        if htf_data is None or len(htf_data) < 10:
+            existing = self.state.get_daily_bias(symbol, today_str)
+            if existing:
+                return existing
+            return {
+                "symbol": symbol,
+                "bias": "NEUTRAL",
+                "trend_clarity_score": 10.0,
+                "clarity_pct": 33,
+                "ema_value": 0.0,
+                "current_price": 0.0,
+                "above_ema": False,
+                "dealing_range_low": 0.0,
+                "dealing_range_high": 0.0,
+                "fib_50": 0.0,
+                "is_discount": False,
+                "is_premium": False,
+                "zone_status": "EQUILIBRIUM",
+                "first_zone_type": "NONE",
+                "all_zones_failed": False,
+                "reversal_risk": "LOW",
+                "choch_detected": False,
+                "reversal_stage": "TRENDING",
+                "day_change_pct": 0.0,
+                "date": today_str,
+                "formatted_date": formatted_date,
+                "summary": f"Awaiting market streaming data for {symbol}.",
+                "updated_at": now.isoformat(),
+            }
+
+        # 2. Run HTF analysis
+        htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
+        current_close = float(htf_data['close'].iloc[-1])
+        current_ema = float(htf_analysis.ema_value)
+        is_above_ema = current_close > current_ema
+        bias_str = htf_analysis.bias.value
+
+        clarity_pct = min(100, max(15, int(round((htf_analysis.trend_clarity_score / 30.0) * 100))))
+        zone_status = "DISCOUNT" if htf_analysis.is_discount else ("PREMIUM" if htf_analysis.is_premium else "EQUILIBRIUM")
+
+        # Day Change % (if time column present)
+        day_change_pct = 0.0
+        try:
+            if 'time' in htf_data.columns:
+                t_series = pd.to_datetime(htf_data['time'], utc=True)
+                today_rows = htf_data[t_series.dt.date == now.date()]
+                if not today_rows.empty:
+                    day_open = float(today_rows['open'].iloc[0])
+                    if day_open > 0:
+                        day_change_pct = round(((current_close - day_open) / day_open) * 100, 2)
+        except Exception:
+            pass
+
+        # Check Trend Reversal detector if available
+        reversal_risk = "LOW"
+        choch_detected = False
+        reversal_stage = "TRENDING"
+        if hasattr(self, "trend_reversal_status") and symbol in self.trend_reversal_status:
+            rev = self.trend_reversal_status[symbol]
+            reversal_risk = getattr(rev, "reversal_risk", "LOW")
+            choch_detected = getattr(rev, "choch_detected", False)
+            reversal_stage = getattr(rev.stage, "value", str(rev.stage))
+
+        # Build clean narrative summary
+        if bias_str == "BULLISH":
+            if htf_analysis.is_discount:
+                summary = f"Bullish bias on {symbol}. Price is in Discount (<0.5 Fib Dealing Range), favoring long expansion."
+            else:
+                summary = f"Bullish bias on {symbol}. Price is above 200 EMA in Premium territory with upward order flow."
+        elif bias_str == "BEARISH":
+            if htf_analysis.is_premium:
+                summary = f"Bearish bias on {symbol}. Price is in Premium (>=0.5 Fib Dealing Range), favoring short expansion."
+            else:
+                summary = f"Bearish bias on {symbol}. Price is below 200 EMA in Discount territory with downward order flow."
+        else:
+            summary = f"Neutral / Consolidating bias on {symbol}. Dealing range equilibrium in consolidation."
+
+        res = {
+            "symbol": symbol,
+            "bias": bias_str,
+            "trend_clarity_score": float(htf_analysis.trend_clarity_score),
+            "clarity_pct": clarity_pct,
+            "ema_value": round(current_ema, 5),
+            "current_price": round(current_close, 5),
+            "above_ema": is_above_ema,
+            "dealing_range_low": round(htf_analysis.dealing_range_low, 5) if htf_analysis.dealing_range_low is not None else None,
+            "dealing_range_high": round(htf_analysis.dealing_range_high, 5) if htf_analysis.dealing_range_high is not None else None,
+            "fib_50": round(htf_analysis.fib_50, 5) if htf_analysis.fib_50 is not None else None,
+            "is_discount": bool(htf_analysis.is_discount),
+            "is_premium": bool(htf_analysis.is_premium),
+            "zone_status": zone_status,
+            "first_zone_type": str(htf_analysis.first_zone_type),
+            "all_zones_failed": bool(htf_analysis.all_zones_failed),
+            "reversal_risk": reversal_risk,
+            "choch_detected": choch_detected,
+            "reversal_stage": reversal_stage,
+            "day_change_pct": day_change_pct,
+            "date": today_str,
+            "formatted_date": formatted_date,
+            "summary": summary,
+            "updated_at": now.isoformat(),
+        }
+
+        # Save to database and memory cache
+        try:
+            self.state.save_daily_bias(res)
+        except Exception as e:
+            logger.warning(f"Failed to persist daily bias for {symbol}: {e}")
+        self._daily_bias_cache[symbol] = res
+        return res
+
+    def get_daily_bias_summary(self, target_symbol: str | None = None) -> dict:
+        """
+        Aggregate today's bias across all active monitored instruments.
+        Returns primary bias, active symbols list, and detailed metrics map.
+        """
+        symbols = list(self.config.selected_symbols) if self.config.selected_symbols else []
+        if not symbols:
+            symbols = [self.config.pair1.symbol, self.config.pair2.symbol, self.config.pair3.symbol]
+
+        unique_symbols = []
+        for s in symbols:
+            if s and s not in unique_symbols:
+                unique_symbols.append(s)
+        if not unique_symbols:
+            unique_symbols = ["XAUUSD", "EURUSD", "GBPUSD"]
+
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        formatted_date = now.strftime("%A, %b %d")
+
+        symbols_map = {}
+        for sym in unique_symbols:
+            cached = self._daily_bias_cache.get(sym)
+            if cached and cached.get("date") == today_str:
+                symbols_map[sym] = cached
+            else:
+                symbols_map[sym] = self.compute_daily_bias(sym)
+
+        primary_sym = (target_symbol or unique_symbols[0]).upper()
+        if primary_sym not in symbols_map:
+            symbols_map[primary_sym] = self.compute_daily_bias(primary_sym)
+
+        primary_bias = symbols_map[primary_sym]["bias"]
+
+        return {
+            "date": today_str,
+            "formatted_date": formatted_date,
+            "primary_symbol": primary_sym,
+            "primary_bias": primary_bias,
+            "active_pairs": unique_symbols,
+            "symbols": symbols_map,
+        }
 
 
 # ─────────────────────────────────────────────

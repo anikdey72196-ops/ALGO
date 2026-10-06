@@ -129,6 +129,7 @@ class BotStateResponse(BaseModel):
     ml_logs: List[str] = []
     current_window: dict = {}
     temporal_ml_shadow_mode: bool = True
+    daily_bias: dict = {}
 
 
 
@@ -512,6 +513,7 @@ async def get_bot_state():
         ml_logs=list(reversed(getattr(bot_instance, "ml_logs", [])[-100:])),
         current_window=getattr(bot_instance, "window_recorder", None).get_window_info() if hasattr(bot_instance, "window_recorder") and bot_instance.window_recorder else {},
         temporal_ml_shadow_mode=getattr(bot_instance.config, "temporal_ml_shadow_mode", True),
+        daily_bias=bot_instance.get_daily_bias_summary() if hasattr(bot_instance, "get_daily_bias_summary") else {},
     )
 
 
@@ -562,6 +564,28 @@ async def get_trend_reversal_status():
             for sym, rev in getattr(bot_instance, "trend_reversal_status", {}).items()
         }
     }
+
+
+@app.get("/api/daily-bias")
+async def get_daily_bias_api(symbol: Optional[str] = None, date: Optional[str] = None):
+    """
+    Return today's directional bias summary or specific symbol/date bias.
+    Allows quick polling and switching between pairs on the frontend card.
+    """
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    if date:
+        res = bot_instance.state.get_all_daily_biases(date_str=date)
+        return {"date": date, "symbols": res}
+    return bot_instance.get_daily_bias_summary(target_symbol=symbol)
+
+
+@app.get("/api/daily-bias/history")
+async def get_daily_bias_history_api(symbol: Optional[str] = None, limit: int = 14):
+    """Return historical daily bias log entries for auditing and review."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    return bot_instance.state.get_daily_bias_history(symbol=symbol, limit=limit)
 
 
 @app.post("/api/activate")

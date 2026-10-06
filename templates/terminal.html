@@ -453,6 +453,38 @@
           <span class="text-[10px] text-slate-500 font-mono">Pure R:R</span>
         </div>
 
+        <!-- Today's Bias Card for Mobile Terminal -->
+        <div class="p-3.5 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-primary text-[18px]">explore</span> Today's Bias
+              <span id="termBiasDatePill" class="text-[9px] px-1.5 py-0.5 rounded bg-[#1e293b] text-slate-300 border border-slate-700">TODAY</span>
+            </span>
+            <select id="termBiasSymbolSelect" onchange="switchTermBiasSymbol(this.value)" class="text-[11px] font-mono font-bold bg-[#131924] text-cyan-300 border border-[#2a3649] rounded px-2 py-0.5 outline-none cursor-pointer">
+              <option value="XAUUSD">XAUUSD</option>
+              <option value="EURUSD">EURUSD</option>
+              <option value="GBPUSD">GBPUSD</option>
+              <option value="BTCUSD">BTCUSD</option>
+              <option value="ETHUSD">ETHUSD</option>
+            </select>
+          </div>
+
+          <div class="mt-2.5 flex items-baseline justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-1.5">
+              <span id="termBiasArrow" class="material-symbols-outlined text-2xl text-emerald-300">trending_up</span>
+              <span id="termBiasValue" class="text-2xl sm:text-3xl font-black font-mono-numbers text-emerald-300">BULLISH</span>
+            </div>
+            <span id="termBiasZoneBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+              DISCOUNT
+            </span>
+          </div>
+
+          <div class="mt-2 pt-2 border-t border-[#1e2736] flex items-center justify-between text-[10px] font-mono text-slate-400">
+            <span>0.5 Fib: <strong id="termBiasFib" class="text-slate-200">---</strong></span>
+            <span id="termBiasClarity" class="text-emerald-400 font-bold">Clarity: 85%</span>
+          </div>
+        </div>
+
         <!-- 4 Grid KPI Boxes -->
         <div class="grid grid-cols-2 gap-2.5">
           
@@ -1151,11 +1183,105 @@
     // -------------------------------------------------------------------------
     // TELEMETRY POLLING & STATE SYNCHRONIZATION
     // -------------------------------------------------------------------------
+    window.termSelectedBiasSymbol = 'XAUUSD';
+    window.termCachedDailyBias = null;
+
+    function switchTermBiasSymbol(sym) {
+      window.termSelectedBiasSymbol = sym;
+      if (window.termCachedDailyBias) {
+        syncTermDailyBias(window.termCachedDailyBias);
+      }
+    }
+
+    function syncTermDailyBias(biasSummary) {
+      if (!biasSummary) return;
+      window.termCachedDailyBias = biasSummary;
+
+      const datePill = document.getElementById('termBiasDatePill');
+      if (datePill && biasSummary.formatted_date) {
+        datePill.innerText = biasSummary.formatted_date.toUpperCase();
+      }
+
+      const selectEl = document.getElementById('termBiasSymbolSelect');
+      if (selectEl && biasSummary.symbols) {
+        const availableSymbols = Object.keys(biasSummary.symbols);
+        const currentOpts = Array.from(selectEl.options).map(o => o.value);
+        if (availableSymbols.length !== currentOpts.length || !availableSymbols.every(s => currentOpts.includes(s))) {
+          selectEl.innerHTML = '';
+          availableSymbols.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.innerText = s;
+            selectEl.appendChild(opt);
+          });
+        }
+        if (!window.termSelectedBiasSymbol || !biasSummary.symbols[window.termSelectedBiasSymbol]) {
+          window.termSelectedBiasSymbol = biasSummary.primary_symbol || availableSymbols[0] || 'XAUUSD';
+        }
+        selectEl.value = window.termSelectedBiasSymbol;
+      }
+
+      const symData = (biasSummary.symbols && biasSummary.symbols[window.termSelectedBiasSymbol])
+        || (biasSummary.symbols && biasSummary.symbols[biasSummary.primary_symbol])
+        || {};
+
+      const bVal = (symData.bias || 'NEUTRAL').toUpperCase();
+      const valEl = document.getElementById('termBiasValue');
+      const arrowEl = document.getElementById('termBiasArrow');
+      const badgeEl = document.getElementById('termBiasZoneBadge');
+      const fibEl = document.getElementById('termBiasFib');
+      const clarityEl = document.getElementById('termBiasClarity');
+
+      if (valEl) {
+        valEl.innerText = bVal;
+        if (bVal === 'BULLISH') valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-emerald-300';
+        else if (bVal === 'BEARISH') valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-rose-300';
+        else valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-amber-300';
+      }
+
+      if (arrowEl) {
+        if (bVal === 'BULLISH') {
+          arrowEl.innerText = 'trending_up';
+          arrowEl.className = 'material-symbols-outlined text-2xl text-emerald-300';
+        } else if (bVal === 'BEARISH') {
+          arrowEl.innerText = 'trending_down';
+          arrowEl.className = 'material-symbols-outlined text-2xl text-rose-300';
+        } else {
+          arrowEl.innerText = 'trending_flat';
+          arrowEl.className = 'material-symbols-outlined text-2xl text-amber-300';
+        }
+      }
+
+      if (badgeEl) {
+        badgeEl.innerText = symData.zone_status || 'EQUILIBRIUM';
+        if (bVal === 'BULLISH') badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+        else if (bVal === 'BEARISH') badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300';
+        else badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300';
+      }
+
+      if (fibEl) {
+        fibEl.innerText = (symData.fib_50 != null && symData.fib_50 > 0)
+          ? `${symData.fib_50.toFixed(symData.fib_50 > 100 ? 2 : 4)}`
+          : 'Mid';
+      }
+
+      if (clarityEl) {
+        const cPct = symData.clarity_pct || 80;
+        clarityEl.innerText = `Clarity: ${cPct}%`;
+        clarityEl.className = cPct >= 75 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold';
+      }
+    }
+
     async function fetchLiveTelemetry() {
       try {
         const res = await fetch('/api/state', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+
+        // Sync Today's Bias
+        if (data.daily_bias) {
+          syncTermDailyBias(data.daily_bias);
+        }
 
         // 1. Connection status
         document.getElementById('connDot').className = "w-1.5 h-1.5 rounded-full bg-emerald-400";

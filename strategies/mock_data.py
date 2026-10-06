@@ -159,27 +159,37 @@ def get_demo_datasets() -> dict[str, dict[str, pd.DataFrame]]:
         'XAUUSD', '15m', bars=1200, start_price=2550.00,
         trend_direction='bullish', volatility=1.2, seed=43,
     )
-    datasets['XAUUSD'] = {'1H': xauusd_1h, '15m': xauusd_15m}
+    xauusd_4h = generate_trending_ohlcv('XAUUSD', '4H', bars=150, start_price=2550.00, trend_direction='bullish', volatility=4.0, seed=42)
+    xauusd_1d = generate_trending_ohlcv('XAUUSD', '1D', bars=100, start_price=2550.00, trend_direction='bullish', volatility=8.0, seed=42)
+    datasets['XAUUSD'] = {'1H': xauusd_1h, '15m': xauusd_15m, '4H': xauusd_4h, '1D': xauusd_1d}
 
     # EURUSD Bullish
     eurusd_1h = generate_trending_ohlcv('EURUSD', '1H', bars=300, start_price=1.0850, trend_direction='bullish', volatility=0.0003, seed=44)
     eurusd_15m = generate_trending_ohlcv('EURUSD', '15m', bars=1200, start_price=1.0850, trend_direction='bullish', volatility=0.00015, seed=45)
-    datasets['EURUSD'] = {'1H': eurusd_1h, '15m': eurusd_15m}
+    eurusd_4h = generate_trending_ohlcv('EURUSD', '4H', bars=150, start_price=1.0850, trend_direction='bullish', volatility=0.0006, seed=44)
+    eurusd_1d = generate_trending_ohlcv('EURUSD', '1D', bars=100, start_price=1.0850, trend_direction='bullish', volatility=0.0012, seed=44)
+    datasets['EURUSD'] = {'1H': eurusd_1h, '15m': eurusd_15m, '4H': eurusd_4h, '1D': eurusd_1d}
 
     # GBPUSD Bearish
     gbpusd_1h = generate_trending_ohlcv('GBPUSD', '1H', bars=300, start_price=1.2850, trend_direction='bearish', volatility=0.0004, seed=46)
     gbpusd_15m = generate_trending_ohlcv('GBPUSD', '15m', bars=1200, start_price=1.2850, trend_direction='bearish', volatility=0.0002, seed=47)
-    datasets['GBPUSD'] = {'1H': gbpusd_1h, '15m': gbpusd_15m}
+    gbpusd_4h = generate_trending_ohlcv('GBPUSD', '4H', bars=150, start_price=1.2850, trend_direction='bearish', volatility=0.0008, seed=46)
+    gbpusd_1d = generate_trending_ohlcv('GBPUSD', '1D', bars=100, start_price=1.2850, trend_direction='bearish', volatility=0.0016, seed=46)
+    datasets['GBPUSD'] = {'1H': gbpusd_1h, '15m': gbpusd_15m, '4H': gbpusd_4h, '1D': gbpusd_1d}
 
     # BTCUSD Bullish
     btcusd_1h = generate_trending_ohlcv('BTCUSD', '1H', bars=300, start_price=65000.0, trend_direction='bullish', volatility=150.0, seed=48)
     btcusd_15m = generate_trending_ohlcv('BTCUSD', '15m', bars=1200, start_price=65000.0, trend_direction='bullish', volatility=80.0, seed=49)
-    datasets['BTCUSD'] = {'1H': btcusd_1h, '15m': btcusd_15m}
+    btcusd_4h = generate_trending_ohlcv('BTCUSD', '4H', bars=150, start_price=65000.0, trend_direction='bullish', volatility=250.0, seed=48)
+    btcusd_1d = generate_trending_ohlcv('BTCUSD', '1D', bars=100, start_price=65000.0, trend_direction='bullish', volatility=500.0, seed=48)
+    datasets['BTCUSD'] = {'1H': btcusd_1h, '15m': btcusd_15m, '4H': btcusd_4h, '1D': btcusd_1d}
 
     # ETHUSD Bullish
     ethusd_1h = generate_trending_ohlcv('ETHUSD', '1H', bars=300, start_price=3200.0, trend_direction='bullish', volatility=12.0, seed=50)
     ethusd_15m = generate_trending_ohlcv('ETHUSD', '15m', bars=1200, start_price=3200.0, trend_direction='bullish', volatility=6.0, seed=51)
-    datasets['ETHUSD'] = {'1H': ethusd_1h, '15m': ethusd_15m}
+    ethusd_4h = generate_trending_ohlcv('ETHUSD', '4H', bars=150, start_price=3200.0, trend_direction='bullish', volatility=20.0, seed=50)
+    ethusd_1d = generate_trending_ohlcv('ETHUSD', '1D', bars=100, start_price=3200.0, trend_direction='bullish', volatility=40.0, seed=50)
+    datasets['ETHUSD'] = {'1H': ethusd_1h, '15m': ethusd_15m, '4H': ethusd_4h, '1D': ethusd_1d}
 
     return datasets
 

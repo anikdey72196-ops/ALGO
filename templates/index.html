@@ -893,10 +893,68 @@
         </div>
       </div>
 
-      <!-- 3. METRICS CARDS (Pure Mechanics: Accuracy, R:R, Hits — No Dollar PnL) -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
-        <!-- Card 1: Risk : Reward -->
+      <!-- 3. METRICS CARDS (Today's Bias + Pure Mechanics: Accuracy, R:R, Hits) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        <!-- Card 1: Today's Bias -->
+        <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between hover:border-purple-300 transition-all relative overflow-hidden group">
+          <!-- Ambient glowing background accent based on bias -->
+          <div id="cardBiasGlow" class="absolute -top-12 -right-12 w-28 h-28 rounded-full blur-2xl opacity-20 pointer-events-none bg-emerald-500 transition-all duration-500"></div>
+
+          <div class="flex items-start justify-between relative z-10">
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs uppercase text-slate-600 font-black tracking-wider flex items-center gap-1.5">
+                  <span id="cardBiasHeaderIcon" class="material-symbols-outlined text-primary text-[20px]">explore</span>
+                  Today's Bias
+                </span>
+                <span id="cardBiasDatePill" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-50 text-primary border border-purple-200">
+                  TODAY
+                </span>
+              </div>
+              <div class="mt-2 flex items-baseline gap-2 flex-wrap">
+                <div class="flex items-center gap-1.5">
+                  <span id="cardBiasArrow" class="material-symbols-outlined text-3xl lg:text-4xl text-emerald-600 font-black transition-all">trending_up</span>
+                  <span id="cardBiasValue" class="text-3xl lg:text-4xl text-emerald-700 font-black font-mono tracking-tight transition-all">BULLISH</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Right: Interactive Pair Switcher & Zone Badge -->
+            <div class="flex flex-col items-end gap-1.5">
+              <span id="cardBiasZoneBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black flex items-center gap-1 font-mono transition-all">
+                <span id="cardBiasZoneDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span id="cardBiasZoneText">DISCOUNT</span>
+              </span>
+              <div class="flex items-center gap-1">
+                <select id="cardBiasSymbolSelect" onchange="switchBiasSymbol(this.value)" class="text-[11px] font-mono font-black bg-purple-50 text-slate-900 border border-purple-200 rounded-lg px-2 py-0.5 outline-none cursor-pointer hover:border-purple-400 hover:bg-purple-100 transition-all shadow-xs">
+                  <option value="XAUUSD">XAUUSD</option>
+                  <option value="EURUSD">EURUSD</option>
+                  <option value="GBPUSD">GBPUSD</option>
+                  <option value="BTCUSD">BTCUSD</option>
+                  <option value="ETHUSD">ETHUSD</option>
+                </select>
+                <!-- Detail Info Button that triggers modal -->
+                <button type="button" onclick="openDailyBiasModal()" title="View Daily Bias Deep-Dive Breakdown" class="p-1 rounded-lg text-slate-400 hover:text-primary hover:bg-purple-50 transition-all cursor-pointer">
+                  <span class="material-symbols-outlined text-[18px]">info</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Metric & Context Row -->
+          <div class="mt-4 pt-3 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-slate-600 relative z-10">
+            <span class="flex items-center gap-1 truncate max-w-[65%]">
+              <span class="text-slate-400">0.5 Fib:</span>
+              <span id="cardBiasEquilibrium" class="font-mono font-black text-slate-900 truncate">Loading...</span>
+            </span>
+            <span id="cardBiasClarity" class="font-mono font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] whitespace-nowrap transition-all">
+              Clarity: 85%
+            </span>
+          </div>
+        </div>
+
+        <!-- Card 2: Risk : Reward -->
         <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_-2px_rgba(124,58,237,0.06)] border border-purple-100 flex flex-col justify-between hover:border-purple-300 transition-all">
           <div class="flex items-start justify-between">
             <div>
@@ -1144,6 +1202,101 @@
         </a>
         <button onclick="closePhoneTerminalModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-black uppercase tracking-wider transition-all cursor-pointer">
           Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TODAY'S BIAS DEEP-DIVE MODAL                                              -->
+  <!-- ========================================================================= -->
+  <div id="dailyBiasModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm hidden p-4">
+    <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full mx-auto shadow-2xl border border-purple-200 relative flex flex-col max-h-[90vh] overflow-y-auto">
+      <button onclick="closeDailyBiasModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer">
+        <span class="material-symbols-outlined text-2xl">close</span>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center flex-shrink-0" id="modalBiasIconContainer">
+          <span class="material-symbols-outlined text-2xl" id="modalBiasIcon">explore</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-xl font-black text-slate-900 uppercase font-mono tracking-tight">Today's Directional Bias</h3>
+            <span id="modalBiasDateBadge" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-50 text-primary border border-purple-200">TODAY</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Higher-timeframe market structure, 200 EMA slope, dealing range equilibrium & liquidity expansion.</p>
+        </div>
+      </div>
+
+      <!-- Selected Instrument Bias Hero Card -->
+      <div class="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 border border-purple-500/30 mb-5 shadow-lg">
+        <div class="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-purple-500/20">
+          <div class="flex items-center gap-2.5">
+            <span id="modalBiasSymbol" class="text-lg font-black font-mono tracking-wider text-cyan-300">XAUUSD</span>
+            <span id="modalBiasDirectionBadge" class="px-3 py-1 rounded-full text-xs font-black font-mono flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="modalBiasDirectionText">BULLISH</span>
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-slate-400">Current Price:</span>
+            <span id="modalBiasPrice" class="font-mono font-black text-white text-base">---</span>
+          </div>
+        </div>
+
+        <p id="modalBiasSummary" class="text-xs text-slate-300 font-sans mt-3 leading-relaxed">
+          Analyzing higher-timeframe dealing range and institutional liquidity...
+        </p>
+      </div>
+
+      <!-- Technical Mechanics Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 font-mono">
+        <div class="p-3 bg-purple-50/60 border border-purple-100 rounded-xl">
+          <span class="text-[10px] uppercase font-bold text-slate-500 block">Trend Clarity</span>
+          <span id="modalBiasClarity" class="text-base font-black text-primary mt-1 block">---</span>
+        </div>
+        <div class="p-3 bg-purple-50/60 border border-purple-100 rounded-xl">
+          <span class="text-[10px] uppercase font-bold text-slate-500 block">200 EMA</span>
+          <span id="modalBiasEMA" class="text-base font-black text-slate-800 mt-1 block truncate">---</span>
+        </div>
+        <div class="p-3 bg-purple-50/60 border border-purple-100 rounded-xl">
+          <span class="text-[10px] uppercase font-bold text-slate-500 block">Dealing Zone</span>
+          <span id="modalBiasZone" class="text-base font-black text-emerald-700 mt-1 block">---</span>
+        </div>
+        <div class="p-3 bg-purple-50/60 border border-purple-100 rounded-xl">
+          <span class="text-[10px] uppercase font-bold text-slate-500 block">0.5 Equilibrium</span>
+          <span id="modalBiasFib50" class="text-base font-black text-slate-800 mt-1 block truncate">---</span>
+        </div>
+      </div>
+
+      <!-- Multi-Pair Matrix Table -->
+      <div class="border border-purple-100 rounded-2xl overflow-hidden mb-5">
+        <div class="bg-purple-50 px-4 py-2 border-b border-purple-100 flex items-center justify-between">
+          <span class="text-xs font-black uppercase font-mono text-slate-800">All Monitored Pairs (Today's Matrix)</span>
+          <span class="text-[10px] font-mono font-bold text-slate-500">Live 1H / 1D Synthesis</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left font-mono text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] border-b border-purple-100">
+              <tr>
+                <th class="p-2.5">Pair</th>
+                <th class="p-2.5">Today's Bias</th>
+                <th class="p-2.5">Dealing Zone</th>
+                <th class="p-2.5">EMA 200</th>
+                <th class="p-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="modalBiasPairsTableBody" class="divide-y divide-purple-50">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDailyBiasModal()" class="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm">
+          Close Diagnostics
         </button>
       </div>
     </div>
@@ -1885,6 +2038,223 @@
     }
 
     // -------------------------------------------------------------------------
+    // I2. TODAY'S BIAS ENGINE & CONTROLLERS
+    // -------------------------------------------------------------------------
+    window.selectedBiasSymbol = 'XAUUSD';
+    window.cachedDailyBias = null;
+
+    function openDailyBiasModal() {
+      const modal = document.getElementById('dailyBiasModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        renderDailyBiasModal();
+      }
+    }
+
+    function closeDailyBiasModal() {
+      const modal = document.getElementById('dailyBiasModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function switchBiasSymbol(symbol) {
+      window.selectedBiasSymbol = symbol;
+      const selectEl = document.getElementById('cardBiasSymbolSelect');
+      if (selectEl && selectEl.value !== symbol) {
+        selectEl.value = symbol;
+      }
+      if (window.cachedDailyBias) {
+        updateDailyBiasUI(window.cachedDailyBias);
+      }
+    }
+
+    function updateDailyBiasUI(biasSummary) {
+      if (!biasSummary) return;
+      window.cachedDailyBias = biasSummary;
+
+      const datePill = document.getElementById('cardBiasDatePill');
+      if (datePill && biasSummary.formatted_date) {
+        datePill.innerText = biasSummary.formatted_date.toUpperCase();
+      }
+
+      // Sync selector dropdown options with available/active pairs
+      const selectEl = document.getElementById('cardBiasSymbolSelect');
+      if (selectEl && biasSummary.symbols) {
+        const availableSymbols = Object.keys(biasSummary.symbols);
+        const currentOptions = Array.from(selectEl.options).map(o => o.value);
+        const needsSync = availableSymbols.length !== currentOptions.length ||
+          !availableSymbols.every(s => currentOptions.includes(s));
+        if (needsSync) {
+          selectEl.innerHTML = '';
+          availableSymbols.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.innerText = s;
+            selectEl.appendChild(opt);
+          });
+        }
+        if (!window.selectedBiasSymbol || !biasSummary.symbols[window.selectedBiasSymbol]) {
+          window.selectedBiasSymbol = biasSummary.primary_symbol || availableSymbols[0] || 'XAUUSD';
+        }
+        selectEl.value = window.selectedBiasSymbol;
+      }
+
+      // Extract current symbol data
+      const symData = (biasSummary.symbols && biasSummary.symbols[window.selectedBiasSymbol])
+        || (biasSummary.symbols && biasSummary.symbols[biasSummary.primary_symbol])
+        || {};
+
+      const biasVal = (symData.bias || 'NEUTRAL').toUpperCase();
+      const valueEl = document.getElementById('cardBiasValue');
+      const arrowEl = document.getElementById('cardBiasArrow');
+      const glowEl = document.getElementById('cardBiasGlow');
+      const zoneBadge = document.getElementById('cardBiasZoneBadge');
+      const zoneText = document.getElementById('cardBiasZoneText');
+      const zoneDot = document.getElementById('cardBiasZoneDot');
+      const eqEl = document.getElementById('cardBiasEquilibrium');
+      const clarityEl = document.getElementById('cardBiasClarity');
+
+      if (valueEl) valueEl.innerText = biasVal;
+
+      if (biasVal === 'BULLISH') {
+        if (valueEl) valueEl.className = 'text-3xl lg:text-4xl text-emerald-600 font-black font-mono tracking-tight transition-all';
+        if (arrowEl) {
+          arrowEl.innerText = 'trending_up';
+          arrowEl.className = 'material-symbols-outlined text-3xl lg:text-4xl text-emerald-600 font-black transition-all';
+        }
+        if (glowEl) glowEl.className = 'absolute -top-12 -right-12 w-28 h-28 rounded-full blur-2xl opacity-25 pointer-events-none bg-emerald-500 transition-all duration-500';
+        if (zoneBadge) zoneBadge.className = 'px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black flex items-center gap-1 font-mono transition-all';
+        if (zoneDot) zoneDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+      } else if (biasVal === 'BEARISH') {
+        if (valueEl) valueEl.className = 'text-3xl lg:text-4xl text-rose-600 font-black font-mono tracking-tight transition-all';
+        if (arrowEl) {
+          arrowEl.innerText = 'trending_down';
+          arrowEl.className = 'material-symbols-outlined text-3xl lg:text-4xl text-rose-600 font-black transition-all';
+        }
+        if (glowEl) glowEl.className = 'absolute -top-12 -right-12 w-28 h-28 rounded-full blur-2xl opacity-25 pointer-events-none bg-rose-500 transition-all duration-500';
+        if (zoneBadge) zoneBadge.className = 'px-2.5 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-xs font-black flex items-center gap-1 font-mono transition-all';
+        if (zoneDot) zoneDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+      } else {
+        if (valueEl) valueEl.className = 'text-3xl lg:text-4xl text-amber-600 font-black font-mono tracking-tight transition-all';
+        if (arrowEl) {
+          arrowEl.innerText = 'trending_flat';
+          arrowEl.className = 'material-symbols-outlined text-3xl lg:text-4xl text-amber-600 font-black transition-all';
+        }
+        if (glowEl) glowEl.className = 'absolute -top-12 -right-12 w-28 h-28 rounded-full blur-2xl opacity-25 pointer-events-none bg-amber-500 transition-all duration-500';
+        if (zoneBadge) zoneBadge.className = 'px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black flex items-center gap-1 font-mono transition-all';
+        if (zoneDot) zoneDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
+      }
+
+      if (zoneText) {
+        zoneText.innerText = symData.zone_status || 'EQUILIBRIUM';
+      }
+
+      if (eqEl) {
+        if (symData.fib_50 != null && symData.fib_50 > 0) {
+          eqEl.innerText = `${symData.fib_50.toFixed(symData.fib_50 > 100 ? 2 : 4)}`;
+        } else {
+          eqEl.innerText = 'Mid Market';
+        }
+      }
+
+      if (clarityEl) {
+        const clarityPct = symData.clarity_pct || 80;
+        clarityEl.innerText = `Clarity: ${clarityPct}%`;
+        if (clarityPct >= 75) {
+          clarityEl.className = 'font-mono font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] whitespace-nowrap transition-all';
+        } else {
+          clarityEl.className = 'font-mono font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px] whitespace-nowrap transition-all';
+        }
+      }
+
+      // If modal is currently open, re-render it
+      const modal = document.getElementById('dailyBiasModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        renderDailyBiasModal();
+      }
+    }
+
+    function renderDailyBiasModal() {
+      if (!window.cachedDailyBias || !window.cachedDailyBias.symbols) return;
+      const data = window.cachedDailyBias;
+      const symData = data.symbols[window.selectedBiasSymbol] || Object.values(data.symbols)[0] || {};
+
+      const symEl = document.getElementById('modalBiasSymbol');
+      if (symEl) symEl.innerText = symData.symbol || window.selectedBiasSymbol;
+
+      const dateEl = document.getElementById('modalBiasDateBadge');
+      if (dateEl) dateEl.innerText = (data.formatted_date || 'TODAY').toUpperCase();
+
+      const dirText = document.getElementById('modalBiasDirectionText');
+      if (dirText) dirText.innerText = (symData.bias || 'NEUTRAL').toUpperCase();
+
+      const dirBadge = document.getElementById('modalBiasDirectionBadge');
+      const iconContainer = document.getElementById('modalBiasIconContainer');
+      const icon = document.getElementById('modalBiasIcon');
+
+      const b = (symData.bias || 'NEUTRAL').toUpperCase();
+      if (b === 'BULLISH') {
+        if (dirBadge) dirBadge.className = 'px-3 py-1 rounded-full text-xs font-black font-mono flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        if (iconContainer) iconContainer.className = 'w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center flex-shrink-0';
+        if (icon) icon.innerText = 'trending_up';
+      } else if (b === 'BEARISH') {
+        if (dirBadge) dirBadge.className = 'px-3 py-1 rounded-full text-xs font-black font-mono flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        if (iconContainer) iconContainer.className = 'w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center flex-shrink-0';
+        if (icon) icon.innerText = 'trending_down';
+      } else {
+        if (dirBadge) dirBadge.className = 'px-3 py-1 rounded-full text-xs font-black font-mono flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        if (iconContainer) iconContainer.className = 'w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center flex-shrink-0';
+        if (icon) icon.innerText = 'trending_flat';
+      }
+
+      const priceEl = document.getElementById('modalBiasPrice');
+      if (priceEl) priceEl.innerText = symData.current_price ? symData.current_price.toFixed(symData.current_price > 100 ? 2 : 4) : '---';
+
+      const summaryEl = document.getElementById('modalBiasSummary');
+      if (summaryEl) summaryEl.innerText = symData.summary || 'Daily structural expansion and dealing range alignment active.';
+
+      const clarityEl = document.getElementById('modalBiasClarity');
+      if (clarityEl) clarityEl.innerText = `${symData.clarity_pct || 80}%`;
+
+      const emaEl = document.getElementById('modalBiasEMA');
+      if (emaEl) emaEl.innerText = symData.ema_value ? `${symData.ema_value.toFixed(symData.ema_value > 100 ? 2 : 4)} (${symData.above_ema ? 'Above' : 'Below'})` : '---';
+
+      const zoneEl = document.getElementById('modalBiasZone');
+      if (zoneEl) zoneEl.innerText = symData.zone_status || 'EQUILIBRIUM';
+
+      const fibEl = document.getElementById('modalBiasFib50');
+      if (fibEl) fibEl.innerText = symData.fib_50 ? `${symData.fib_50.toFixed(symData.fib_50 > 100 ? 2 : 4)}` : '---';
+
+      // Table of all pairs
+      const tbody = document.getElementById('modalBiasPairsTableBody');
+      if (tbody && data.symbols) {
+        tbody.innerHTML = '';
+        for (const [sym, item] of Object.entries(data.symbols)) {
+          const row = document.createElement('tr');
+          row.className = sym === window.selectedBiasSymbol ? 'bg-purple-50/70 font-bold' : 'hover:bg-slate-50 transition-colors';
+          const itemBias = (item.bias || 'NEUTRAL').toUpperCase();
+          const colorClass = itemBias === 'BULLISH' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : (itemBias === 'BEARISH' ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200');
+
+          row.innerHTML = `
+            <td class="p-2.5 font-black text-slate-900">${sym}</td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded border text-[10px] font-black ${colorClass}">${itemBias}</span>
+            </td>
+            <td class="p-2.5 text-slate-600 font-mono text-[11px]">${item.zone_status || 'EQUILIBRIUM'}</td>
+            <td class="p-2.5 text-slate-600 font-mono text-[11px]">${item.ema_value ? item.ema_value.toFixed(item.ema_value > 100 ? 2 : 4) : '---'}</td>
+            <td class="p-2.5 text-right">
+              <button onclick="switchBiasSymbol('${sym}')" class="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-primary text-[10px] font-bold cursor-pointer transition-all">
+                Select
+              </button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        }
+      }
+    }
+
+    // -------------------------------------------------------------------------
     // J. REAL-TIME DATA POLLING (3000ms Interval)
     // -------------------------------------------------------------------------
     async function fetchLiveState() {
@@ -1892,6 +2262,11 @@
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const data = await res.json();
+
+        // 0. Sync Today's Directional Bias
+        if (data.daily_bias) {
+          updateDailyBiasUI(data.daily_bias);
+        }
 
         // 1. Sync Bot Status
         if (data.is_active && state.botStatus !== 'RUNNING') {
