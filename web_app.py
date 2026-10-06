@@ -326,11 +326,117 @@ async def serve_dashboard(request: Request):
 
 
 
-@app.get("/api/state", response_model=BotStateResponse)
-async def get_bot_state():
-    """Return live system state, metrics, and logs."""
+def get_compact_state_payload() -> CompactBotState:
+    """Compute lightweight state payload tailored for mobile UI and WebSockets."""
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    equity = bot_instance.broker.get_account_equity() if bot_instance.broker else 0.0
+    daily_summary = bot_instance.state.get_daily_summary()
+    metrics = bot_instance.state.get_performance_metrics()
+
+    broker_info = None
+    if hasattr(bot_instance.broker, "get_account_info"):
+        broker_info = bot_instance.broker.get_account_info()
+
+    pairs_cfg_data = {}
+    default_meta = {
+        "XAUUSD": {"name": "Gold / USD", "lot": 0.05, "sl": 25.0},
+        "EURUSD": {"name": "Euro / USD", "lot": 0.10, "sl": 15.0},
+        "GBPUSD": {"name": "Pound / USD", "lot": 0.12, "sl": 20.0},
+        "BTCUSD": {"name": "Bitcoin / USD", "lot": 0.01, "sl": 150.0},
+        "ETHUSD": {"name": "Ethereum / USD", "lot": 0.05, "sl": 80.0},
+    }
+    for s_name, meta in default_meta.items():
+        lot_val = meta["lot"]
+        sl_val = meta["sl"]
+        en_val = s_name in bot_instance.config.selected_symbols
+
+        if hasattr(bot_instance.config, "pair_configs") and s_name in bot_instance.config.pair_configs:
+            cfg = bot_instance.config.pair_configs[s_name]
+            if cfg.fixed_lot_size is not None:
+                lot_val = cfg.fixed_lot_size
+            if cfg.fixed_sl_pips is not None:
+                sl_val = cfg.fixed_sl_pips
+            en_val = cfg.enabled and en_val
+        elif bot_instance.config.pair1.symbol == s_name:
+            if bot_instance.config.pair1.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair1.fixed_lot_size
+            if bot_instance.config.pair1.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair1.fixed_sl_pips
+        elif bot_instance.config.pair2.symbol == s_name:
+            if bot_instance.config.pair2.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair2.fixed_lot_size
+            if bot_instance.config.pair2.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair2.fixed_sl_pips
+        elif bot_instance.config.pair3.symbol == s_name:
+            if bot_instance.config.pair3.fixed_lot_size is not None:
+                lot_val = bot_instance.config.pair3.fixed_lot_size
+            if bot_instance.config.pair3.fixed_sl_pips is not None:
+                sl_val = bot_instance.config.pair3.fixed_sl_pips
+
+        pairs_cfg_data[s_name.lower()] = {
+            "symbol": s_name,
+            "name": meta["name"],
+            "lot": lot_val,
+            "sl": sl_val,
+            "active": en_val,
+        }
+
+    return CompactBotState(
+        is_active=bot_instance.is_active,
+        equity=round(equity, 2),
+        daily_pnl=round(daily_summary["realized_pnl"], 2),
+        trades_today=daily_summary["trade_count"],
+        circuit_breaker_active=daily_summary["circuit_breaker_active"],
+        accuracy=metrics.get("accuracy", 0.0),
+        winning_trades=metrics.get("winning_trades", 0),
+        losing_trades=metrics.get("losing_trades", 0),
+        total_closed_trades=metrics.get("total_closed_trades", 0),
+        performance_metrics=metrics,
+        current_window=getattr(bot_instance, "window_recorder", None).get_window_info() if hasattr(bot_instance, "window_recorder") and bot_instance.window_recorder else {},
+        daily_bias=bot_instance.get_daily_bias_summary() if hasattr(bot_instance, "get_daily_bias_summary") else {},
+        ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
+        ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
+        enabled_strategies=bot_instance.config.enabled_strategies,
+        reversal_strategy_enabled=getattr(bot_instance.config, "reversal_strategy_enabled", False),
+        selected_symbols=bot_instance.config.selected_symbols,
+        pairs_config=pairs_cfg_data,
+        broker_info=broker_info,
+    )
+
+
+@app.get("/api/state/compact", response_model=CompactBotState)
+async def get_compact_state():
+    """Lightweight compact state endpoint for mobile screens."""
+    return get_compact_state_payload()
+
+
+@app.websocket("/ws/state")
+async def ws_state(websocket: WebSocket):
+    """Real-time WebSocket connection streaming compact bot state with low bandwidth and zero polling overhead."""
+    await websocket.accept()
+    try:
+        while True:
+            if bot_instance:
+                compact_state = get_compact_state_payload()
+                state_json = compact_state.model_dump_json() if hasattr(compact_state, "model_dump_json") else compact_state.json()
+                await websocket.send_text(state_json)
+            await asyncio.sleep(2.5)
+    except (WebSocketDisconnect, ConnectionResetError):
+        pass
+    except Exception as e:
+        logger.debug(f"WebSocket client disconnected: {e}")
+
+
+@app.get("/api/state")
+async def get_bot_state(compact: bool = False):
+    """Return live system state, metrics, and logs (pass ?compact=true for lightweight payload)."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    if compact:
+        return get_compact_state_payload()
 
     global _state_cache
     now = time.time()
@@ -338,9 +444,10 @@ async def get_bot_state():
         return _state_cache["response"]
 
     equity = bot_instance.broker.get_account_equity()
-    daily_pnl = bot_instance.state.get_daily_pnl()
-    trade_count = bot_instance.state.get_trade_count()
-    cb_active = bot_instance.state.is_circuit_breaker_active()
+    daily_summary = bot_instance.state.get_daily_summary()
+    daily_pnl = daily_summary["realized_pnl"]
+    trade_count = daily_summary["trade_count"]
+    cb_active = daily_summary["circuit_breaker_active"]
     active_session = bot_instance.state.get_active_session()
 
     available = [i.symbol for i in bot_instance.config.instruments]
@@ -600,6 +707,23 @@ async def get_system_logs(category: Optional[str] = None, limit: int = 200):
         "category": cat,
         "count": len(logs),
         "logs": list(reversed(logs[-limit:]))
+    }
+
+
+@app.get("/api/logs/compact")
+async def get_compact_logs(limit: int = 80):
+    """Return only the last `limit` log lines trimmed to 160 characters for high-speed mobile network transfers."""
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    raw_logs = list(bot_instance.recent_logs[-limit:])
+    trimmed = [
+        (l[:160] + "…") if len(l) > 160 else l
+        for l in raw_logs
+    ]
+    return {
+        "status": "ok",
+        "count": len(trimmed),
+        "logs": list(reversed(trimmed))
     }
 
 
@@ -1509,33 +1633,87 @@ async def clear_trades():
 @app.get("/api/trades/export_csv")
 @app.get("/api/trades/download_csv")
 async def export_trades_csv():
-    """Download trade ledger as a CSV file."""
+    """Stream trade ledger as a CSV file on-the-fly without large memory allocations."""
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
-    bot_instance.state._sync_trades_csv()
-    csv_file = Path(bot_instance.state.csv_path)
-    if not csv_file.exists():
-        raise HTTPException(status_code=404, detail="Trades CSV not found")
-    return FileResponse(
-        path=str(csv_file),
-        filename="trades_history.csv",
-        media_type="text/csv"
+
+    def iter_trades_csv():
+        fieldnames = [
+            "id", "timestamp", "closed_at", "symbol", "direction", "entry_price",
+            "stop_loss", "take_profit", "lot_size", "realized_pnl",
+            "status", "duration_seconds", "strategy_name", "magic_number"
+        ]
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        with bot_instance.state._lock:
+            cursor = bot_instance.state.conn.execute(
+                "SELECT id, timestamp, closed_at, symbol, direction, entry_price, "
+                "stop_loss, take_profit, lot_size, realized_pnl, status, "
+                "duration_seconds, strategy_name, magic_number FROM trade_log ORDER BY id ASC"
+            )
+            for row in cursor:
+                writer.writerow(dict(row))
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+    return StreamingResponse(
+        iter_trades_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=trades_history.csv"}
     )
 
 
 @app.get("/api/sessions/export_csv")
 async def export_sessions_csv():
-    """Download bot sessions history as a CSV file."""
+    """Stream bot sessions history as a CSV file on-the-fly."""
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
-    bot_instance.state._sync_sessions_csv()
-    csv_file = Path(bot_instance.state.sessions_csv_path)
-    if not csv_file.exists():
-        raise HTTPException(status_code=404, detail="Sessions CSV not found")
-    return FileResponse(
-        path=str(csv_file),
-        filename="sessions_history.csv",
-        media_type="text/csv"
+
+    def iter_sessions_csv():
+        fieldnames = [
+            "id", "activation_time", "deactivation_time", "formatted_duration",
+            "symbols", "lot_size", "trigger_source", "notes", "is_active"
+        ]
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        with bot_instance.state._lock:
+            cursor = bot_instance.state.conn.execute(
+                "SELECT id, activated_at, deactivated_at, duration_seconds, "
+                "symbols, lot_size, trigger_source, deactivation_reason, is_active FROM bot_sessions ORDER BY id ASC"
+            )
+            for row in cursor:
+                dur_sec = row["duration_seconds"]
+                dur_fmt = format_duration(dur_sec) if dur_sec else ""
+                writer.writerow({
+                    "id": row["id"],
+                    "activation_time": row["activated_at"] or "",
+                    "deactivation_time": row["deactivated_at"] or "",
+                    "formatted_duration": dur_fmt,
+                    "symbols": row["symbols"] or "",
+                    "lot_size": row["lot_size"] or "",
+                    "trigger_source": row["trigger_source"] or "",
+                    "notes": row["deactivation_reason"] or "",
+                    "is_active": "YES" if row["is_active"] else "NO",
+                })
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+    return StreamingResponse(
+        iter_sessions_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sessions_history.csv"}
     )
 
 
