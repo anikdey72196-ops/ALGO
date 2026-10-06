@@ -267,7 +267,8 @@ async def serve_terminal(request: Request):
 @app.get("/terminal/controls", response_class=HTMLResponse)
 async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
-    return templates.TemplateResponse(request=request, name="terminal_controls.html")
+    tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
+    return templates.TemplateResponse(request=request, name=tpl)
 
 
 @app.get("/terminal/strategy", response_class=HTMLResponse)
@@ -702,6 +703,11 @@ async def handle_dashboard_update(payload: dict):
             return {"status": "success", "botStatus": status}
 
     elif action == "toggle_strategy":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Strategy modification is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
         strat_id = payload.get("strategy")
         active = payload.get("active", True)
         strat_map = {
@@ -744,6 +750,11 @@ async def handle_dashboard_update(payload: dict):
         }
 
     elif action == "toggle_pair":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Pair modification is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
         pair_id = payload.get("pair")
         active = payload.get("active", True)
         sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
@@ -758,12 +769,22 @@ async def handle_dashboard_update(payload: dict):
         return {"status": "success", "selected_symbols": current}
 
     elif action == "toggle_trailing":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Trailing Stop setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
         enabled = payload.get("enabled", True)
         bot_instance.config.trailing_stop_mode = "STRUCTURE" if enabled else "NONE"
         bot_instance.save_settings()
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
     elif action == "update_pair_settings":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Pair risk settings are LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
         pair_id = payload.get("pair")
         lot_val = payload.get("lot")
         sl_val = payload.get("sl")
@@ -797,11 +818,6 @@ async def handle_dashboard_update(payload: dict):
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
         bot_instance.save_settings()
-        if bot_instance.is_active:
-            bot_instance.log(
-                f"⚙️ Live risk update: {sym} lot size set to {bot_instance.config.pair_configs[sym].fixed_lot_size}, "
-                f"SL set to {bot_instance.config.pair_configs[sym].fixed_sl_pips} pips (applies to next trades)."
-            )
         return {
             "status": "success",
             "symbol": sym,

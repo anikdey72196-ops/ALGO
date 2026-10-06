@@ -65,6 +65,11 @@
   </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 min-h-screen flex flex-col antialiased selection:bg-brand-100 selection:text-brand-900">
+<!-- Floating Toast Banner -->
+<div id="controlsToastBar" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl bg-slate-900/95 text-white text-xs font-semibold shadow-2xl backdrop-blur-md hidden transition-all duration-200 border border-slate-700/50 flex items-center gap-2">
+  <span class="material-symbols-outlined text-[18px] text-amber-400">info</span>
+  <span id="controlsToastText"></span>
+</div>
 <!-- Institutional Top Header -->
 <header class="fixed top-0 w-full z-50 pt-safe bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
 <div class="h-14 px-4 flex items-center justify-between gap-3">
@@ -137,6 +142,11 @@
 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Dedicated Asset Routing &amp; Risk Matrix</h2>
 </div>
 <span class="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200" id="activePairsCountBadge">5 Pairs Configured</span>
+</div>
+<!-- Active Lock Notice Banner -->
+<div id="controlsLockNotice" class="hidden flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium shadow-sm transition-all duration-200">
+  <span class="material-symbols-outlined text-[18px] text-amber-600 shrink-0">lock</span>
+  <span><strong class="font-bold text-amber-800">Bot is ACTIVE:</strong> Pair routing, lot sizing, and risk parameters are LOCKED during execution. Put bot into STANDBY to modify.</span>
 </div>
 <!-- Individual Pair Execution Cards (5 Instruments) -->
 <div class="space-y-3" id="pairMatrixList">
@@ -597,9 +607,86 @@
       const botBadge = document.getElementById('botBadge');
       const botOrb = document.getElementById('botOrb');
       const botIcon = document.getElementById('botIcon');
+      const pairCards = document.querySelectorAll('.pair-card');
+      const trailingToggle = document.getElementById('trailingToggle');
+      const trailingBg = document.getElementById('trailingBg');
+      const trailingDot = document.getElementById('trailingDot');
+      const applyBtn = document.getElementById('applyParamsBtn');
+
+      function showToast(msg) {
+        const bar = document.getElementById('controlsToastBar');
+        const txt = document.getElementById('controlsToastText');
+        if (bar && txt) {
+          txt.textContent = msg;
+          bar.classList.remove('hidden');
+          setTimeout(() => bar.classList.add('hidden'), 3200);
+        }
+      }
 
       function updateBotUI(active) {
         isBotActive = active;
+        const lockNotice = document.getElementById('controlsLockNotice');
+        if (lockNotice) {
+          if (isBotActive) lockNotice.classList.remove('hidden');
+          else lockNotice.classList.add('hidden');
+        }
+
+        // Lock / Unlock inputs and buttons
+        pairCards.forEach(card => {
+          const routeSwitch = card.querySelector('.pair-switch');
+          const lotInput = card.querySelector('.input-lot');
+          const slInput = card.querySelector('.input-sl');
+          const lotChips = card.querySelectorAll('.lot-chip');
+          const slChips = card.querySelectorAll('.sl-chip');
+          const minusBtn = card.querySelector('.btn-step-minus');
+          const plusBtn = card.querySelector('.btn-step-plus');
+
+          if (routeSwitch) {
+            routeSwitch.disabled = isBotActive;
+            if (isBotActive) routeSwitch.parentElement.classList.add('cursor-not-allowed', 'opacity-70');
+            else routeSwitch.parentElement.classList.remove('cursor-not-allowed', 'opacity-70');
+          }
+          if (lotInput) {
+            lotInput.disabled = isBotActive;
+            if (isBotActive) lotInput.classList.add('cursor-not-allowed', 'opacity-60');
+            else lotInput.classList.remove('cursor-not-allowed', 'opacity-60');
+          }
+          if (slInput) {
+            slInput.disabled = isBotActive;
+            if (isBotActive) slInput.classList.add('cursor-not-allowed', 'opacity-60');
+            else slInput.classList.remove('cursor-not-allowed', 'opacity-60');
+          }
+          if (minusBtn) minusBtn.disabled = isBotActive;
+          if (plusBtn) plusBtn.disabled = isBotActive;
+          lotChips.forEach(c => {
+            c.disabled = isBotActive;
+            if (isBotActive) c.classList.add('cursor-not-allowed', 'opacity-60');
+            else c.classList.remove('cursor-not-allowed', 'opacity-60');
+          });
+          slChips.forEach(c => {
+            c.disabled = isBotActive;
+            if (isBotActive) c.classList.add('cursor-not-allowed', 'opacity-60');
+            else c.classList.remove('cursor-not-allowed', 'opacity-60');
+          });
+        });
+
+        if (trailingToggle) {
+          trailingToggle.disabled = isBotActive;
+          if (isBotActive) trailingToggle.parentElement.classList.add('cursor-not-allowed', 'opacity-70');
+          else trailingToggle.parentElement.classList.remove('cursor-not-allowed', 'opacity-70');
+        }
+
+        if (applyBtn) {
+          applyBtn.disabled = isBotActive;
+          if (isBotActive) {
+            applyBtn.className = 'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-slate-200 text-slate-400 font-semibold text-xs tracking-wider uppercase cursor-not-allowed shadow-none';
+            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">lock</span><span>Parameters Locked (Bot Active)</span>';
+          } else {
+            applyBtn.className = 'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs tracking-wider uppercase shadow-sm transition-all active:scale-[0.99] cursor-pointer';
+            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">sync_alt</span><span>Transmit All Parameters to Engine</span>';
+          }
+        }
+
         if (isBotActive) {
           masterBtn.classList.replace('bg-slate-300', 'bg-brand-600');
           toggleKnob.classList.replace('translate-x-0', 'translate-x-5');
@@ -638,14 +725,13 @@
         try {
           const endpoint = nextState ? '/api/activate' : '/api/deactivate';
           await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+          showToast(nextState ? 'Execution Core ARMED — Features Locked' : 'Execution Core STANDBY — Features Unlocked');
         } catch (err) {
           console.warn('Bot toggle API sync error:', err);
         }
       });
 
       // Individual Pair Calculation & Control Binding
-      const pairCards = document.querySelectorAll('.pair-card');
-
       pairCards.forEach(card => {
         const symbol = card.getAttribute('data-symbol');
         const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
@@ -670,6 +756,10 @@
         // Lot chips
         lotChips.forEach(chip => {
           chip.addEventListener('click', () => {
+            if (isBotActive) {
+              showToast('⚠️ Lot sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return;
+            }
             lotChips.forEach(c => {
               c.className = 'lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
             });
@@ -682,6 +772,10 @@
         // SL chips
         slChips.forEach(chip => {
           chip.addEventListener('click', () => {
+            if (isBotActive) {
+              showToast('⚠️ Stop Loss is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return;
+            }
             slChips.forEach(c => {
               c.className = 'sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
             });
@@ -694,33 +788,66 @@
         // Lot Stepper
         if (minusBtn && plusBtn) {
           minusBtn.addEventListener('click', () => {
+            if (isBotActive) {
+              showToast('⚠️ Stepper sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return;
+            }
             let v = Math.max(0.01, +(parseFloat(lotInput.value) - 0.01).toFixed(2));
             lotInput.value = v.toFixed(2);
             updateCardRisk();
           });
           plusBtn.addEventListener('click', () => {
+            if (isBotActive) {
+              showToast('⚠️ Stepper sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return;
+            }
             let v = +(parseFloat(lotInput.value) + 0.01).toFixed(2);
             lotInput.value = v.toFixed(2);
             updateCardRisk();
           });
         }
 
-        lotInput.addEventListener('change', updateCardRisk);
-        slInput.addEventListener('input', updateCardRisk);
+        lotInput.addEventListener('change', () => {
+          if (isBotActive) {
+            showToast('⚠️ Lot sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+            return;
+          }
+          updateCardRisk();
+        });
+        slInput.addEventListener('input', () => {
+          if (isBotActive) {
+            showToast('⚠️ Stop Loss is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+            return;
+          }
+          updateCardRisk();
+        });
 
         // Pair Route Toggle
         if (routeSwitch) {
+          routeSwitch.addEventListener('click', (e) => {
+            if (isBotActive) {
+              e.preventDefault();
+              showToast('⚠️ Pair modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return false;
+            }
+          });
           routeSwitch.addEventListener('change', (e) => {
+            if (isBotActive) {
+              e.preventDefault();
+              routeSwitch.checked = !routeSwitch.checked;
+              showToast('⚠️ Pair modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+              return;
+            }
             const toggleBg = e.target.nextElementSibling;
-            const toggleThumb = toggleBg.querySelector('div');
+            const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
             if (e.target.checked) {
               card.style.opacity = '1';
-              toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
-              toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+              if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+              if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
             } else {
               card.style.opacity = '0.5';
-              toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
-              toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+              if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+              if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
             }
           });
         }
@@ -729,11 +856,21 @@
       });
 
       // Trailing switch
-      const trailingToggle = document.getElementById('trailingToggle');
-      const trailingBg = document.getElementById('trailingBg');
-      const trailingDot = document.getElementById('trailingDot');
       if (trailingToggle) {
+        trailingToggle.addEventListener('click', (e) => {
+          if (isBotActive) {
+            e.preventDefault();
+            showToast('⚠️ Trailing Stop modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+            return false;
+          }
+        });
         trailingToggle.addEventListener('change', (e) => {
+          if (isBotActive) {
+            e.preventDefault();
+            trailingToggle.checked = !trailingToggle.checked;
+            showToast('⚠️ Trailing Stop modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+            return;
+          }
           if (e.target.checked) {
             trailingBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5';
             trailingDot.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
@@ -745,9 +882,12 @@
       }
 
       // Transmit button feedback & live backend transmission
-      const applyBtn = document.getElementById('applyParamsBtn');
       if (applyBtn) {
         applyBtn.addEventListener('click', async () => {
+          if (isBotActive) {
+            showToast('⚠️ Cannot transmit parameters while bot is ACTIVE! Switch to STANDBY first.');
+            return;
+          }
           const original = applyBtn.innerHTML;
           applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">sync</span><span>Syncing with HFT Gateway...</span>';
           applyBtn.classList.replace('bg-brand-600', 'bg-slate-800');
@@ -815,6 +955,28 @@
           if (data && data.broker_info && data.broker_info.account_id) {
             const accEl = document.getElementById('headerAccountText');
             if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
+          }
+          if (data && data.selected_symbols) {
+            const selectedSet = new Set(data.selected_symbols.map(s => s.toUpperCase()));
+            pairCards.forEach(card => {
+              const sym = card.getAttribute('data-symbol').toUpperCase();
+              const sw = card.querySelector('.pair-switch');
+              if (sw) {
+                const isSelected = selectedSet.has(sym);
+                sw.checked = isSelected;
+                const toggleBg = sw.nextElementSibling;
+                const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
+                if (isSelected) {
+                  card.style.opacity = '1';
+                  if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+                  if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+                } else {
+                  card.style.opacity = '0.5';
+                  if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+                  if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+                }
+              }
+            });
           }
         } catch (e) {
           // ignore transient poll errors

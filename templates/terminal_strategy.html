@@ -356,7 +356,7 @@
         masterBanner.className = 'mt-3.5 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-surface-container text-on-surface-variant transition-all duration-200';
         bannerIcon.textContent = 'verified_user';
         bannerIcon.className = 'material-symbols-outlined text-[18px] text-primary shrink-0';
-        bannerText.innerHTML = '<strong class="font-medium text-primary">Trading Bot is ACTIVE</strong> — Engines live. Tap switch to toggle active strategies in real-time.';
+        bannerText.innerHTML = '<strong class="font-medium text-primary">Trading Bot is ACTIVE</strong> — Strategy modifications and toggles are LOCKED during execution. Put bot in Standby to edit.';
 
         lockBadges.forEach(badge => {
           badge.innerHTML = '<span class="material-symbols-outlined text-[12px]">lock</span><span>Locked</span>';
@@ -367,6 +367,11 @@
           slider.disabled = true;
           slider.classList.add('cursor-not-allowed');
           slider.classList.remove('cursor-pointer');
+        });
+
+        stratToggles.forEach(toggle => {
+          toggle.disabled = true;
+          toggle.classList.add('cursor-not-allowed');
         });
 
         btnDeploy.disabled = true;
@@ -402,6 +407,11 @@
           slider.classList.add('cursor-pointer');
         });
 
+        stratToggles.forEach(toggle => {
+          toggle.disabled = false;
+          toggle.classList.remove('cursor-not-allowed');
+        });
+
         btnDeploy.disabled = false;
         btnDeploy.className = 'flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:opacity-90 active:scale-[0.98] transition-all duration-150 shadow-md cursor-pointer';
       }
@@ -414,7 +424,7 @@
       try {
         const endpoint = nextActive ? '/api/activate' : '/api/deactivate';
         await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        showToast(nextActive ? 'Execution Core ARMED' : 'Execution Core STANDBY');
+        showToast(nextActive ? 'Execution Core ARMED — Features Locked' : 'Execution Core STANDBY — Features Unlocked');
       } catch (err) {
         console.warn('Bot toggle error:', err);
       }
@@ -467,6 +477,11 @@
     stratToggles.forEach(toggle => {
       toggle.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (isBotActive) {
+          showToast('⚠️ Strategy modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+          return;
+        }
+
         const card = toggle.closest('.strategy-card');
         if (!card) return;
 
@@ -497,18 +512,18 @@
             showToast(`${stratTitle}: ${nextActive ? 'ACTIVATED' : 'PAUSED'}`);
             pendingOverrides[stratKey] = { state: nextActive, time: Date.now() };
           } else {
-            console.error('Failed to toggle strategy:', res.statusText);
+            const errData = await res.json().catch(() => ({}));
             delete pendingOverrides[stratKey];
             setCardVisualState(card, currentActive);
             updateActiveLoadCounter();
-            showToast(`Failed to update ${stratTitle}`, true);
+            showToast(errData.detail || `Failed to update ${stratTitle}`);
           }
         } catch (err) {
           console.error('Network error toggling strategy:', err);
           delete pendingOverrides[stratKey];
           setCardVisualState(card, currentActive);
           updateActiveLoadCounter();
-          showToast(`Connection error: ${stratTitle} not changed`, true);
+          showToast(`Connection error: ${stratTitle} not changed`);
         }
       });
     });
@@ -520,6 +535,10 @@
         headerRow.style.cursor = 'pointer';
         headerRow.addEventListener('click', (e) => {
           if (e.target.closest('.strat-toggle')) return;
+          if (isBotActive) {
+            showToast('⚠️ Strategy modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
+            return;
+          }
           const toggle = card.querySelector('.strat-toggle');
           if (toggle) toggle.click();
         });
