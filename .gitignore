@@ -13,3 +13,5 @@ trades_history.csv
 graphify-out
 .gsd
 .gemini
+/adapters
+/.agent

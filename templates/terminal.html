@@ -1,1531 +1,827 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>ALGOQUANT — Bot Terminal // Mobile & Tablet Cockpit</title>
-
-  <!-- PWA & Mobile Web App Meta Tags -->
-  <meta name="theme-color" content="#090a0f">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Bot Terminal">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="format-detection" content="telephone=no">
-
-  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/svg+xml" href="/static/icons/terminal-icon.svg">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
-
-  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
-
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script id="tailwind-config">
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_tab" name="shell-type">
+<title>Glacier Terminal — Controls</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
       theme: {
         extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
           colors: {
             brand: {
-              DEFAULT: '#6366f1',
-              dark: '#4f46e5',
-              light: '#818cf8',
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
             },
-            surface: {
-              DEFAULT: '#0c1017',
-              card: '#131924',
-              panel: '#161e2b',
-              border: '#222d3d',
-              hover: '#1a2332',
+            slate: {
+              50: '#f8fafc',
+              100: '#f1f5f9',
+              200: '#e2e8f0',
+              300: '#cbd5e1',
+              400: '#94a3b8',
+              500: '#64748b',
+              600: '#475569',
+              700: '#334155',
+              800: '#1e293b',
+              900: '#0f172a',
             }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
           }
         }
       }
     };
   </script>
-
-  <style>
-    /* Global Mobile Ergonomics & Typography */
-    html, body {
-      font-family: "Plus Jakarta Sans", sans-serif;
-      background-color: #0c1017;
-      color: #e2e8f0;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      touch-action: manipulation;
-      overscroll-behavior-y: none;
+<style>
+    @layer base {
+      html, body {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #f8fafc;
+        color: #0f172a;
+        font-family: 'Inter', sans-serif;
+      }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
     }
-
-    .font-mono-numbers {
-      font-family: "JetBrains Mono", monospace;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* Subtle custom scrollbar */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #0c1017; }
-    ::-webkit-scrollbar-thumb { background: #222d3d; border-radius: 9999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #334155; }
-
-    /* Number inputs: remove default browser arrows for clean touch steppers */
-    input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    input[type=number] {
-      -moz-appearance: textfield;
-    }
-
-    /* iOS & Android Safe Areas */
-    .safe-top {
-      padding-top: max(10px, env(safe-area-inset-top));
-    }
-    .safe-bottom {
-      padding-bottom: max(10px, env(safe-area-inset-bottom));
-    }
-
-    /* Soft clean status rings (No harsh neon glow) */
-    .status-ring-green { border-color: rgba(52, 211, 153, 0.4); }
-    .status-ring-amber { border-color: rgba(251, 191, 36, 0.4); }
-    .status-ring-red { border-color: rgba(248, 113, 113, 0.4); }
-
-    /* Active Mobile Nav Pill: Soft & Clean without neon glow */
-    .mobile-nav-active {
-      color: #60a5fa !important;
-      position: relative;
-    }
-    .mobile-nav-active::after {
-      content: '';
-      position: absolute;
-      bottom: -4px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 16px;
-      height: 2.5px;
-      background: #60a5fa;
-      border-radius: 9999px;
-      box-shadow: none;
-    }
-
-    /* Log Stream Left Insets with Soft Pastels */
-    .log-item-reversal {
-      border-left: 3px solid #f87171;
-      background: rgba(248, 113, 113, 0.08);
-    }
-    .log-item-shield {
-      border-left: 3px solid #60a5fa;
-      background: rgba(96, 165, 250, 0.08);
-    }
-    .log-item-trade {
-      border-left: 3px solid #34d399;
-      background: rgba(52, 211, 153, 0.08);
-    }
-    .log-item-ml {
-      border-left: 3px solid #a78bfa;
-      background: rgba(167, 139, 250, 0.08);
-    }
-    .log-item-warn {
-      border-left: 3px solid #fbbf24;
-      background: rgba(251, 191, 36, 0.08);
-    }
-    .log-item-normal {
-      border-left: 3px solid #222d3d;
-      background: #131924;
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
     }
   </style>
 </head>
-<body class="bg-[#0c1017] text-slate-100 antialiased h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden selection:bg-slate-700 selection:text-white">
-
-  <!-- Toast Notification Container (Mobile Optimized) -->
-  <div id="toastContainer" class="fixed top-4 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none items-center"></div>
-
-  <!-- ========================================================================= -->
-  <!-- 1. TOP APP BAR (Optimized for Phone Thumb Reach & Tablet Cockpit)          -->
-  <!-- ========================================================================= -->
-  <header class="safe-top w-full bg-[#131924]/95 backdrop-blur-md border-b border-[#222d3d] z-40 px-3 md:px-6 py-2.5 flex-shrink-0">
-    <div class="max-w-[1440px] mx-auto flex items-center justify-between gap-2">
-      
-      <!-- Left: Logo & Bot State Status Cluster -->
-      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-        <a href="/" class="flex items-center gap-2 group flex-shrink-0">
-          <div class="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-sky-300 shadow-sm">
-            <span class="material-symbols-outlined text-[19px]">terminal</span>
-          </div>
-          <div class="hidden xs:block">
-            <div class="font-bold text-sm tracking-tight text-slate-100 font-mono flex items-center gap-1 leading-none">
-              ALGO<span class="text-sky-300">QUANT</span>
-            </div>
-            <div class="text-[9px] font-bold text-slate-400 tracking-wider font-mono uppercase mt-0.5">Bot Terminal</div>
-          </div>
-        </a>
-
-        <div class="h-5 w-px bg-[#222d3d] mx-0.5"></div>
-
-        <!-- Bot State Badge (Active / Idle / Halted) -->
-        <div id="botStateBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#161f2c] border border-[#26354a] text-[11px] font-bold font-mono">
-          <span id="botStateDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
-          <span id="botStateLabel" class="text-slate-300 uppercase tracking-wide">IDLE</span>
-        </div>
-
-        <!-- Ping & Telemetry Indicator -->
-        <div class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0f141f] border border-[#222d3d] text-[10px] text-slate-400 font-mono">
-          <span id="connDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          <span id="connStatus">1s LIVE</span>
-        </div>
-      </div>
-
-      <!-- Center: Execution Edge Summary (Tablet / Desktop Only) -->
-      <div class="hidden md:flex items-center gap-6 border-x border-[#222d3d] px-6 text-xs font-mono">
-        <div class="flex flex-col text-left">
-          <span class="text-[10px] uppercase text-slate-400 font-bold">Accuracy</span>
-          <span id="statAccuracyHeader" class="font-bold text-emerald-300 text-sm">0.0%</span>
-        </div>
-        <div class="flex flex-col text-left">
-          <span class="text-[10px] uppercase text-slate-400 font-bold">TP / SL Hits</span>
-          <span id="statHitsHeader" class="font-bold text-slate-200 text-sm">0 TP · 0 SL</span>
-        </div>
-        <div class="flex flex-col text-left">
-          <span class="text-[10px] uppercase text-slate-400 font-bold">Target R:R</span>
-          <span id="statRRHeader" class="font-bold text-sky-300 text-sm">1:2.50</span>
-        </div>
-      </div>
-
-      <!-- Right: Master Quick Touch Controls -->
-      <div class="flex items-center gap-2">
-        <!-- Quick Emergency Halt / Activate Touch Button in Header -->
-        <button id="headerQuickActionBtn" onclick="handleHeaderQuickAction()" class="px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/30 text-rose-300 border border-rose-800/40 hover:bg-rose-900/40 cursor-pointer min-h-[36px]">
-          <span class="material-symbols-outlined text-[16px]">power_settings_new</span>
-          <span id="headerQuickActionText">HALT</span>
-        </button>
-
-        <!-- Link back to Desktop Full Dashboard -->
-        <a href="/" class="p-2 rounded-xl bg-[#161e2b] border border-[#222d3d] text-slate-400 hover:text-white transition-colors flex items-center justify-center min-w-[36px] min-h-[36px]" title="Return to Desktop Dashboard">
-          <span class="material-symbols-outlined text-[18px]">dashboard</span>
-        </a>
-      </div>
-
-    </div>
-  </header>
-
-  <!-- PWA Install Guide Banner (Mobile Friendly) -->
-  <div id="pwaBanner" class="hidden w-full bg-[#161e2b] border-b border-[#222d3d] px-3 py-2 flex items-center justify-between gap-2 z-30 flex-shrink-0 text-xs font-sans">
-    <div class="flex items-center gap-2 min-w-0">
-      <span class="material-symbols-outlined text-sky-300 text-[18px] flex-shrink-0">install_mobile</span>
-      <p id="pwaInstructions" class="text-slate-300 truncate text-[11px]">
-        Add to Home Screen for standalone fullscreen experience.
-      </p>
-    </div>
-    <div class="flex items-center gap-1.5 flex-shrink-0">
-      <button id="pwaInstallBtn" class="hidden px-2.5 py-1 bg-sky-700 hover:bg-sky-600 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer" type="button">
-        Install
-      </button>
-      <button onclick="dismissPwaBanner()" class="text-slate-400 hover:text-white p-1 rounded transition-colors" type="button">
-        <span class="material-symbols-outlined text-[16px]">close</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- 2. MAIN RESPONSIVE VIEWPORT CONTAINER                                     -->
-  <!-- ========================================================================= -->
-  <!-- On Phones (< 768px): Single active tab displayed with bottom navigation. -->
-  <!-- On Tablets (>= 768px): Dual-pane split cockpit (Left: Logs, Right: Deck).-->
-  <main class="flex-1 w-full max-w-[1440px] mx-auto p-2 sm:p-3 md:p-4 overflow-hidden flex flex-col md:grid md:grid-cols-12 md:gap-3.5 min-h-0">
-
-    <!-- ======================================================================= -->
-    <!-- SECTION A: THE LIVE STREAM TERMINAL                                     -->
-    <!-- (Left pane on tablet, or Tab 1 on mobile phone)                         -->
-    <!-- ======================================================================= -->
-    <section id="panelTerminal" class="w-full flex-1 flex flex-col bg-[#131924] rounded-2xl border border-[#222d3d] overflow-hidden min-h-0 md:col-span-7 lg:col-span-7 shadow-sm">
-      
-      <!-- Sub-Bar: Filter Chips & Search -->
-      <div class="px-2.5 py-2 bg-[#10151f] border-b border-[#222d3d] flex flex-col gap-2 flex-shrink-0">
-        
-        <!-- Filter Pills Scrollable Row -->
-        <div class="flex items-center justify-between gap-1">
-          <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-1 pr-1">
-            <button onclick="setFilter('ALL')" id="filterALL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all bg-slate-700 text-slate-100 border border-slate-600 flex-shrink-0 cursor-pointer" type="button">
-              ALL LOGS
-            </button>
-            <button onclick="setFilter('REVERSAL')" id="filterREVERSAL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
-              <span>🚨</span><span>REVERSALS</span>
-            </button>
-            <button onclick="setFilter('TRADE')" id="filterTRADE" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
-              <span>✅</span><span>TRADES</span>
-            </button>
-            <button onclick="setFilter('ML')" id="filterML" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
-              <span>🧠</span><span>AI / ML</span>
-            </button>
-            <button onclick="setFilter('WARN')" id="filterWARN" class="px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#26354a] flex-shrink-0 cursor-pointer flex items-center gap-1" type="button">
-              <span>⚠️</span><span>ALERTS</span>
-            </button>
-          </div>
-
-          <!-- Auto-scroll & Clear Actions -->
-          <div class="flex items-center gap-1 flex-shrink-0">
-            <button id="autoScrollBtn" onclick="toggleAutoScroll()" class="h-7 px-2 rounded-lg bg-[#0e121a] border border-[#222d3d] text-sky-300 hover:text-sky-200 text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Toggle Auto-Scroll" type="button">
-              <span class="material-symbols-outlined text-[14px]">vertical_align_bottom</span>
-              <span id="autoScrollLabel" class="hidden xs:inline">Auto</span>
-            </button>
-            <button onclick="clearTerminal()" class="h-7 px-2 rounded-lg bg-[#0e121a] border border-[#222d3d] text-slate-400 hover:text-white text-[11px] font-mono font-bold transition-all cursor-pointer" title="Clear Screen" type="button">
-              Clear
-            </button>
-          </div>
-        </div>
-
-        <!-- Keyword & Symbol Search Input -->
-        <div class="relative flex items-center w-full">
-          <span class="material-symbols-outlined absolute left-2.5 text-slate-500 text-[16px] pointer-events-none">search</span>
-          <input id="searchInput" oninput="handleSearch(this.value)" class="w-full h-8 pl-8 pr-7 bg-[#0c0e14] rounded-lg text-xs font-mono text-slate-200 placeholder-slate-500 border border-[#232838] focus:outline-none focus:border-cyan-500 transition-colors" placeholder="Filter symbol (XAUUSD, EURUSD) or phrase..." type="text">
-          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 text-slate-400 hover:text-white text-xs font-bold p-1 cursor-pointer" type="button">&times;</button>
-        </div>
-
-      </div>
-
-      <!-- Live Log Stream Body -->
-      <div class="relative flex-1 w-full bg-[#0c0e14] min-h-0 flex flex-col overflow-hidden">
-        
-        <div id="terminalContainer" class="flex-1 overflow-y-auto p-2.5 flex flex-col gap-1.5 focus:outline-none select-text font-mono text-[11px] sm:text-xs leading-relaxed" tabindex="0">
-          <div class="text-slate-500 text-center py-12 text-xs font-mono animate-pulse">
-            Connecting to institutional execution telemetry...
-          </div>
-        </div>
-
-        <!-- Floating Scroll-to-Bottom Button -->
-        <button id="scrollDownBtn" onclick="scrollToBottom(true)" class="hidden absolute bottom-3 right-3 bg-cyan-600/90 hover:bg-cyan-500 text-white border border-cyan-400/50 text-xs font-mono font-bold px-3 py-1.5 rounded-full shadow-xl items-center gap-1.5 transition-all cursor-pointer z-10" type="button">
-          <span class="material-symbols-outlined text-[14px]">arrow_downward</span>
-          <span>New Logs</span>
-        </button>
-
-      </div>
-
-      <!-- Sub-Footer: Events & Last Update -->
-      <div class="px-3 py-1.5 bg-[#11141c] border-t border-[#232838] flex items-center justify-between text-[10px] font-mono text-slate-400 flex-shrink-0">
-        <div class="flex items-center gap-2 truncate">
-          <span id="logCount" class="text-cyan-400 font-bold">0 events</span>
-          <span>•</span>
-          <span id="monitoredSymbols" class="truncate text-slate-300">Pairs: -</span>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0">
-          <span id="lastUpdateTime">Sync: --:--:--</span>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ======================================================================= -->
-    <!-- SECTION B: TELEMETRY & TACTILE CONTROL COCKPIT                          -->
-    <!-- (Right pane on tablet, or Tab 2, 3, 4 on mobile phone)                  -->
-    <!-- ======================================================================= -->
-    <div id="panelSideCockpit" class="w-full flex-1 flex flex-col gap-3 md:col-span-5 lg:col-span-5 overflow-y-auto min-h-0 pr-0.5">
-
-      <!-- 1. TACTILE BOT CONTROL CARD -->
-      <section id="mobileTabCockpitSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
-        
-        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2.5">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-indigo-300 text-[20px]">bolt</span>
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Execution Master</span>
-          </div>
-          <span id="perfStatusBadge" class="px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-slate-300 font-mono">
-            IDLE
-          </span>
-        </div>
-
-        <!-- Master Bot Trigger Buttons (Large touch ergonomics, soft styling) -->
-        <div class="grid grid-cols-2 gap-2.5">
-          
-          <!-- Master Activate Button -->
-          <button id="cockpitActivateBtn" onclick="activateBotMobile()" class="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]">
-            <span class="material-symbols-outlined text-[18px]">play_circle</span>
-            <span id="cockpitActivateText">START BOT</span>
-          </button>
-
-          <!-- Emergency Halt Button -->
-          <button id="cockpitHaltBtn" onclick="haltBotMobile()" class="py-3 px-3 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 text-rose-200 border border-rose-800/40 font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]">
-            <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
-            <span>HALT ENGINE</span>
-          </button>
-
-        </div>
-
-        <!-- AI Gate & Night Window Toggles -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-          
-          <!-- AI Confirmation Gate Toggle -->
-          <label class="flex items-center justify-between p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d] cursor-pointer hover:border-slate-600 transition-colors">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-indigo-300 text-[18px]">psychology</span>
-              <div class="flex flex-col">
-                <span class="text-[11px] font-bold text-slate-200 font-mono">AI Gate Guard</span>
-                <span class="text-[9px] text-slate-400">≥ 75% Confidence</span>
-              </div>
-            </div>
-            <input type="checkbox" id="aiGateSwitch" onchange="toggleAiGateMobile(this.checked)" checked class="w-4 h-4 bg-[#161f2c] border-[#26354a] rounded accent-indigo-500 cursor-pointer">
-          </label>
-
-          <!-- Night Limit Window Status -->
-          <div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0f141f] border border-[#222d3d]">
-            <div class="flex items-center gap-2">
-              <span class="text-base">🌙</span>
-              <div class="flex flex-col">
-                <span class="text-[11px] font-bold text-slate-200 font-mono">Night Window</span>
-                <span id="nightWindowText" class="text-[9px] text-slate-400">2 Trades Max (11PM-8AM)</span>
-              </div>
-            </div>
-            <span id="nightActiveDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
-          </div>
-
-        </div>
-
-        <!-- NEW: PAIR LOT SIZE & STOP LOSS CONFIGURATION MANAGER -->
-        <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col gap-2.5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-sky-300 text-[18px]">tune</span>
-              <span class="text-[11px] font-bold font-mono text-slate-200 uppercase tracking-wide">Pair Lot &amp; SL Controls</span>
-            </div>
-            <span class="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">Live Precision</span>
-          </div>
-          <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
-            Adjust lot size &amp; stop loss (pips) below. You can use the <span class="text-slate-300 font-bold">+/-</span> buttons or <span class="text-slate-300 font-bold">type directly</span> in the box.
-          </p>
-          <div id="termPairControlsList" class="space-y-2 mt-1">
-            <!-- Dynamically populated with lot & sl inputs for every pair -->
-          </div>
-        </div>
-
-        <!-- October 5-Window Schedule & Shadow Mode Telemetry -->
-        <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col gap-2.5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-indigo-300 text-[17px]">schedule</span>
-              <span class="text-[11px] font-bold font-mono text-slate-200">October 5-Window Schedule</span>
-            </div>
-            <span id="termShadowBadge" class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-950/40 text-indigo-300 border border-indigo-800/40">
-              SHADOW MODE
+<body class="bg-slate-50 font-sans text-slate-900 min-h-screen flex flex-col antialiased selection:bg-brand-100 selection:text-brand-900">
+<!-- Institutional Top Header -->
+<header class="fixed top-0 w-full z-50 pt-safe bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+<div class="h-14 px-4 flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded bg-brand-700 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+<span class="material-symbols-outlined text-[18px]">candlestick_chart</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-xs font-bold tracking-wider uppercase text-slate-900 truncate">GLACIER</span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200" id="headerLiveStatusBadge">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" id="headerLiveDot"></span><span id="headerLiveStatusText">LIVE</span>
             </span>
+</div>
+<span class="text-[10px] font-medium text-slate-500 truncate">Institutional Terminal</span>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0">
+<div class="hidden sm:flex flex-col items-end text-right px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+<div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 font-mono">
+<span class="material-symbols-outlined text-[12px] text-emerald-600">wifi_tethering</span><span id="headerLatencyText">12ms NY4</span>
           </div>
+<span class="text-[9px] text-slate-500 font-mono" id="headerAccountText">ACC: #4902-INST</span>
+</div>
+<button class="flex items-center gap-1.5 px-2.5 h-8 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
+<div class="flex flex-col">
+<span class="text-[8px] uppercase font-semibold tracking-wider text-slate-400 leading-none">Desk</span>
+<span class="text-[11px] font-bold text-slate-800 font-mono leading-tight">ALPHA-1</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-slate-500">expand_more</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-700">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col relative w-full pt-16 bg-slate-50 pb-28">
+<div class="flex flex-col w-full max-w-2xl mx-auto px-3.5 py-3 space-y-3.5">
+<!-- Master Bot Status Card (Crisp Institutional Light) -->
+<div class="rounded-lg bg-white border border-slate-200 p-4 shadow-sm" id="masterStatusCard">
+<div class="flex items-center justify-between gap-3">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center w-10 h-10 rounded-md bg-brand-50 border border-brand-200 text-brand-700" id="botOrb">
+<span class="material-symbols-outlined text-[22px]" id="botIcon">smart_toy</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="text-sm font-bold text-slate-900 tracking-tight" id="botStatusLabel">ALGO ENGINE ACTIVE</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200" id="botBadge">ROUTING</span>
+</div>
+<span class="text-[11px] text-slate-500 font-mono mt-0.5">Glacier HFT Core v4.1 • Multi-Asset Grid</span>
+</div>
+</div>
+<!-- Master Toggle -->
+<button aria-pressed="true" class="relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full bg-brand-600 p-0.5 transition-colors duration-200 focus:outline-none" id="masterBotToggle" type="button">
+<span class="pointer-events-none inline-block h-6 w-6 transform translate-x-5 rounded-full bg-white shadow-sm transition duration-200 flex items-center justify-center" id="toggleKnob">
+<span class="material-symbols-outlined text-[13px] text-brand-600 font-bold" id="knobIcon">power_settings_new</span>
+</span>
+</button>
+</div>
+<!-- Telemetry Row -->
 
-          <div class="flex items-center justify-between bg-[#131924] px-2.5 py-2 rounded-lg border border-[#222d3d]">
-            <div class="flex items-center gap-2 min-w-0">
-              <span id="termCurrentWindowDot" class="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0"></span>
-              <div class="flex flex-col min-w-0">
-                <span id="termCurrentWindowLabel" class="text-xs font-mono font-bold text-slate-100 truncate">W5: 8:01 PM - 11:00 PM</span>
-                <span class="text-[9px] text-slate-400 font-mono">3-Hour Intervals (Active 8AM-11PM)</span>
+</div>
+<!-- Section Title -->
+<div class="flex items-center justify-between px-0.5 pt-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-brand-700">tune</span>
+<h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Dedicated Asset Routing &amp; Risk Matrix</h2>
+</div>
+<span class="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200" id="activePairsCountBadge">5 Pairs Configured</span>
+</div>
+<!-- Individual Pair Execution Cards (5 Instruments) -->
+<div class="space-y-3" id="pairMatrixList">
+<!-- PAIR 1: XAUUSD -->
+<div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="XAUUSD" data-tick-val="10">
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-amber-50 border border-amber-200 flex items-center justify-center font-mono text-[11px] font-bold text-amber-800">
+                AU
               </div>
-            </div>
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button onclick="syncWindowNowMobile()" id="termSyncBtn" class="px-2 py-1 rounded bg-[#182130] hover:bg-[#222d40] border border-[#26354a] text-slate-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Force Sync Interval CSV">
-                <span class="material-symbols-outlined text-[13px]">sync</span>
-                <span>Sync</span>
-              </button>
-              <a href="/api/windows/export_csv" download="temporal_windows_october.csv" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer" title="Download October CSV">
-                <span class="material-symbols-outlined text-[13px]">download</span>
-                <span>CSV</span>
-              </a>
-            </div>
-          </div>
-        </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-tight text-slate-900">XAUUSD</span>
+<span class="text-[11px] text-slate-500 font-medium">Gold / US Dollar</span>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
 
-      </section>
+<span class="text-slate-300">•</span>
 
-      <!-- 2. EXECUTION EDGE METRICS CARDS -->
-      <section id="mobileTabMetricsSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
-        
-        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-emerald-300 text-[20px]">analytics</span>
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Mathematical Mechanics</span>
-          </div>
-          <span class="text-[10px] text-slate-500 font-mono">Pure R:R</span>
-        </div>
 
-        <!-- Today's Bias Card for Mobile Terminal -->
-        <div class="p-3.5 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between relative overflow-hidden">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-primary text-[18px]">explore</span> Today's Bias
-              <span id="termBiasDatePill" class="text-[9px] px-1.5 py-0.5 rounded bg-[#1e293b] text-slate-300 border border-slate-700">TODAY</span>
-            </span>
-            <select id="termBiasSymbolSelect" onchange="switchTermBiasSymbol(this.value)" class="text-[11px] font-mono font-bold bg-[#131924] text-cyan-300 border border-[#2a3649] rounded px-2 py-0.5 outline-none cursor-pointer">
-              <option value="XAUUSD">XAUUSD</option>
-              <option value="EURUSD">EURUSD</option>
-              <option value="GBPUSD">GBPUSD</option>
-              <option value="BTCUSD">BTCUSD</option>
-              <option value="ETHUSD">ETHUSD</option>
-            </select>
-          </div>
-
-          <div class="mt-2.5 flex items-baseline justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-1.5">
-              <span id="termBiasArrow" class="material-symbols-outlined text-2xl text-emerald-300">trending_up</span>
-              <span id="termBiasValue" class="text-2xl sm:text-3xl font-black font-mono-numbers text-emerald-300">BULLISH</span>
-            </div>
-            <span id="termBiasZoneBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-              DISCOUNT
-            </span>
-          </div>
-
-          <div class="mt-2 pt-2 border-t border-[#1e2736] flex items-center justify-between text-[10px] font-mono text-slate-400">
-            <span>0.5 Fib: <strong id="termBiasFib" class="text-slate-200">---</strong></span>
-            <span id="termBiasClarity" class="text-emerald-400 font-bold">Clarity: 85%</span>
-          </div>
-        </div>
-
-        <!-- 4 Grid KPI Boxes -->
-        <div class="grid grid-cols-2 gap-2.5">
-          
-          <!-- Win Accuracy Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <span class="text-[10px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Win Accuracy
-            </span>
-            <div class="mt-2 flex items-baseline justify-between">
-              <span id="statAccuracy" class="text-2xl sm:text-3xl font-bold text-emerald-300 font-mono-numbers">0.0%</span>
-              <span class="text-[9px] font-mono text-slate-400">Target</span>
-            </div>
-          </div>
-
-          <!-- Target R:R Ratio Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <span class="text-[10px] uppercase font-bold text-slate-400 font-mono flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-indigo-300"></span> Target R:R
-            </span>
-            <div class="mt-2 flex items-baseline justify-between">
-              <span id="statTargetRR" class="text-2xl sm:text-3xl font-bold text-indigo-300 font-mono-numbers">1:2.50</span>
-              <span class="text-[9px] font-mono text-indigo-400">EDGE</span>
-            </div>
-          </div>
-
-          <!-- TP / SL Hits Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Execution Hits</span>
-            <div class="mt-2">
-              <span id="statTPSLCounts" class="text-sm sm:text-base font-bold text-slate-100 font-mono-numbers">
-                <span class="text-emerald-300">0 TP</span> · <span class="text-rose-300">0 SL</span>
-              </span>
-            </div>
-          </div>
-
-          <!-- Total Closed Trades Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Total Closed</span>
-            <div class="mt-2">
-              <span id="statTradeCount" class="text-sm sm:text-base font-bold text-slate-200 font-mono-numbers">0 trades</span>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Strategy Win Rate Breakdown (Compact for mobile) -->
-        <div class="mt-1 pt-2 border-t border-[#222d3d] text-[11px] font-mono">
-          <div class="flex items-center justify-between text-[10px] text-slate-500 uppercase font-bold mb-1.5">
-            <span>Strategy</span>
-            <span>TP / SL</span>
-            <span>Win Rate</span>
-          </div>
-          <div class="space-y-1.5">
-            <div class="flex items-center justify-between text-slate-300">
-              <span class="font-bold">SMC Swing</span>
-              <span class="text-slate-400">7 / 11</span>
-              <span class="text-emerald-300 font-bold">38.9%</span>
-            </div>
-            <div class="flex items-center justify-between text-slate-300">
-              <span class="font-bold">5M Scalp</span>
-              <span class="text-slate-400">4 / 10</span>
-              <span class="text-emerald-300 font-bold">28.6%</span>
-            </div>
-            <div class="flex items-center justify-between text-slate-300">
-              <span class="font-bold">ICT Institutional</span>
-              <span class="text-slate-400">3 / 5</span>
-              <span class="text-emerald-300 font-bold">37.5%</span>
-            </div>
-          </div>
-        </div>
-
-      </section>
-
-      <!-- 3. TRAPSHIELD AI & RISK SAFETY CARD (Soft, clean, no neon) -->
-      <section id="mobileTabRiskSection" class="bg-[#131924] rounded-2xl border border-[#222d3d] p-3.5 sm:p-4 shadow-sm flex flex-col gap-3">
-        
-        <div class="flex items-center justify-between border-b border-[#222d3d] pb-2">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-sky-300 text-[20px]">shield</span>
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-100 font-mono">Risk Sentinel &amp; ML</span>
-          </div>
-          <span id="cbStatusBadge" class="px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-emerald-300 font-mono">
-            NORMAL
-          </span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2.5">
-          
-          <!-- TrapShield AI Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">TrapShield</span>
-              <span id="mlStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-bold">GATED</span>
-            </div>
-            <div class="mt-2">
-              <span id="statTrapsCaught" class="text-sm font-bold text-slate-100 font-mono">0 events</span>
-              <div class="text-[9px] text-slate-400 font-mono mt-0.5">
-                Samples: <span id="statTrapSamples" class="text-slate-300 font-bold">0</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<div class="text-xs font-mono font-bold text-slate-900 pair-price">$2,348.60</div>
+<div class="text-[10px] font-mono font-semibold text-emerald-600 pair-chg">+0.84%</div>
+</div>
+<!-- Route Switch -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only pair-switch" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Dedicated Pair Controls -->
+<div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- Lot Size dedicated -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
+<span class="text-[10px] font-mono text-slate-400">100 oz contract</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
+<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
+<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+</div>
+<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+</div>
+</div>
+<!-- Stop Loss dedicated -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
+<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$25.00 est.</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="15" type="button">15p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="25" type="button">25p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="100" type="button">100p</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
+<div class="flex items-center gap-1 text-[11px] text-slate-500">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Offset</span>
+</div>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="25">
+<span class="text-[10px] text-slate-500">pips</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PAIR 2: GBPUSD -->
+<div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="GBPUSD" data-tick-val="10">
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-blue-50 border border-blue-200 flex items-center justify-center font-mono text-[11px] font-bold text-blue-800">
+                GB
               </div>
-            </div>
-          </div>
-
-          <!-- Circuit Breaker Box -->
-          <div class="p-3 rounded-xl bg-[#0f141f] border border-[#222d3d] flex flex-col justify-between">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] uppercase font-bold text-slate-400 font-mono">Safety Lock</span>
-              <span id="statPrimaryPair" class="text-[9px] text-slate-400 font-mono">None</span>
-            </div>
-            <div class="mt-2">
-              <span id="statRiskStatus" class="text-sm font-bold text-emerald-300 font-mono">Operational</span>
-              <div class="text-[9px] text-slate-400 font-mono mt-0.5">
-                Circuit Breaker
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-tight text-slate-900">GBPUSD</span>
+<span class="text-[11px] text-slate-500 font-medium">British Pound / USD</span>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
+<span class="">B: <strong class="text-slate-700 font-semibold bid-val">1.27410</strong></span>
+<span class="text-slate-300">•</span>
+<span class="">A: <strong class="text-slate-700 font-semibold ask-val">1.27430</strong></span>
+<span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">0.2 spd</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<div class="text-xs font-mono font-bold text-slate-900 pair-price">1.27420</div>
+<div class="text-[10px] font-mono font-semibold text-rose-600 pair-chg">-0.15%</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only pair-switch" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Dedicated Pair Controls -->
+<div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- Lot Size -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
+<span class="text-[10px] font-mono text-slate-400">100k standard</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.25" type="button">0.25</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
+<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
+<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+</div>
+<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+</div>
+</div>
+<!-- Stop Loss -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
+<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$20.00 est.</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="15" type="button">15p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="20" type="button">20p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="35" type="button">35p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
+<div class="flex items-center gap-1 text-[11px] text-slate-500">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Offset</span>
+</div>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="20">
+<span class="text-[10px] text-slate-500">pips</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PAIR 3: EURUSD -->
+<div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="EURUSD" data-tick-val="10">
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-indigo-50 border border-indigo-200 flex items-center justify-center font-mono text-[11px] font-bold text-indigo-800">
+                EU
               </div>
-            </div>
-          </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-tight text-slate-900">EURUSD</span>
+<span class="text-[11px] text-slate-500 font-medium">Euro / US Dollar</span>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
+<span class="">B: <strong class="text-slate-700 font-semibold bid-val">1.08940</strong></span>
+<span class="text-slate-300">•</span>
+<span class="">A: <strong class="text-slate-700 font-semibold ask-val">1.08960</strong></span>
+<span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">0.2 spd</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<div class="text-xs font-mono font-bold text-slate-900 pair-price">1.08950</div>
+<div class="text-[10px] font-mono font-semibold text-emerald-600 pair-chg">+0.22%</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only pair-switch" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Dedicated Pair Controls -->
+<div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- Lot Size -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
+<span class="text-[10px] font-mono text-slate-400">100k standard</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.20" type="button">0.20</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
+<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.20">
+<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+</div>
+<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+</div>
+</div>
+<!-- Stop Loss -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
+<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$30.00 est.</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="15" type="button">15p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="25" type="button">25p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="40" type="button">40p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="60" type="button">60p</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
+<div class="flex items-center gap-1 text-[11px] text-slate-500">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Offset</span>
+</div>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="15">
+<span class="text-[10px] text-slate-500">pips</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PAIR 4: BTCUSD -->
+<div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="BTCUSD" data-tick-val="1">
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-orange-50 border border-orange-200 flex items-center justify-center font-mono text-[11px] font-bold text-orange-800">
+                BTC
+              </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-tight text-slate-900">BTCUSD</span>
+<span class="text-[11px] text-slate-500 font-medium">Bitcoin / US Dollar</span>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
+<span class="">B: <strong class="text-slate-700 font-semibold bid-val">64,275</strong></span>
+<span class="text-slate-300">•</span>
+<span class="">A: <strong class="text-slate-700 font-semibold ask-val">64,285</strong></span>
+<span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">10.0 spd</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<div class="text-xs font-mono font-bold text-slate-900 pair-price">$64,280</div>
+<div class="text-[10px] font-mono font-semibold text-emerald-600 pair-chg">+1.95%</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only pair-switch" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Dedicated Pair Controls -->
+<div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- Lot Size -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
+<span class="text-[10px] font-mono text-slate-400">1 BTC / 100 CFD</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.02" type="button">0.02</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.10" type="button">0.10</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
+<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.02">
+<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+</div>
+<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+</div>
+</div>
+<!-- Stop Loss -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
+<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$2.00 est.</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="100" type="button">100p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="150" type="button">150p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="250" type="button">250p</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
+<div class="flex items-center gap-1 text-[11px] text-slate-500">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Offset</span>
+</div>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="1000" min="5" type="number" value="100">
+<span class="text-[10px] text-slate-500">pts</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PAIR 5: ETHUSD -->
+<div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="ETHUSD" data-tick-val="2">
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-purple-50 border border-purple-200 flex items-center justify-center font-mono text-[11px] font-bold text-purple-800">
+                ETH
+              </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-sm font-bold tracking-tight text-slate-900">ETHUSD</span>
+<span class="text-[11px] text-slate-500 font-medium">Ethereum / US Dollar</span>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
+<span class="">B: <strong class="text-slate-700 font-semibold bid-val">3,449.50</strong></span>
+<span class="text-slate-300">•</span>
+<span class="">A: <strong class="text-slate-700 font-semibold ask-val">3,450.50</strong></span>
+<span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">1.0 spd</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<div class="text-xs font-mono font-bold text-slate-900 pair-price">$3,450.00</div>
+<div class="text-[10px] font-mono font-semibold text-emerald-600 pair-chg">+0.65%</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only pair-switch" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Dedicated Pair Controls -->
+<div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- Lot Size -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
+<span class="text-[10px] font-mono text-slate-400">10 ETH CFD</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.25" type="button">0.25</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
+<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
+<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+</div>
+<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+</div>
+</div>
+<!-- Stop Loss -->
+<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
+<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$10.00 est.</span>
+</div>
+<div class="grid grid-cols-4 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="25" type="button">25p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="50" type="button">50p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="75" type="button">75p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="120" type="button">120p</button>
+</div>
+<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
+<div class="flex items-center gap-1 text-[11px] text-slate-500">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Offset</span>
+</div>
+<div class="flex items-center gap-1 font-mono text-xs">
+<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="50">
+<span class="text-[10px] text-slate-500">pts</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Engine Guard Rails -->
+<div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-xs font-semibold text-slate-800">Dynamic Trailing Stop Protection</span>
+<span class="text-[10px] text-slate-500">Anchor SL along moving average tick on profitable trades</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only" id="trailingToggle" type="checkbox">
+<div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5" id="trailingBg">
+<div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm" id="trailingDot"></div>
+</div>
+</label>
+</div>
+</div>
+<!-- Action Button -->
+<div class="pt-1">
+<button class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs tracking-wider uppercase shadow-sm transition-all active:scale-[0.99]" id="applyParamsBtn" type="button">
+<span class="material-symbols-outlined text-[16px]">sync_alt</span>
+<span class="">Transmit All Parameters to Engine</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Clean Institutional Tab Bar -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-white border-t border-slate-200 shadow-sm" data-active-classes="text-brand-700 bg-brand-50">
+<div class="flex items-center justify-around h-14 px-4 max-w-lg mx-auto">
+<a aria-current="page" class="flex flex-col items-center justify-center min-w-[76px] h-10 rounded-md transition-all gap-0.5 text-brand-700 bg-brand-50 border border-brand-100 font-semibold" data-path="controls" href="/terminal/controls">
+<span class="material-symbols-outlined text-[19px]">tune</span>
+<span class="text-[10px] font-semibold tracking-wide uppercase">Controls</span>
+</a>
+<a class="flex flex-col items-center justify-center min-w-[76px] h-10 rounded-md transition-all gap-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50" data-path="strategy" href="/terminal/strategy">
+<span class="material-symbols-outlined text-[19px]">hub</span>
+<span class="text-[10px] font-medium tracking-wide uppercase">Strategy</span>
+</a>
+<a class="flex flex-col items-center justify-center min-w-[76px] h-10 rounded-md transition-all gap-0.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50" data-path="analysis" href="/terminal/analysis">
+<span class="material-symbols-outlined text-[19px]">analytics</span>
+<span class="text-[10px] font-medium tracking-wide uppercase">Analysis</span>
+</a>
+</div>
+</nav>
+<script>
+    (function initLightControls() {
+      let isBotActive = true;
+      const masterBtn = document.getElementById('masterBotToggle');
+      const toggleKnob = document.getElementById('toggleKnob');
+      const botStatusLabel = document.getElementById('botStatusLabel');
+      const botBadge = document.getElementById('botBadge');
+      const botOrb = document.getElementById('botOrb');
+      const botIcon = document.getElementById('botIcon');
 
-        </div>
-
-      </section>
-
-    </div>
-
-  </main>
-
-  <!-- ========================================================================= -->
-  <!-- 3. MOBILE BOTTOM NAVIGATION DOCK (< 768px ONLY)                           -->
-  <!-- ========================================================================= -->
-  <!-- Clean, soft, thumb-reach navigation bar with no neon glow                 -->
-  <nav class="safe-bottom w-full bg-[#131924]/95 backdrop-blur-md border-t border-[#222d3d] flex items-center justify-around py-2 px-3 z-40 md:hidden flex-shrink-0">
-    
-    <!-- Tab 1: Terminal Feed -->
-    <button onclick="switchMobileTab('terminal')" id="mobileNavTerminal" class="mobile-nav-active flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3" type="button">
-      <span class="material-symbols-outlined text-[20px]">terminal</span>
-      <span class="text-[10px] font-mono font-bold uppercase tracking-wider">Feed</span>
-    </button>
-
-    <!-- Tab 2: Cockpit Controls -->
-    <button onclick="switchMobileTab('cockpit')" id="mobileNavCockpit" class="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3" type="button">
-      <span class="material-symbols-outlined text-[20px]">bolt</span>
-      <span class="text-[10px] font-mono font-bold uppercase tracking-wider">Controls</span>
-    </button>
-
-    <!-- Tab 3: Metrics -->
-    <button onclick="switchMobileTab('metrics')" id="mobileNavMetrics" class="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3" type="button">
-      <span class="material-symbols-outlined text-[20px]">analytics</span>
-      <span class="text-[10px] font-mono font-bold uppercase tracking-wider">Metrics</span>
-    </button>
-
-    <!-- Tab 4: AI & Risk -->
-    <button onclick="switchMobileTab('risk')" id="mobileNavRisk" class="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3" type="button">
-      <span class="material-symbols-outlined text-[20px]">shield</span>
-      <span class="text-[10px] font-mono font-bold uppercase tracking-wider">Risk AI</span>
-    </button>
-
-  </nav>
-
-  <!-- ========================================================================= -->
-  <!-- 4. JAVASCRIPT STATE ENGINE & DUAL-DEVICE CONTROLLER                       -->
-  <!-- ========================================================================= -->
-  <script>
-    // State management
-    let allLogs = [];
-    let mlLogs = [];
-    let activeFilter = 'ALL';
-    let searchQuery = '';
-    let autoScroll = true;
-    let deferredPrompt = null;
-    let lastLogHash = '';
-    let pollInterval = null;
-    let isBotActive = false;
-    let activeMobileTab = 'terminal'; // 'terminal' | 'cockpit' | 'metrics' | 'risk'
-
-    // PWA Standalone Detection
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-    // Service Worker Registration
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.debug('SW reg:', err));
-      });
-    }
-
-    // Android PWA beforeinstallprompt handler
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      const btn = document.getElementById('pwaInstallBtn');
-      if (btn) {
-        btn.classList.remove('hidden');
-        btn.onclick = async () => {
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') dismissPwaBanner();
-            deferredPrompt = null;
+      function updateBotUI(active) {
+        isBotActive = active;
+        if (isBotActive) {
+          masterBtn.classList.replace('bg-slate-300', 'bg-brand-600');
+          toggleKnob.classList.replace('translate-x-0', 'translate-x-5');
+          botStatusLabel.textContent = 'ALGO ENGINE ACTIVE';
+          botStatusLabel.className = 'text-sm font-bold text-slate-900 tracking-tight';
+          botBadge.textContent = 'ROUTING';
+          botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200';
+          botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-brand-50 border border-brand-200 text-brand-700';
+          botIcon.className = 'material-symbols-outlined text-[22px] text-brand-700';
+          const headerBadge = document.getElementById('headerLiveStatusBadge');
+          if (headerBadge) {
+            headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200';
+            document.getElementById('headerLiveStatusText').textContent = 'LIVE';
           }
-        };
-      }
-    });
-
-    function setupPwaBanner() {
-      if (isStandalone || localStorage.getItem('dismissTerminalBanner') === 'true') {
-        const banner = document.getElementById('pwaBanner');
-        if (banner) banner.classList.add('hidden');
-        return;
-      }
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const instructions = document.getElementById('pwaInstructions');
-      if (instructions) {
-        if (isIOS) {
-          instructions.innerHTML = `Install as App: Tap Share <span class="text-white font-bold">⎋</span> → <span class="text-cyan-400 font-bold underline">Add to Home Screen</span>`;
         } else {
-          instructions.innerHTML = `Install as App: Tap browser menu <span class="text-white font-bold">⋮</span> → <span class="text-cyan-400 font-bold underline">Install App</span>`;
-        }
-      }
-      const banner = document.getElementById('pwaBanner');
-      if (banner) banner.classList.remove('hidden');
-    }
-
-    function dismissPwaBanner() {
-      localStorage.setItem('dismissTerminalBanner', 'true');
-      const banner = document.getElementById('pwaBanner');
-      if (banner) {
-        banner.style.opacity = '0';
-        setTimeout(() => banner.classList.add('hidden'), 200);
-      }
-    }
-
-    // Mobile Toast Notification
-    function showToast(message, isError = false) {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-
-      const toast = document.createElement('div');
-      toast.className = `px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-mono font-bold flex items-center gap-2 transform transition-all duration-300 pointer-events-auto ${
-        isError 
-          ? 'bg-rose-950/95 border-rose-500 text-rose-200' 
-          : 'bg-[#181b26]/95 border-cyan-500 text-cyan-200'
-      }`;
-      toast.innerHTML = `
-        <span class="material-symbols-outlined text-[16px]">${isError ? 'warning' : 'check_circle'}</span>
-        <span>${escapeHtml(message)}</span>
-      `;
-      container.appendChild(toast);
-
-      if (navigator.vibrate) {
-        navigator.vibrate(isError ? [40, 60, 40] : [25]);
-      }
-
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-10px)';
-        setTimeout(() => toast.remove(), 300);
-      }, 3500);
-    }
-
-    // -------------------------------------------------------------------------
-    // MOBILE BOTTOM NAVIGATION HANDLER (< 768px)
-    // -------------------------------------------------------------------------
-    function switchMobileTab(tab) {
-      activeMobileTab = tab;
-
-      if (navigator.vibrate) navigator.vibrate(15);
-
-      // Update Nav Buttons
-      ['terminal', 'cockpit', 'metrics', 'risk'].forEach(t => {
-        const btn = document.getElementById(`mobileNav${t.charAt(0).toUpperCase() + t.slice(1)}`);
-        if (btn) {
-          if (t === tab) {
-            btn.className = "mobile-nav-active flex flex-col items-center gap-1 text-cyan-400 transition-all cursor-pointer py-1 px-3";
-          } else {
-            btn.className = "flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-all cursor-pointer py-1 px-3";
+          masterBtn.classList.replace('bg-brand-600', 'bg-slate-300');
+          toggleKnob.classList.replace('translate-x-5', 'translate-x-0');
+          botStatusLabel.textContent = 'ALGO ENGINE PAUSED';
+          botStatusLabel.className = 'text-sm font-bold text-slate-500 tracking-tight';
+          botBadge.textContent = 'STANDBY';
+          botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200';
+          botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-slate-100 border border-slate-200 text-slate-400';
+          botIcon.className = 'material-symbols-outlined text-[22px] text-slate-400';
+          const headerBadge = document.getElementById('headerLiveStatusBadge');
+          if (headerBadge) {
+            headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200';
+            document.getElementById('headerLiveStatusText').textContent = 'PAUSED';
           }
         }
-      });
-
-      // On mobile screens (< 768px), show/hide sections
-      const panelTerm = document.getElementById('panelTerminal');
-      const panelSide = document.getElementById('panelSideCockpit');
-      const secCockpit = document.getElementById('mobileTabCockpitSection');
-      const secMetrics = document.getElementById('mobileTabMetricsSection');
-      const secRisk = document.getElementById('mobileTabRiskSection');
-
-      if (window.innerWidth < 768) {
-        if (tab === 'terminal') {
-          panelTerm.classList.remove('hidden');
-          panelSide.classList.add('hidden');
-          scrollToBottom();
-        } else {
-          panelTerm.classList.add('hidden');
-          panelSide.classList.remove('hidden');
-
-          if (tab === 'cockpit') {
-            secCockpit.classList.remove('hidden');
-            secMetrics.classList.add('hidden');
-            secRisk.classList.add('hidden');
-          } else if (tab === 'metrics') {
-            secCockpit.classList.add('hidden');
-            secMetrics.classList.remove('hidden');
-            secRisk.classList.add('hidden');
-          } else if (tab === 'risk') {
-            secCockpit.classList.add('hidden');
-            secMetrics.classList.add('hidden');
-            secRisk.classList.remove('hidden');
-          }
-        }
-      } else {
-        // Tablet / Desktop layout: ensure both panels and all sections are visible
-        panelTerm.classList.remove('hidden');
-        panelSide.classList.remove('hidden');
-        secCockpit.classList.remove('hidden');
-        secMetrics.classList.remove('hidden');
-        secRisk.classList.remove('hidden');
       }
-    }
 
-    // Responsive screen resize listener to reset dual-pane layout on tablets
-    window.addEventListener('resize', () => {
-      if (window.innerWidth >= 768) {
-        document.getElementById('panelTerminal')?.classList.remove('hidden');
-        document.getElementById('panelSideCockpit')?.classList.remove('hidden');
-        document.getElementById('mobileTabCockpitSection')?.classList.remove('hidden');
-        document.getElementById('mobileTabMetricsSection')?.classList.remove('hidden');
-        document.getElementById('mobileTabRiskSection')?.classList.remove('hidden');
-      } else {
-        switchMobileTab(activeMobileTab);
-      }
-    });
-
-    // -------------------------------------------------------------------------
-    // TERMINAL LOG STREAM & FILTERS
-    // -------------------------------------------------------------------------
-    function toggleAutoScroll() {
-      autoScroll = !autoScroll;
-      const btn = document.getElementById('autoScrollBtn');
-      const label = document.getElementById('autoScrollLabel');
-      if (autoScroll) {
-        if (label) label.textContent = "Auto";
-        btn.className = "h-7 px-2 rounded-lg bg-[#0c0e14] border border-[#232838] text-cyan-400 hover:text-cyan-300 text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer";
-        scrollToBottom(true);
-      } else {
-        if (label) label.textContent = "Paused";
-        btn.className = "h-7 px-2 rounded-lg bg-[#0c0e14] border border-[#232838] text-slate-500 hover:text-slate-300 text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer";
-      }
-    }
-
-    function scrollToBottom(force = false) {
-      const term = document.getElementById('terminalContainer');
-      if (term) {
-        term.scrollTop = term.scrollHeight;
-        document.getElementById('scrollDownBtn').classList.add('hidden');
-      }
-    }
-
-    async function setFilter(type) {
-      activeFilter = type;
-      ['ALL', 'REVERSAL', 'TRADE', 'ML', 'WARN'].forEach(t => {
-        const btn = document.getElementById(`filter${t}`);
-        if (!btn) return;
-        if (t === type) {
-          btn.className = "px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex-shrink-0 cursor-pointer";
-        } else {
-          btn.className = "px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all text-slate-400 hover:text-white border border-transparent hover:border-[#2a3044] flex-shrink-0 cursor-pointer";
-        }
-      });
-
-      if (type === 'ML' && mlLogs.length === 0) {
+      // Master Bot Toggle logic with live API sync
+      masterBtn.addEventListener('click', async () => {
+        const nextState = !isBotActive;
+        updateBotUI(nextState);
         try {
-          const res = await fetch('/api/logs?category=ML&limit=200');
-          if (res.ok) {
-            const json = await res.json();
-            if (json.logs && Array.isArray(json.logs)) mlLogs = json.logs;
-          }
-        } catch (e) {
-          console.debug('Failed to fetch ML logs:', e);
-        }
-      }
-      renderLogs();
-    }
-
-    function isMlLog(l) {
-      if (!l) return false;
-      return l.includes('ML') || l.includes('TRAP') || l.includes('Trap') || l.includes('AI') || 
-             l.includes('🤖') || l.includes('🔬') || l.includes('🪤') || l.includes('DECISION') || 
-             l.includes('TEMPORAL') || l.includes('vetoed') || l.includes('VETO');
-    }
-
-    function handleSearch(val) {
-      searchQuery = (val || '').trim().toLowerCase();
-      document.getElementById('clearSearchBtn').classList.toggle('hidden', searchQuery.length === 0);
-      renderLogs();
-    }
-
-    function clearSearch() {
-      const inp = document.getElementById('searchInput');
-      inp.value = '';
-      searchQuery = '';
-      document.getElementById('clearSearchBtn').classList.add('hidden');
-      renderLogs();
-    }
-
-    function clearTerminal() {
-      allLogs = [];
-      mlLogs = [];
-      renderLogs();
-      showToast("Terminal buffer cleared");
-    }
-
-    function escapeHtml(str) {
-      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function renderLogs() {
-      const term = document.getElementById('terminalContainer');
-      if (!term) return;
-
-      let filtered = allLogs;
-
-      if (activeFilter === 'REVERSAL') {
-        filtered = filtered.filter(l => l.includes('REVERSAL') || l.includes('CHoCH') || l.includes('🚨') || l.includes('🛡️') || l.includes('SWEEP'));
-      } else if (activeFilter === 'TRADE') {
-        filtered = filtered.filter(l => l.includes('ORDER') || l.includes('FILLED') || l.includes('TRADE') || l.includes('POSITION') || l.includes('✅') || l.includes('AUTHORIZED') || l.includes('ACTIVATED') || l.includes('SIGNAL'));
-      } else if (activeFilter === 'ML') {
-        const combined = [...mlLogs];
-        allLogs.forEach(l => {
-          if (isMlLog(l) && !combined.includes(l)) combined.push(l);
-        });
-        filtered = combined;
-      } else if (activeFilter === 'WARN') {
-        filtered = filtered.filter(l => l.includes('⚠️') || l.includes('WARN') || l.includes('🚫') || l.includes('⛔') || l.includes('ERROR') || l.includes('FAILED') || l.includes('SKIPPED') || l.includes('REJECTED'));
-      }
-
-      if (searchQuery) {
-        filtered = filtered.filter(l => l.toLowerCase().includes(searchQuery));
-      }
-
-      const logCountEl = document.getElementById('logCount');
-      if (logCountEl) logCountEl.innerText = `${filtered.length} / ${allLogs.length} events`;
-
-      if (filtered.length === 0) {
-        term.innerHTML = `<div class="text-slate-500 text-center py-12 text-xs font-mono italic">No events matching current filter.</div>`;
-        return;
-      }
-
-      term.innerHTML = filtered.map(log => {
-        // Divider row for market ticks
-        if (log.includes("─── TICK") || log.includes("─── EURUSD") || log.includes("─── GBPUSD") || log.includes("─── USDJPY")) {
-          return `<div class="my-1 px-2.5 py-1 bg-[#131924] rounded-lg text-slate-400 text-[10px] sm:text-xs flex items-center justify-between font-bold border border-[#222d3d]">
-            <span class="text-sky-300 font-mono">${escapeHtml(log)}</span>
-          </div>`;
-        }
-
-        let itemClass = "log-item-normal text-slate-300";
-
-        if (log.includes("🚨") || log.includes("TREND REVERSAL ALERT") || log.includes("CHoCH DETECTED") || log.includes("REVERSAL")) {
-          itemClass = "log-item-reversal text-rose-300 font-bold";
-        } else if (log.includes("🛡️") || log.includes("REVERSAL SHIELD") || log.includes("SWEEP")) {
-          itemClass = "log-item-shield text-sky-300 font-bold";
-        } else if (log.includes("✅") || log.includes("ORDER FILLED") || log.includes("ACTIVATED") || log.includes("FILLED") || log.includes("TRADE")) {
-          itemClass = "log-item-trade text-emerald-300 font-bold";
-        } else if (isMlLog(log)) {
-          itemClass = "log-item-ml text-indigo-300 font-medium";
-        } else if (log.includes("⚠️") || log.includes("WARN") || log.includes("REJECTED") || log.includes("SKIPPED") || log.includes("PAUSED")) {
-          itemClass = "log-item-warn text-amber-200 font-medium";
-        } else if (log.includes("❌") || log.includes("ERROR") || log.includes("FAILED")) {
-          itemClass = "log-item-reversal text-rose-300 font-bold";
-        }
-
-        return `<div class="py-1 px-2.5 rounded-lg ${itemClass} flex items-start gap-2 text-[11px] sm:text-xs transition-colors leading-relaxed">
-          <span class="flex-1 break-words">${escapeHtml(log)}</span>
-        </div>`;
-      }).join('');
-
-      if (autoScroll) scrollToBottom();
-    }
-
-    // Scroll listener for detecting manual user scroll
-    document.getElementById('terminalContainer').addEventListener('scroll', (e) => {
-      const term = e.target;
-      const isAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 40;
-      const downBtn = document.getElementById('scrollDownBtn');
-      if (!isAtBottom) {
-        downBtn.classList.remove('hidden');
-        downBtn.classList.add('flex');
-      } else {
-        downBtn.classList.add('hidden');
-        downBtn.classList.remove('flex');
-      }
-    });
-
-    // -------------------------------------------------------------------------
-    // PAIR LOT SIZE & STOP LOSS STATE & LIVE CONTROLLERS (SOFT & CLEAN STYLING)
-    // -------------------------------------------------------------------------
-    const defaultPairMeta = {
-      xauusd: { symbol: 'XAUUSD', name: 'Gold / US Dollar', lot: 0.05, sl: 25.0, lotStep: 0.01, slStep: 5, color: 'text-amber-300', tag: 'COMMODITY', active: true },
-      eurusd: { symbol: 'EURUSD', name: 'Euro / US Dollar', lot: 0.10, sl: 15.0, lotStep: 0.01, slStep: 5, color: 'text-sky-300', tag: 'MAJOR FX', active: true },
-      gbpusd: { symbol: 'GBPUSD', name: 'Pound / US Dollar', lot: 0.12, sl: 20.0, lotStep: 0.01, slStep: 5, color: 'text-emerald-300', tag: 'MAJOR FX', active: true },
-      btcusd: { symbol: 'BTCUSD', name: 'Bitcoin / US Dollar', lot: 0.01, sl: 150.0, lotStep: 0.01, slStep: 25, color: 'text-orange-300', tag: 'CRYPTO', active: true },
-      ethusd: { symbol: 'ETHUSD', name: 'Ethereum / US Dollar', lot: 0.05, sl: 80.0, lotStep: 0.01, slStep: 10, color: 'text-purple-300', tag: 'CRYPTO', active: true }
-    };
-
-    let pairSettingsState = { ...defaultPairMeta };
-    let pairControlsRendered = false;
-
-    function syncPairsFromState(pairsConfig, selectedSymbols = []) {
-      if (!pairsConfig || Object.keys(pairsConfig).length === 0) {
-        if (!pairControlsRendered) {
-          renderControlsPairs();
-          pairControlsRendered = true;
-        }
-        return;
-      }
-
-      let changed = false;
-      Object.keys(pairsConfig).forEach(k => {
-        const key = k.toLowerCase();
-        const incoming = pairsConfig[k];
-        if (!pairSettingsState[key]) {
-          pairSettingsState[key] = {
-            ...(defaultPairMeta[key] || {
-              symbol: incoming.symbol || key.toUpperCase(),
-              name: incoming.name || key.toUpperCase(),
-              lotStep: 0.01,
-              slStep: 5,
-              color: 'text-slate-200',
-              tag: 'ASSET'
-            })
-          };
-        }
-        const current = pairSettingsState[key];
-        const isEditingLot = document.activeElement && document.activeElement.id === `input-lot-${key}`;
-        const isEditingSl = document.activeElement && document.activeElement.id === `input-sl-${key}`;
-
-        if (!isEditingLot && typeof incoming.lot === 'number' && current.lot !== incoming.lot) {
-          current.lot = incoming.lot;
-          changed = true;
-        }
-        if (!isEditingSl && typeof incoming.sl === 'number' && current.sl !== incoming.sl) {
-          current.sl = incoming.sl;
-          changed = true;
-        }
-        const isActive = incoming.active ?? (selectedSymbols.includes(current.symbol));
-        if (current.active !== isActive) {
-          current.active = isActive;
-          changed = true;
+          const endpoint = nextState ? '/api/activate' : '/api/deactivate';
+          await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        } catch (err) {
+          console.warn('Bot toggle API sync error:', err);
         }
       });
 
-      if (changed || !pairControlsRendered) {
-        renderControlsPairs();
-        pairControlsRendered = true;
-      }
-    }
+      // Individual Pair Calculation & Control Binding
+      const pairCards = document.querySelectorAll('.pair-card');
 
-    function renderControlsPairs() {
-      const container = document.getElementById('termPairControlsList');
-      if (!container) return;
+      pairCards.forEach(card => {
+        const symbol = card.getAttribute('data-symbol');
+        const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
+        const lotInput = card.querySelector('.input-lot');
+        const slInput = card.querySelector('.input-sl');
+        const lotChips = card.querySelectorAll('.lot-chip');
+        const slChips = card.querySelectorAll('.sl-chip');
+        const minusBtn = card.querySelector('.btn-step-minus');
+        const plusBtn = card.querySelector('.btn-step-plus');
+        const estRiskLabel = card.querySelector('.est-risk');
+        const routeSwitch = card.querySelector('.pair-switch');
 
-      container.innerHTML = Object.entries(pairSettingsState).map(([key, pair]) => {
-        const lotVal = typeof pair.lot === 'number' ? pair.lot.toFixed(2) : parseFloat(pair.lot || 0.05).toFixed(2);
-        const slVal = typeof pair.sl === 'number' ? Math.round(pair.sl) : Math.round(parseFloat(pair.sl || 25));
-
-        return `
-          <div class="p-2.5 rounded-xl bg-[#131924] border border-[#222d3d] flex flex-col gap-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="font-bold font-mono ${pair.color || 'text-slate-100'} text-xs">${pair.symbol}</span>
-                <span class="text-[10px] text-slate-400">${pair.name}</span>
-              </div>
-              <button type="button" onclick="togglePairStateMobile('${key}')" class="px-2 py-0.5 rounded text-[9px] font-bold font-mono transition-all cursor-pointer ${
-                pair.active
-                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
-              }">
-                ${pair.active ? 'ACTIVE' : 'DISABLED'}
-              </button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 mt-0.5">
-              <!-- Lot Pod -->
-              <div class="bg-[#0f141f] p-2 rounded-lg border border-[#222d3d] flex items-center justify-between">
-                <span class="text-[9px] uppercase font-bold text-slate-400">LOT</span>
-                <div class="flex items-center gap-1">
-                  <button type="button" onclick="updatePairLot('${key}', -0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
-                  <input id="input-lot-${key}" type="number" step="0.01" min="0.01" max="10.0" value="${lotVal}" onchange="onPairLotInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
-                  <button type="button" onclick="updatePairLot('${key}', 0.01)" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
-                </div>
-              </div>
-
-              <!-- SL Pod -->
-              <div class="bg-[#0f141f] p-2 rounded-lg border border-[#222d3d] flex items-center justify-between">
-                <span class="text-[9px] uppercase font-bold text-slate-400">SL (pips)</span>
-                <div class="flex items-center gap-1">
-                  <button type="button" onclick="updatePairSl('${key}', -${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">-</button>
-                  <input id="input-sl-${key}" type="number" step="1" min="1" max="500" value="${slVal}" onchange="onPairSlInputChange('${key}', this)" class="w-12 h-6 text-center text-[11px] font-bold font-mono bg-transparent text-slate-100 border border-transparent focus:border-sky-500/40 rounded focus:outline-none">
-                  <button type="button" onclick="updatePairSl('${key}', ${pair.slStep || 5})" class="w-6 h-6 rounded bg-[#182130] hover:bg-[#222d40] text-slate-300 font-bold flex items-center justify-center text-xs active:scale-90 transition-all cursor-pointer">+</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function updatePairLot(pairKey, delta) {
-      const pair = pairSettingsState[pairKey.toLowerCase()];
-      if (!pair) return;
-      let newLot = Math.max(0.01, Math.min(10.0, parseFloat((pair.lot + delta).toFixed(2))));
-      pair.lot = newLot;
-      renderControlsPairs();
-      await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-    }
-
-    async function updatePairSl(pairKey, delta) {
-      const pair = pairSettingsState[pairKey.toLowerCase()];
-      if (!pair) return;
-      let newSl = Math.max(1, Math.min(500, Math.round(pair.sl + delta)));
-      pair.sl = newSl;
-      renderControlsPairs();
-      await persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-    }
-
-    let lotSlDebounceTimer = null;
-    function onPairLotInputChange(pairKey, inputElem) {
-      const pair = pairSettingsState[pairKey.toLowerCase()];
-      if (!pair) return;
-      let val = parseFloat(inputElem.value);
-      if (!isNaN(val) && val >= 0.01) {
-        pair.lot = Math.round(val * 100) / 100;
-        clearTimeout(lotSlDebounceTimer);
-        lotSlDebounceTimer = setTimeout(() => {
-          persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-          renderControlsPairs();
-        }, 500);
-      }
-    }
-
-    function onPairSlInputChange(pairKey, inputElem) {
-      const pair = pairSettingsState[pairKey.toLowerCase()];
-      if (!pair) return;
-      let val = parseFloat(inputElem.value);
-      if (!isNaN(val) && val >= 1) {
-        pair.sl = Math.round(val);
-        clearTimeout(lotSlDebounceTimer);
-        lotSlDebounceTimer = setTimeout(() => {
-          persistPairSettings(pairKey.toLowerCase(), pair.lot, pair.sl);
-          renderControlsPairs();
-        }, 500);
-      }
-    }
-
-    async function togglePairStateMobile(pairKey) {
-      const pair = pairSettingsState[pairKey.toLowerCase()];
-      if (!pair) return;
-      pair.active = !pair.active;
-      renderControlsPairs();
-      try {
-        await fetch('/api/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'toggle_pair',
-            pair: pairKey.toLowerCase(),
-            active: pair.active
-          })
-        });
-        showToast(`${pair.symbol}: ${pair.active ? 'ACTIVATED' : 'DISABLED'}`);
-      } catch (err) {
-        showToast("Error updating pair active state", true);
-      }
-    }
-
-    async function persistPairSettings(pairKey, lot, sl) {
-      try {
-        const res = await fetch('/api/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'update_pair_settings',
-            pair: pairKey.toLowerCase(),
-            lot: lot,
-            sl: sl
-          })
-        });
-        const json = await res.json();
-        if (res.ok && json.status === 'success') {
-          showToast(`Saved ${pairKey.toUpperCase()}: ${lot.toFixed(2)} Lot · ${Math.round(sl)}p SL`);
-        } else {
-          showToast(json.detail || json.message || "Failed to update pair settings", true);
+        function updateCardRisk() {
+          const lot = parseFloat(lotInput.value) || 0.01;
+          const sl = parseFloat(slInput.value) || 10;
+          const dollar = (lot * sl * tickVal).toFixed(2);
+          if (estRiskLabel) {
+            estRiskLabel.textContent = `-$${dollar} est.`;
+          }
         }
-      } catch (e) {
-        showToast("Network error saving pair settings", true);
-      }
-    }
 
-    // -------------------------------------------------------------------------
-    // TELEMETRY POLLING & STATE SYNCHRONIZATION
-    // -------------------------------------------------------------------------
-    window.termSelectedBiasSymbol = 'XAUUSD';
-    window.termCachedDailyBias = null;
+        // Lot chips
+        lotChips.forEach(chip => {
+          chip.addEventListener('click', () => {
+            lotChips.forEach(c => {
+              c.className = 'lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
+            });
+            chip.className = 'lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white';
+            lotInput.value = parseFloat(chip.dataset.val).toFixed(2);
+            updateCardRisk();
+          });
+        });
 
-    function switchTermBiasSymbol(sym) {
-      window.termSelectedBiasSymbol = sym;
-      if (window.termCachedDailyBias) {
-        syncTermDailyBias(window.termCachedDailyBias);
-      }
-    }
+        // SL chips
+        slChips.forEach(chip => {
+          chip.addEventListener('click', () => {
+            slChips.forEach(c => {
+              c.className = 'sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
+            });
+            chip.className = 'sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white';
+            slInput.value = parseInt(chip.dataset.pips, 10);
+            updateCardRisk();
+          });
+        });
 
-    function syncTermDailyBias(biasSummary) {
-      if (!biasSummary) return;
-      window.termCachedDailyBias = biasSummary;
-
-      const datePill = document.getElementById('termBiasDatePill');
-      if (datePill && biasSummary.formatted_date) {
-        datePill.innerText = biasSummary.formatted_date.toUpperCase();
-      }
-
-      const selectEl = document.getElementById('termBiasSymbolSelect');
-      if (selectEl && biasSummary.symbols) {
-        const availableSymbols = Object.keys(biasSummary.symbols);
-        const currentOpts = Array.from(selectEl.options).map(o => o.value);
-        if (availableSymbols.length !== currentOpts.length || !availableSymbols.every(s => currentOpts.includes(s))) {
-          selectEl.innerHTML = '';
-          availableSymbols.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s;
-            opt.innerText = s;
-            selectEl.appendChild(opt);
+        // Lot Stepper
+        if (minusBtn && plusBtn) {
+          minusBtn.addEventListener('click', () => {
+            let v = Math.max(0.01, +(parseFloat(lotInput.value) - 0.01).toFixed(2));
+            lotInput.value = v.toFixed(2);
+            updateCardRisk();
+          });
+          plusBtn.addEventListener('click', () => {
+            let v = +(parseFloat(lotInput.value) + 0.01).toFixed(2);
+            lotInput.value = v.toFixed(2);
+            updateCardRisk();
           });
         }
-        if (!window.termSelectedBiasSymbol || !biasSummary.symbols[window.termSelectedBiasSymbol]) {
-          window.termSelectedBiasSymbol = biasSummary.primary_symbol || availableSymbols[0] || 'XAUUSD';
-        }
-        selectEl.value = window.termSelectedBiasSymbol;
-      }
 
-      const symData = (biasSummary.symbols && biasSummary.symbols[window.termSelectedBiasSymbol])
-        || (biasSummary.symbols && biasSummary.symbols[biasSummary.primary_symbol])
-        || {};
+        lotInput.addEventListener('change', updateCardRisk);
+        slInput.addEventListener('input', updateCardRisk);
 
-      const bVal = (symData.bias || 'NEUTRAL').toUpperCase();
-      const valEl = document.getElementById('termBiasValue');
-      const arrowEl = document.getElementById('termBiasArrow');
-      const badgeEl = document.getElementById('termBiasZoneBadge');
-      const fibEl = document.getElementById('termBiasFib');
-      const clarityEl = document.getElementById('termBiasClarity');
-
-      if (valEl) {
-        valEl.innerText = bVal;
-        if (bVal === 'BULLISH') valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-emerald-300';
-        else if (bVal === 'BEARISH') valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-rose-300';
-        else valEl.className = 'text-2xl sm:text-3xl font-black font-mono-numbers text-amber-300';
-      }
-
-      if (arrowEl) {
-        if (bVal === 'BULLISH') {
-          arrowEl.innerText = 'trending_up';
-          arrowEl.className = 'material-symbols-outlined text-2xl text-emerald-300';
-        } else if (bVal === 'BEARISH') {
-          arrowEl.innerText = 'trending_down';
-          arrowEl.className = 'material-symbols-outlined text-2xl text-rose-300';
-        } else {
-          arrowEl.innerText = 'trending_flat';
-          arrowEl.className = 'material-symbols-outlined text-2xl text-amber-300';
-        }
-      }
-
-      if (badgeEl) {
-        badgeEl.innerText = symData.zone_status || 'EQUILIBRIUM';
-        if (bVal === 'BULLISH') badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-        else if (bVal === 'BEARISH') badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300';
-        else badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300';
-      }
-
-      if (fibEl) {
-        fibEl.innerText = (symData.fib_50 != null && symData.fib_50 > 0)
-          ? `${symData.fib_50.toFixed(symData.fib_50 > 100 ? 2 : 4)}`
-          : 'Mid';
-      }
-
-      if (clarityEl) {
-        const cPct = symData.clarity_pct || 80;
-        clarityEl.innerText = `Clarity: ${cPct}%`;
-        clarityEl.className = cPct >= 75 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold';
-      }
-    }
-
-    async function fetchLiveTelemetry() {
-      try {
-        const res = await fetch('/api/state', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        // Sync Today's Bias
-        if (data.daily_bias) {
-          syncTermDailyBias(data.daily_bias);
+        // Pair Route Toggle
+        if (routeSwitch) {
+          routeSwitch.addEventListener('change', (e) => {
+            const toggleBg = e.target.nextElementSibling;
+            const toggleThumb = toggleBg.querySelector('div');
+            if (e.target.checked) {
+              card.style.opacity = '1';
+              toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+              toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+            } else {
+              card.style.opacity = '0.5';
+              toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+              toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+            }
+          });
         }
 
-        // 1. Connection status
-        document.getElementById('connDot').className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
-        document.getElementById('connStatus').innerText = "1s LIVE";
+        updateCardRisk();
+      });
 
-        // 2. Engine Active / Idle Status
-        isBotActive = Boolean(data.is_active);
-        const stateBadge = document.getElementById('botStateBadge');
-        const stateDot = document.getElementById('botStateDot');
-        const stateLabel = document.getElementById('botStateLabel');
-        const perfBadge = document.getElementById('perfStatusBadge');
-        const headerQuickBtn = document.getElementById('headerQuickActionBtn');
-        const headerQuickText = document.getElementById('headerQuickActionText');
-        const cockpitActivateBtn = document.getElementById('cockpitActivateBtn');
-        const cockpitActivateText = document.getElementById('cockpitActivateText');
-
-        if (isBotActive) {
-          stateDot.className = "w-2 h-2 rounded-full bg-emerald-400";
-          stateLabel.className = "text-emerald-300 uppercase tracking-wide font-bold";
-          stateLabel.innerText = "ACTIVE";
-          
-          perfBadge.innerText = "RUNNING";
-          perfBadge.className = "px-2 py-0.5 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 text-[10px] font-bold font-mono";
-
-          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-rose-950/30 text-rose-300 border border-rose-800/40 hover:bg-rose-900/40 cursor-pointer min-h-[36px]";
-          headerQuickText.innerText = "HALT";
-
-          cockpitActivateBtn.disabled = true;
-          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-slate-800 text-slate-500 font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 border border-slate-700 cursor-not-allowed opacity-60 min-h-[46px]";
-          cockpitActivateText.innerText = "ENGINE RUNNING";
-        } else {
-          stateDot.className = "w-2 h-2 rounded-full bg-amber-400";
-          stateLabel.className = "text-amber-300 uppercase tracking-wide font-bold";
-          stateLabel.innerText = "IDLE";
-
-          perfBadge.innerText = "IDLE";
-          perfBadge.className = "px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-slate-300 font-mono";
-
-          headerQuickBtn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm bg-emerald-950/30 text-emerald-300 border border-emerald-800/40 hover:bg-emerald-900/40 cursor-pointer min-h-[36px]";
-          headerQuickText.innerText = "START";
-
-          cockpitActivateBtn.disabled = false;
-          cockpitActivateBtn.className = "py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer min-h-[46px]";
-          cockpitActivateText.innerText = "START BOT";
-        }
-
-        // 3. Execution Edge & Accuracy Metrics
-        const acc = Number(data.accuracy || 0);
-        const winHits = data.winning_trades || 0;
-        const lossHits = data.losing_trades || 0;
-        const totalTrades = data.total_closed_trades || data.trade_count || 0;
-
-        const statAccH = document.getElementById('statAccuracyHeader');
-        if (statAccH) statAccH.innerText = totalTrades > 0 ? `${acc.toFixed(1)}%` : `---%`;
-
-        const statHitsH = document.getElementById('statHitsHeader');
-        if (statHitsH) statHitsH.innerText = `${winHits} TP · ${lossHits} SL`;
-
-        const statRRH = document.getElementById('statRRHeader');
-        if (statRRH) statRRH.innerText = `1:2.50`;
-
-        const statAcc = document.getElementById('statAccuracy');
-        if (statAcc) statAcc.innerText = totalTrades > 0 ? `${acc.toFixed(1)}%` : `0.0%`;
-
-        const statTrades = document.getElementById('statTradeCount');
-        if (statTrades) statTrades.innerText = `${totalTrades} trades`;
-
-        const statTPSL = document.getElementById('statTPSLCounts');
-        if (statTPSL) statTPSL.innerHTML = `<span class="text-emerald-300">${winHits} TP</span> · <span class="text-rose-300">${lossHits} SL</span>`;
-
-        // 4. TrapShield AI Metrics
-        const trapData = data.trap_stats || data.ml_trap_detector;
-        if (trapData) {
-          const mode = trapData.mode || 'GATED';
-          document.getElementById('mlStatusBadge').innerText = String(mode).toUpperCase();
-          const trapsToday = trapData.traps_today ?? trapData.vetoed_today ?? 0;
-          const totalTraps = trapData.traps_caught || 0;
-          let label = '0 events';
-          if (trapsToday > 0) {
-            label = `${trapsToday} today (${totalTraps} total)`;
-          } else if (totalTraps > 0) {
-            label = `${totalTraps} caught`;
+      // Trailing switch
+      const trailingToggle = document.getElementById('trailingToggle');
+      const trailingBg = document.getElementById('trailingBg');
+      const trailingDot = document.getElementById('trailingDot');
+      if (trailingToggle) {
+        trailingToggle.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            trailingBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5';
+            trailingDot.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+          } else {
+            trailingBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
+            trailingDot.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
           }
-          document.getElementById('statTrapsCaught').innerText = label;
-          document.getElementById('statTrapSamples').innerText = `${trapData.n_samples || 0}`;
-        }
-
-        // 5. Circuit Breaker & Safety Status
-        const cbActive = data.circuit_breaker_active === true;
-        const cbBadge = document.getElementById('cbStatusBadge');
-        const riskStatus = document.getElementById('statRiskStatus');
-        if (cbActive) {
-          cbBadge.innerText = "TRIPPED";
-          cbBadge.className = "px-2 py-0.5 rounded-md bg-rose-950/40 text-rose-300 border border-rose-800/40 text-[10px] font-bold font-mono";
-          riskStatus.innerText = "Safety Lock Active";
-          riskStatus.className = "text-sm font-bold text-rose-300 font-mono";
-        } else {
-          cbBadge.innerText = "NORMAL";
-          cbBadge.className = "px-2 py-0.5 rounded-md bg-[#161f2c] border border-[#26354a] text-[10px] font-bold text-emerald-300 font-mono";
-          riskStatus.innerText = "Operational";
-          riskStatus.className = "text-sm font-bold text-emerald-300 font-mono";
-        }
-
-        // 6. Monitored Symbols & Primary Pair
-        const symbols = data.selected_symbols || [];
-        document.getElementById('monitoredSymbols').innerText = symbols.length ? `Pairs: ${symbols.join(', ')}` : 'Pairs: None';
-        document.getElementById('statPrimaryPair').innerText = symbols.length ? symbols[0] : 'None';
-
-        // 6b. Synchronize Pair Lot Size & Stop Loss Stepper Pods
-        syncPairsFromState(data.pairs_config, symbols);
-
-        // 7. AI Gate Switch status sync
-        if (typeof data.ai_confirmation_enabled === 'boolean') {
-          const gateCheckbox = document.getElementById('aiGateSwitch');
-          if (gateCheckbox && document.activeElement !== gateCheckbox) {
-            gateCheckbox.checked = data.ai_confirmation_enabled;
-          }
-        }
-
-        // 8. Night Window status sync
-        const isNight = Boolean(data.is_night_window);
-        const nightDot = document.getElementById('nightActiveDot');
-        if (nightDot) {
-          nightDot.className = isNight ? "w-2 h-2 rounded-full bg-indigo-400 animate-pulse" : "w-2 h-2 rounded-full bg-slate-600";
-        }
-
-        // 8b. October 5-Window Interval Sync
-        if (data.current_window) {
-          const win = data.current_window;
-          const label = document.getElementById('termCurrentWindowLabel');
-          if (label) {
-            label.innerText = `${win.window_name} (${win.start_time_local} - ${win.end_time_local})`;
-          }
-          const winDot = document.getElementById('termCurrentWindowDot');
-          if (winDot) {
-            winDot.className = win.is_night
-              ? "w-2 h-2 rounded-full bg-indigo-400 animate-pulse flex-shrink-0"
-              : "w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0";
-          }
-        }
-
-        // 9. Sync Clock
-        document.getElementById('lastUpdateTime').innerText = `Sync: ${new Date().toLocaleTimeString()}`;
-
-        // 10. Update Log Buffers
-        if (data.ml_logs && Array.isArray(data.ml_logs) && data.ml_logs.length > 0) {
-          mlLogs = data.ml_logs;
-        }
-        if (data.recent_logs && Array.isArray(data.recent_logs)) {
-          const newHash = data.recent_logs.slice(-3).join('|') + `_${data.recent_logs.length}_${(data.ml_logs || []).length}`;
-          if (newHash !== lastLogHash) {
-            allLogs = data.recent_logs;
-            lastLogHash = newHash;
-            renderLogs();
-          }
-        }
-
-      } catch (err) {
-        document.getElementById('connDot').className = "w-1.5 h-1.5 rounded-full bg-rose-500";
-        document.getElementById('connStatus').innerText = "DISCONNECTED";
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // BOT CONTROL ACTIONS (MOBILE & TABLET ONE-TOUCH TRIGGERS)
-    // -------------------------------------------------------------------------
-    async function activateBotMobile() {
-      if (isBotActive) return;
-      try {
-        const res = await fetch('/api/activate', { method: 'POST' });
-        const json = await res.json();
-        if (res.ok && json.status === 'success') {
-          showToast("🚀 Bot successfully ACTIVATED! Scanning markets...");
-          fetchLiveTelemetry();
-        } else {
-          showToast(json.message || "Failed to activate bot", true);
-        }
-      } catch (e) {
-        showToast("Network error activating bot", true);
-      }
-    }
-
-    async function haltBotMobile() {
-      try {
-        const res = await fetch('/api/deactivate', { method: 'POST' });
-        const json = await res.json();
-        if (res.ok) {
-          showToast("🛑 Emergency HALT sent! Bot execution paused.", true);
-          fetchLiveTelemetry();
-        } else {
-          showToast(json.message || "Failed to halt bot", true);
-        }
-      } catch (e) {
-        showToast("Network error sending halt", true);
-      }
-    }
-
-    function handleHeaderQuickAction() {
-      if (isBotActive) {
-        haltBotMobile();
-      } else {
-        activateBotMobile();
-      }
-    }
-
-    async function toggleAiGateMobile(checked) {
-      try {
-        await fetch('/api/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'save_configuration',
-            config: { aiGateEnabled: checked }
-          })
         });
-        showToast(`AI Sentinel Gate: ${checked ? 'ENABLED (≥75%)' : 'DISABLED'}`);
-      } catch (e) {
-        showToast("Failed to update AI Gate setting", true);
       }
-    }
 
-    async function syncWindowNowMobile() {
-      try {
-        const btn = document.getElementById('termSyncBtn');
-        if (btn) btn.classList.add('animate-pulse');
-        const res = await fetch('/api/windows/sync', { method: 'POST' });
-        const json = await res.json();
-        if (btn) btn.classList.remove('animate-pulse');
-        if (res.ok && json.status === 'success') {
-          showToast(`✅ Window synced to CSV (${json.saved_windows || 0} intervals)`);
-          fetchLiveTelemetry();
-        } else {
-          showToast(json.message || "Window sync complete", false);
+      // Transmit button feedback & live backend transmission
+      const applyBtn = document.getElementById('applyParamsBtn');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', async () => {
+          const original = applyBtn.innerHTML;
+          applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">sync</span><span>Syncing with HFT Gateway...</span>';
+          applyBtn.classList.replace('bg-brand-600', 'bg-slate-800');
+
+          try {
+            // Collect pair parameters
+            const pairUpdates = [];
+            pairCards.forEach(card => {
+              const symbol = card.getAttribute('data-symbol');
+              const lot = parseFloat(card.querySelector('.input-lot')?.value || 0.10);
+              const sl = parseFloat(card.querySelector('.input-sl')?.value || 25);
+              const active = !!card.querySelector('.pair-switch')?.checked;
+              pairUpdates.push({ symbol, lot, sl, active });
+            });
+
+            // Send each pair setting to backend /api/update
+            for (const p of pairUpdates) {
+              await fetch('/api/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update_pair_settings', pair: p.symbol, lot: p.lot, sl: p.sl })
+              });
+              await fetch('/api/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'toggle_pair', pair: p.symbol, active: p.active })
+              });
+            }
+
+            // Also update trailing stop mode if configured
+            const trailingOn = trailingToggle ? trailingToggle.checked : true;
+            await fetch('/api/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'toggle_trailing', enabled: trailingOn })
+            }).catch(() => {});
+
+            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Parameters Transmitted Successfully</span>';
+            applyBtn.classList.replace('bg-slate-800', 'bg-emerald-600');
+            setTimeout(() => {
+              applyBtn.innerHTML = original;
+              applyBtn.classList.replace('bg-emerald-600', 'bg-brand-600');
+            }, 1400);
+          } catch (err) {
+            console.error('Failed to transmit parameters:', err);
+            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">error</span><span>Transmission Error</span>';
+            applyBtn.classList.replace('bg-slate-800', 'bg-rose-600');
+            setTimeout(() => {
+              applyBtn.innerHTML = original;
+              applyBtn.classList.replace('bg-rose-600', 'bg-brand-600');
+            }, 1800);
+          }
+        });
+      }
+
+      // Live state poll to keep status and numbers fresh
+      async function pollLiveState() {
+        try {
+          const res = await fetch('/api/state');
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data && typeof data.is_active === 'boolean') {
+            updateBotUI(data.is_active);
+          }
+          if (data && data.broker_info && data.broker_info.account_id) {
+            const accEl = document.getElementById('headerAccountText');
+            if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
+          }
+        } catch (e) {
+          // ignore transient poll errors
         }
-      } catch (e) {
-        showToast("Error syncing window CSV", true);
       }
-    }
-
-    // Startup Execution
-    setupPwaBanner();
-    switchMobileTab('terminal');
-    fetchLiveTelemetry();
-    pollInterval = setInterval(fetchLiveTelemetry, 2000);
+      setInterval(pollLiveState, 4000);
+      pollLiveState();
+    })();
   </script>
-</body>
-</html>
+</body></html>

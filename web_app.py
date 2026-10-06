@@ -260,7 +260,29 @@ async def get_service_worker():
 @app.get("/terminal", response_class=HTMLResponse)
 async def serve_terminal(request: Request):
     """Serve the dedicated Mobile Terminal PWA web app."""
-    return templates.TemplateResponse(request=request, name="terminal.html")
+    tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
+    return templates.TemplateResponse(request=request, name=tpl)
+
+
+@app.get("/terminal/controls", response_class=HTMLResponse)
+async def serve_terminal_controls(request: Request):
+    """Serve Glacier Terminal Controls tab."""
+    return templates.TemplateResponse(request=request, name="terminal_controls.html")
+
+
+@app.get("/terminal/strategy", response_class=HTMLResponse)
+async def serve_terminal_strategy(request: Request):
+    """Serve Glacier Terminal Strategy tab."""
+    tpl = "terminal_strategy.html" if (TEMPLATES_DIR / "terminal_strategy.html").exists() else "terminal_controls.html"
+    return templates.TemplateResponse(request=request, name=tpl)
+
+
+@app.get("/terminal/analysis", response_class=HTMLResponse)
+async def serve_terminal_analysis(request: Request):
+    """Serve Glacier Terminal Analysis tab."""
+    tpl = "terminal_analysis.html" if (TEMPLATES_DIR / "terminal_analysis.html").exists() else "terminal_controls.html"
+    return templates.TemplateResponse(request=request, name=tpl)
+
 
 
 @app.get("/api/network-info")
@@ -408,6 +430,15 @@ async def get_bot_state():
                         "traps_caught": s_stat.get("traps", 0),
                         "genuine_setups": s_stat.get("genuine", 0),
                     }
+            shadow_perf = {}
+            if hasattr(bot_instance.trap_svc, "shadow_prediction_stats"):
+                try:
+                    shadow_perf = bot_instance.trap_svc.shadow_prediction_stats(
+                        threshold=getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50)
+                    )
+                except Exception as ex:
+                    shadow_perf = {"error": str(ex)}
+
             trap_stats = {
                 "model_version": bot_instance.trap_svc.model.version,
                 "n_samples": bot_instance.trap_svc.model.n_samples,
@@ -424,6 +455,7 @@ async def get_bot_state():
                 "total_today": today_stats.get("total", 0),
                 "gating_enabled": getattr(bot_instance.config, "ml_gating_enabled", True),
                 "strategies": strategy_models,
+                "shadow_performance": shadow_perf,
             }
         except Exception as e:
             trap_stats = {"error": str(e)}
@@ -672,8 +704,24 @@ async def handle_dashboard_update(payload: dict):
     elif action == "toggle_strategy":
         strat_id = payload.get("strategy")
         active = payload.get("active", True)
-        strat_map = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW", "reversal": "TREND_REVERSAL"}
-        strat_name = strat_map.get(strat_id, str(strat_id).upper())
+        strat_map = {
+            "smc": "SMC",
+            "swing": "SMC",
+            "scalp5m": "SMC_SCALP_5M",
+            "scalp-5m": "SMC_SCALP_5M",
+            "scalp_5m": "SMC_SCALP_5M",
+            "smc_scalp_5m": "SMC_SCALP_5M",
+            "ict": "ICT",
+            "ict-inst": "ICT",
+            "orderflow": "ORDER_FLOW",
+            "order-flow": "ORDER_FLOW",
+            "order_flow": "ORDER_FLOW",
+            "reversal": "TREND_REVERSAL",
+            "trend_reversal": "TREND_REVERSAL",
+            "trend-reversal": "TREND_REVERSAL",
+        }
+        lookup_key = str(strat_id).lower().replace(" ", "_")
+        strat_name = strat_map.get(lookup_key, strat_map.get(strat_id, str(strat_id).upper().replace("-", "_")))
         current = list(bot_instance.config.enabled_strategies)
         if active and strat_name not in current:
             current.append(strat_name)
@@ -681,11 +729,19 @@ async def handle_dashboard_update(payload: dict):
             current.remove(strat_name)
         bot_instance.config.enabled_strategies = current
 
-        if strat_id == "reversal" or strat_name == "TREND_REVERSAL":
+        if lookup_key in ("reversal", "trend_reversal", "trend-reversal") or strat_name == "TREND_REVERSAL":
             bot_instance.config.reversal_strategy_enabled = active
 
+        if hasattr(bot_instance, "strategy") and hasattr(bot_instance.strategy, "set_enabled_strategies"):
+            bot_instance.strategy.set_enabled_strategies(current)
+
         bot_instance.save_settings()
-        return {"status": "success", "enabled_strategies": current, "reversal_strategy_enabled": getattr(bot_instance.config, "reversal_strategy_enabled", False)}
+        return {
+            "status": "success",
+            "enabled_strategies": current,
+            "reversal_strategy_enabled": getattr(bot_instance.config, "reversal_strategy_enabled", False),
+            "message": f"Strategy {strat_name} {'enabled' if active else 'disabled'}"
+        }
 
     elif action == "toggle_pair":
         pair_id = payload.get("pair")
@@ -700,6 +756,12 @@ async def handle_dashboard_update(payload: dict):
         bot_instance.config.selected_symbols = current
         bot_instance.save_settings()
         return {"status": "success", "selected_symbols": current}
+
+    elif action == "toggle_trailing":
+        enabled = payload.get("enabled", True)
+        bot_instance.config.trailing_stop_mode = "STRUCTURE" if enabled else "NONE"
+        bot_instance.save_settings()
+        return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
     elif action == "update_pair_settings":
         pair_id = payload.get("pair")
@@ -757,12 +819,22 @@ async def handle_dashboard_update(payload: dict):
         strats = config.get("strategies", {})
         if strats:
             enabled_strats = []
+            strat_mapping = {
+                "smc": "SMC", "swing": "SMC",
+                "scalp5m": "SMC_SCALP_5M", "scalp-5m": "SMC_SCALP_5M", "scalp_5m": "SMC_SCALP_5M", "smc_scalp_5m": "SMC_SCALP_5M",
+                "ict": "ICT", "ict-inst": "ICT",
+                "orderflow": "ORDER_FLOW", "order-flow": "ORDER_FLOW", "order_flow": "ORDER_FLOW",
+                "reversal": "TREND_REVERSAL", "trend_reversal": "TREND_REVERSAL", "trend-reversal": "TREND_REVERSAL"
+            }
             for k, v in strats.items():
                 if v:
-                    strat_name = {"smc": "SMC", "scalp5m": "SMC_SCALP_5M", "ict": "ICT", "orderFlow": "ORDER_FLOW", "reversal": "TREND_REVERSAL"}.get(k, k.upper())
-                    enabled_strats.append(strat_name)
+                    strat_name = strat_mapping.get(str(k).lower().replace(" ", "_"), str(k).upper().replace("-", "_"))
+                    if strat_name not in enabled_strats:
+                        enabled_strats.append(strat_name)
             bot_instance.config.enabled_strategies = enabled_strats
             bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in enabled_strats)
+            if hasattr(bot_instance, "strategy") and hasattr(bot_instance.strategy, "set_enabled_strategies"):
+                bot_instance.strategy.set_enabled_strategies(enabled_strats)
 
         pairs = config.get("pairs", {})
         if pairs:
@@ -1327,6 +1399,19 @@ async def sync_windows_from_database():
         "new_intervals_added": added,
         "total_intervals": len(window_recorder.read_all_records()),
     }
+
+
+
+@app.get("/api/ml/shadow-stats")
+async def get_ml_shadow_stats(threshold: float = 0.50):
+    """Return AI Shadow Mode prediction accuracy and evaluation metrics."""
+    if not bot_instance or not hasattr(bot_instance, "trap_svc") or not bot_instance.trap_svc:
+        return {"status": "inactive", "message": "ML Trap Detector not initialized"}
+    try:
+        stats = bot_instance.trap_svc.shadow_prediction_stats(threshold=threshold)
+        return {"status": "success", **stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
