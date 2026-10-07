@@ -500,25 +500,6 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to sync sessions CSV: {e}")
     
-    def get_daily_summary(self, today: date | None = None) -> dict:
-        """Batch query for realized PnL, trade count, and circuit breaker status for today (UTC)."""
-        if today is None:
-            today = datetime.now(timezone.utc).date()
-        date_str = today.isoformat()
-        with self._lock:
-            cursor = self.conn.execute(
-                'SELECT realized_pnl, trade_count, circuit_breaker_active FROM daily_state WHERE date = ?',
-                (date_str,)
-            )
-            row = cursor.fetchone()
-        if row:
-            return {
-                "realized_pnl": float(row['realized_pnl']),
-                "trade_count": int(row['trade_count']),
-                "circuit_breaker_active": bool(row['circuit_breaker_active']),
-            }
-        return {"realized_pnl": 0.0, "trade_count": 0, "circuit_breaker_active": False}
-
     def get_daily_pnl(self, today: date | None = None) -> float:
         """Sum of realized PnL for today (UTC)."""
         if today is None:
