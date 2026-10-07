@@ -5,24 +5,24 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-primary"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>LIVE</span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Strategy</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="stratLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="stratAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 pt-2 pb-6 max-w-xl mx-auto space-y-4 select-none">
+  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium {% if is_active %}text-primary{% else %}text-secondary{% endif %}" id="headerLiveStatusBadge"><span class="w-1.5 h-1.5 rounded-full {% if is_active %}bg-primary animate-pulse{% else %}bg-secondary{% endif %}" id="headerLiveDot"></span><span id="headerLiveText">{% if is_active %}LIVE{% else %}STANDBY{% endif %}</span></span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Strategy</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="stratLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="stratAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 pt-2 pb-6 max-w-xl mx-auto space-y-4 select-none">
 
 <!-- Live Engine Status & Risk Protection Banner (No extra buttons) -->
 <div class="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-sm transition-all duration-200" id="engineStatusBanner">
   <div class="flex items-center gap-2.5 min-w-0">
-    <div class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-primary-container text-primary" id="statusBeaconOrb">
-      <span class="material-symbols-outlined text-[18px]" id="statusBeaconIcon">lock</span>
-      <span class="absolute -top-0.5 -right-0.5 flex h-2 w-2" id="statusPulseDot">
+    <div class="relative flex items-center justify-center w-8 h-8 rounded-lg {% if is_active %}bg-primary-container text-primary{% else %}bg-surface-container-high text-on-surface-variant{% endif %}" id="statusBeaconOrb">
+      <span class="material-symbols-outlined text-[18px]" id="statusBeaconIcon">{% if is_active %}lock{% else %}tune{% endif %}</span>
+      <span class="absolute -top-0.5 -right-0.5 flex h-2 w-2 {% if not is_active %}hidden{% endif %}" id="statusPulseDot">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
         <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
       </span>
     </div>
     <div class="flex flex-col min-w-0">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-semibold text-on-surface" id="statusBannerTitle">BOT ACTIVE</span>
-        <span class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20" id="statusBannerBadge">STRATEGIES BLOCKED</span>
+        <span class="text-xs font-semibold text-on-surface" id="statusBannerTitle">{% if is_active %}BOT ACTIVE{% else %}BOT STANDBY{% endif %}</span>
+        <span class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full {% if is_active %}bg-primary/10 text-primary border border-primary/20{% else %}bg-secondary/10 text-secondary border border-secondary/20{% endif %}" id="statusBannerBadge">{% if is_active %}STRATEGIES BLOCKED{% else %}EDITABLE{% endif %}</span>
       </div>
-      <span class="text-[10px] text-on-surface-variant truncate" id="statusBannerSubtitle">All algorithms locked during live execution to protect risk limits</span>
+      <span class="text-[10px] text-on-surface-variant truncate" id="statusBannerSubtitle">{% if is_active %}All algorithms locked during live execution to protect risk limits{% else %}Engines idle — Click strategy cards to enable or disable{% endif %}</span>
     </div>
   </div>
 </div>
@@ -258,7 +258,7 @@
 
 <script>
   (function() {
-    let isBotActive = true;
+    let isBotActive = {{ 'true' if is_active else 'false' }};
 
     const statusBanner = document.getElementById('engineStatusBanner');
     const statusBannerTitle = document.getElementById('statusBannerTitle');
@@ -337,6 +337,9 @@
       }
     }
 
+    // Immediately reflect initial server state
+    updateBotState(isBotActive);
+
     function setCardVisualState(card, isEnabled) {
       if (!card) return;
       card.setAttribute('data-active', isEnabled ? 'true' : 'false');
@@ -369,7 +372,7 @@
     async function handleToggleClick(card) {
       if (!card) return;
       if (isBotActive) {
-        showToast('⚠️ Bot is ACTIVE: All strategies are automatically BLOCKED from modification.');
+        showToast('⚠️ Bot is ACTIVE: Strategy modifications are locked during live trading. Switch to STANDBY in Controls first.');
         return;
       }
 
@@ -500,7 +503,16 @@
           updateActiveLoadCounter();
         }
 
-        // 4. Live win rates per strategy
+        // 4. Live win rates per strategy & aggregate metrics
+        if (s.win_rate !== undefined) {
+          const winEl = document.getElementById('weightedWinVal');
+          if (winEl) winEl.textContent = `${parseFloat(s.win_rate).toFixed(1)}%`;
+        }
+        if (s.sharpe_ratio !== undefined && s.sharpe_ratio !== null) {
+          const sharpeEl = document.getElementById('combinedSharpeVal');
+          if (sharpeEl) sharpeEl.textContent = parseFloat(s.sharpe_ratio).toFixed(2);
+        }
+
         if (s.stats_by_strategy) {
           const stats = s.stats_by_strategy;
           function setWR(cardId, keys) {
@@ -513,11 +525,11 @@
               if (el) el.textContent = `${parseFloat(found.win_rate).toFixed(1)}%`;
             }
           }
-          setWR('scalp-5m', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m']);
-          setWR('ict-inst', ['ICT Institutional', 'ICT', 'ict']);
-          setWR('swing', ['SMC Swing', 'SMC', 'smc']);
-          setWR('order-flow', ['Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
-          setWR('reversal', ['Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
+          setWR('scalp-5m', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m', '5m scalp']);
+          setWR('ict-inst', ['ICT', 'ICT Institutional', 'ict']);
+          setWR('swing', ['SMC Swing', 'SMC', 'smc', 'Swing']);
+          setWR('order-flow', ['Order Flow', 'Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
+          setWR('reversal', ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
         }
       } catch (err) {
         // silent transient polling error

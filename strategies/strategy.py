@@ -2892,7 +2892,7 @@ class StrategyEngine:
         if self.trading_config and hasattr(self.trading_config, 'enabled_strategies'):
             self.enabled_strategies: list[str] = [s for s in self.trading_config.enabled_strategies if s in self.strategies]
         else:
-            self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"]
+            self.enabled_strategies: list[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"]
 
     @property
     def active_strategies(self) -> list[BaseStrategy]:

@@ -651,11 +651,11 @@ class TradingConfig(BaseModel):
     
     # Multi-strategy concurrent execution
     enabled_strategies: List[str] = Field(
-        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW"],
-        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW).",
+        default_factory=lambda: ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"],
+        description="List of strategies running concurrently (SMC, SMC_SCALP_5M, ICT, ORDER_FLOW, TREND_REVERSAL).",
     )
     reversal_strategy_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Enable Institutional Reversal Zone scanning, alerts, and Reversal Guard filtering.",
     )
     

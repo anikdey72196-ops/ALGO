@@ -281,6 +281,11 @@ class TradingBot:
                             target_cfg.active_gating = self.config.temporal_ml_enabled
                 if "reversal_strategy_enabled" in saved:
                     self.config.reversal_strategy_enabled = bool(saved["reversal_strategy_enabled"])
+                    if self.config.reversal_strategy_enabled and "TREND_REVERSAL" not in self.config.enabled_strategies:
+                        self.config.enabled_strategies.append("TREND_REVERSAL")
+                        self.strategy.set_enabled_strategies(self.config.enabled_strategies)
+                if "is_active" in saved and isinstance(saved["is_active"], bool):
+                    self.is_active = saved["is_active"]
                 if "ml_shadow_mode" in saved:
                     self.config.ml_shadow_mode = bool(saved["ml_shadow_mode"])
                     if hasattr(self, "trap_svc") and self.trap_svc:
@@ -348,6 +353,7 @@ class TradingBot:
                 "ml_shadow_mode": getattr(self.config, "ml_shadow_mode", True),
                 "temporal_ml_enabled": getattr(self.config, "temporal_ml_enabled", True),
                 "reversal_strategy_enabled": getattr(self.config, "reversal_strategy_enabled", False),
+                "is_active": self.is_active,
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)

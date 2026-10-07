@@ -5,7 +5,7 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-primary"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>LIVE</span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Analysis</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="analysisLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="analysisAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 py-4 space-y-5 max-w-xl mx-auto">
+  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium {% if is_active %}text-primary{% else %}text-secondary{% endif %}" id="headerLiveStatusBadge"><span class="w-1.5 h-1.5 rounded-full {% if is_active %}bg-primary animate-pulse{% else %}bg-secondary{% endif %}" id="headerLiveDot"></span><span id="headerLiveText">{% if is_active %}LIVE{% else %}STANDBY{% endif %}</span></span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Analysis</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="analysisLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="analysisAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 py-4 space-y-5 max-w-xl mx-auto">
 <!-- Ambient Frozen Glow Orbs (Subtle Depth) -->
 <div class="relative w-full">
 <div class="absolute -top-10 -left-12 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -134,16 +134,16 @@
 <svg aria-label="Strategy distribution donut chart" class="w-full h-full -rotate-90" role="img" viewbox="0 0 120 120">
 <!-- Background Ring -->
 <circle class="text-surface-container-highest" cx="60" cy="60" fill="none" r="46" stroke="currentColor" stroke-width="13"></circle>
-<!-- 5m Scalp: 32% -->
-<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#7dd3fc" stroke-dasharray="92.49 196.53" stroke-dashoffset="0" stroke-linecap="butt" stroke-width="13"></circle>
-<!-- ICT Inst: 28% -->
-<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#88b4cc" stroke-dasharray="80.93 208.09" stroke-dashoffset="-92.49" stroke-linecap="butt" stroke-width="13"></circle>
-<!-- Swing: 20% -->
-<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c8a0f0" stroke-dasharray="57.80 231.22" stroke-dashoffset="-173.42" stroke-linecap="butt" stroke-width="13"></circle>
-<!-- Order Flow: 12% -->
-<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c0d8e8" stroke-dasharray="34.68 254.34" stroke-dashoffset="-231.22" stroke-linecap="butt" stroke-width="13"></circle>
-<!-- Reversal: 8% -->
-<circle class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#4a6070" stroke-dasharray="23.12 265.90" stroke-dashoffset="-265.90" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- 5m Scalp -->
+<circle id="donutSlice1" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#7dd3fc" stroke-dasharray="92.49 196.53" stroke-dashoffset="0" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- ICT Inst -->
+<circle id="donutSlice2" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#88b4cc" stroke-dasharray="80.93 208.09" stroke-dashoffset="-92.49" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Swing -->
+<circle id="donutSlice3" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c8a0f0" stroke-dasharray="57.80 231.22" stroke-dashoffset="-173.42" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Order Flow -->
+<circle id="donutSlice4" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c0d8e8" stroke-dasharray="34.68 254.34" stroke-dashoffset="-231.22" stroke-linecap="butt" stroke-width="13"></circle>
+<!-- Reversal -->
+<circle id="donutSlice5" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#4a6070" stroke-dasharray="23.12 265.90" stroke-dashoffset="-265.90" stroke-linecap="butt" stroke-width="13"></circle>
 </svg>
 <!-- Center Metric Counter -->
 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -237,32 +237,32 @@
 <text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="103">40%</text>
 <!-- Bar 1: XAUUSD -->
 <g class="group cursor-pointer">
-<rect fill="#7dd3fc" height="102" opacity="0.9" rx="4" width="30" x="22" y="23" id="barRect1"></rect>
-<text class="text-[9px] fill-primary font-bold font-mono" text-anchor="middle" x="37" y="17" id="barVal1">78.4%</text>
+<rect fill="#7dd3fc" height="37" opacity="0.9" rx="4" width="30" x="22" y="88" id="barRect1"></rect>
+<text class="text-[9px] fill-primary font-bold font-mono" text-anchor="middle" x="37" y="82" id="barVal1">28.2%</text>
 <text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="37" y="140">XAUUSD</text>
 </g>
 <!-- Bar 2: GBPUSD -->
 <g class="group cursor-pointer">
-<rect fill="#88b4cc" height="93" opacity="0.85" rx="4" width="30" x="88" y="32" id="barRect2"></rect>
-<text class="text-[9px] fill-secondary font-bold font-mono" text-anchor="middle" x="103" y="26" id="barVal2">71.2%</text>
+<rect fill="#88b4cc" height="51" opacity="0.85" rx="4" width="30" x="88" y="74" id="barRect2"></rect>
+<text class="text-[9px] fill-secondary font-bold font-mono" text-anchor="middle" x="103" y="68" id="barVal2">38.8%</text>
 <text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="103" y="140">GBPUSD</text>
 </g>
 <!-- Bar 3: EURUSD -->
 <g class="group cursor-pointer">
-<rect fill="#7dd3fc" height="85" opacity="0.7" rx="4" width="30" x="154" y="40" id="barRect3"></rect>
-<text class="text-[9px] fill-primary-fixed font-bold font-mono" text-anchor="middle" x="169" y="34" id="barVal3">65.0%</text>
+<rect fill="#7dd3fc" height="55" opacity="0.7" rx="4" width="30" x="154" y="70" id="barRect3"></rect>
+<text class="text-[9px] fill-primary-fixed font-bold font-mono" text-anchor="middle" x="169" y="64" id="barVal3">41.8%</text>
 <text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="169" y="140">EURUSD</text>
 </g>
 <!-- Bar 4: BTCUSD -->
 <g class="group cursor-pointer">
-<rect fill="#c8a0f0" height="81" opacity="0.85" rx="4" width="30" x="220" y="44" id="barRect4"></rect>
-<text class="text-[9px] fill-tertiary font-bold font-mono" text-anchor="middle" x="235" y="38" id="barVal4">62.5%</text>
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="30" x="220" y="122" id="barRect4"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="235" y="117" id="barVal4">0 Trd</text>
 <text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="235" y="140">BTCUSD</text>
 </g>
 <!-- Bar 5: ETHUSD -->
 <g class="group cursor-pointer">
-<rect fill="#4a6070" height="74" opacity="0.9" rx="4" width="30" x="286" y="51" id="barRect5"></rect>
-<text class="text-[9px] fill-on-surface-variant font-bold font-mono" text-anchor="middle" x="301" y="45" id="barVal5">56.8%</text>
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="30" x="286" y="122" id="barRect5"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="301" y="117" id="barVal5">0 Trd</text>
 <text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="301" y="140">ETHUSD</text>
 </g>
 </svg>
@@ -513,15 +513,50 @@
       if (stateRes.ok) {
         const s = await stateRes.json();
         
-        // Accuracy & Metrics
+        // Header live status sync
+        if (typeof s.is_active === 'boolean') {
+          const badge = document.getElementById('headerLiveStatusBadge');
+          const dot = document.getElementById('headerLiveDot');
+          const text = document.getElementById('headerLiveText');
+          if (badge && dot && text) {
+            if (s.is_active) {
+              badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-primary';
+              dot.className = 'w-1.5 h-1.5 rounded-full bg-primary animate-pulse';
+              text.textContent = 'LIVE';
+            } else {
+              badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-secondary';
+              dot.className = 'w-1.5 h-1.5 rounded-full bg-secondary';
+              text.textContent = 'STANDBY';
+            }
+          }
+        }
+
+        // Accuracy & Metrics KPI strip
         if (s.accuracy !== undefined) {
           const accVal = parseFloat(s.accuracy).toFixed(1);
-          document.getElementById('overallAccuracyVal').textContent = `${accVal}%`;
+          const accValEl = document.getElementById('overallAccuracyVal');
+          if (accValEl) accValEl.textContent = `${accVal}%`;
           const accBar = document.getElementById('overallAccuracyBar');
           if (accBar) accBar.style.width = `${Math.min(100, Math.max(0, accVal))}%`;
         }
         if (s.total_closed_trades !== undefined) {
-          document.getElementById('closedPositionsVal').textContent = s.total_closed_trades;
+          const closedEl = document.getElementById('closedPositionsVal');
+          if (closedEl) closedEl.textContent = s.total_closed_trades;
+          const closedSub = document.getElementById('closedPositionsSub');
+          if (closedSub) closedSub.textContent = `${s.winning_trades || 0}W / ${s.losing_trades || 0}L`;
+        }
+
+        // Risk / Reward Ratio from performance_metrics
+        if (s.performance_metrics) {
+          const pm = s.performance_metrics;
+          const rrEl = document.getElementById('avgRRVal');
+          if (rrEl) {
+            if (pm.formatted_avg_rr) {
+              rrEl.textContent = pm.formatted_avg_rr.replace(':', ' : ');
+            } else if (pm.avg_planned_rr) {
+              rrEl.textContent = `1 : ${parseFloat(pm.avg_planned_rr).toFixed(1)}`;
+            }
+          }
         }
 
         // Account info
@@ -533,16 +568,18 @@
         // Market daily bias
         if (s.daily_bias && s.daily_bias.bias) {
           const biasDir = s.daily_bias.bias.toUpperCase();
-          document.getElementById('marketBiasDirection').textContent = biasDir;
+          const dirEl = document.getElementById('marketBiasDirection');
+          if (dirEl) dirEl.textContent = biasDir;
           const score = s.daily_bias.score !== undefined ? (s.daily_bias.score > 0 ? `+${s.daily_bias.score.toFixed(2)}` : s.daily_bias.score.toFixed(2)) : '+0.72';
-          document.getElementById('marketBiasIndex').textContent = `${score} IX`;
+          const idxEl = document.getElementById('marketBiasIndex');
+          if (idxEl) idxEl.textContent = `${score} IX`;
           const icon = document.getElementById('marketBiasIcon');
           if (icon) {
             icon.textContent = biasDir === 'BEARISH' ? 'south_east' : (biasDir === 'BULLISH' ? 'north_east' : 'sync_alt');
           }
         }
 
-        // Performance by strategy
+        // Performance by strategy (cards + dynamic donut chart)
         if (s.stats_by_strategy) {
           const strats = s.stats_by_strategy;
           function updateStrat(cardPrefix, names) {
@@ -558,7 +595,7 @@
               const losses = found.losing_trades || found.losses || 0;
               const total = wins + losses || 1;
               const tpRatio = ((wins / total) * 100).toFixed(1);
-              const slRatio = (100 - tpRatio).toFixed(1);
+              const slRatio = (100 - parseFloat(tpRatio)).toFixed(1);
 
               const barTP = document.getElementById(cardPrefix + 'BarTP');
               const barSL = document.getElementById(cardPrefix + 'BarSL');
@@ -571,31 +608,117 @@
               if (slText) slText.innerHTML = `<span class="material-symbols-outlined text-[12px]">close</span> SL Hit: ${losses}`;
             }
           }
-          updateStrat('scalp', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m']);
-          updateStrat('ict', ['ICT Institutional', 'ICT', 'ict']);
-          updateStrat('swing', ['SMC Swing', 'SMC', 'smc']);
-          updateStrat('of', ['Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
-          updateStrat('rev', ['Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
+          updateStrat('scalp', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m', '5m scalp']);
+          updateStrat('ict', ['ICT', 'ICT Institutional', 'ict']);
+          updateStrat('swing', ['SMC Swing', 'SMC', 'smc', 'Swing']);
+          updateStrat('of', ['Order Flow', 'Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
+          updateStrat('rev', ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
+
+          // Dynamic Strategy Allocation Donut Chart
+          const stratList = [
+            { id: '1', keys: ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m', '5m scalp'], name: '5m Scalp' },
+            { id: '2', keys: ['ICT', 'ICT Institutional', 'ict'], name: 'ICT Inst' },
+            { id: '3', keys: ['SMC Swing', 'SMC', 'smc', 'Swing'], name: 'Swing' },
+            { id: '4', keys: ['Order Flow', 'Order Flow Engine', 'ORDER_FLOW', 'orderFlow'], name: 'Order Flow' },
+            { id: '5', keys: ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal'], name: 'Reversal' }
+          ];
+
+          let totalStratTrades = 0;
+          const stratData = stratList.map(st => {
+            let found = null;
+            for (const k of st.keys) {
+              if (strats[k]) { found = strats[k]; break; }
+            }
+            const trds = found ? (found.total_trades || found.total || 0) : 0;
+            const wr = found && found.win_rate !== undefined ? parseFloat(found.win_rate).toFixed(1) : '0.0';
+            totalStratTrades += trds;
+            return { ...st, trades: trds, winRate: wr, found };
+          });
+
+          const C = 289.0265; // 2 * PI * 46
+          let currentOffset = 0;
+          let topStrat = stratData[0];
+
+          stratData.forEach(st => {
+            if (st.trades > topStrat.trades) topStrat = st;
+            const volPct = totalStratTrades > 0 ? (st.trades / totalStratTrades) : 0.2;
+            const arcLen = volPct * C;
+            const slice = document.getElementById(`donutSlice${st.id}`);
+            if (slice) {
+              slice.setAttribute('stroke-dasharray', `${arcLen.toFixed(2)} ${(C - arcLen).toFixed(2)}`);
+              slice.setAttribute('stroke-dashoffset', `-${currentOffset.toFixed(2)}`);
+            }
+            currentOffset += arcLen;
+
+            const volEl = document.getElementById(`stratVol${st.id}`);
+            const winEl = document.getElementById(`stratWin${st.id}`);
+            if (volEl) volEl.textContent = `${(volPct * 100).toFixed(1)}% vol`;
+            if (winEl) winEl.textContent = `${st.winRate}% win`;
+          });
+
+          const primaryNameEl = document.getElementById('donutPrimaryName');
+          const primaryPctEl = document.getElementById('donutPrimaryPct');
+          if (primaryNameEl && topStrat) primaryNameEl.textContent = topStrat.name;
+          if (primaryPctEl && totalStratTrades > 0) primaryPctEl.textContent = `${((topStrat.trades / totalStratTrades) * 100).toFixed(0)}%`;
         }
 
-        // Performance by pair
+        // Performance by pair (Real SVG Bar Graph with flat zero-baseline for un-traded pairs)
         if (s.stats_by_pair) {
           const pairs = s.stats_by_pair;
           const pairKeys = ['XAUUSD', 'GBPUSD', 'EURUSD', 'BTCUSD', 'ETHUSD'];
           pairKeys.forEach((sym, idx) => {
             const p = pairs[sym];
-            if (p) {
+            const valEl = document.getElementById(`barVal${idx + 1}`);
+            const rectEl = document.getElementById(`barRect${idx + 1}`);
+            const total = p ? (p.total || p.total_trades || 0) : 0;
+            if (p && total > 0) {
               const wr = parseFloat(p.win_rate || 0).toFixed(1);
-              const valEl = document.getElementById(`barVal${idx + 1}`);
-              const rectEl = document.getElementById(`barRect${idx + 1}`);
-              if (valEl) valEl.textContent = `${wr}%`;
+              const h = Math.max(12, Math.min(105, Math.round(wr * 1.3125)));
               if (rectEl) {
-                const h = Math.max(10, Math.min(115, Math.round(wr * 1.3)));
                 rectEl.setAttribute('height', h);
                 rectEl.setAttribute('y', 125 - h);
+                rectEl.setAttribute('opacity', '0.9');
+                if (idx === 0) rectEl.setAttribute('fill', '#7dd3fc');
+                else if (idx === 1) rectEl.setAttribute('fill', '#88b4cc');
+                else if (idx === 2) rectEl.setAttribute('fill', '#7dd3fc');
+              }
+              if (valEl) {
+                valEl.textContent = `${wr}%`;
+                valEl.setAttribute('y', Math.max(15, 125 - h - 5));
+                valEl.setAttribute('fill', idx === 1 ? '#88b4cc' : '#7dd3fc');
+              }
+            } else {
+              // Exact 0 trades: draw baseline bar, flat 0 indicator (avoids fake bars for BTC/ETH)
+              if (rectEl) {
+                rectEl.setAttribute('height', 3);
+                rectEl.setAttribute('y', 122);
+                rectEl.setAttribute('opacity', '0.25');
+                rectEl.setAttribute('fill', '#475569');
+              }
+              if (valEl) {
+                valEl.textContent = '0 Trd';
+                valEl.setAttribute('y', 117);
+                valEl.setAttribute('fill', '#64748b');
               }
             }
           });
+
+          // Top Yield and Best Win Rate from real pair stats
+          const tradedPairs = Object.values(pairs).filter(x => x && (x.total > 0 || x.total_trades > 0));
+          if (tradedPairs.length > 0) {
+            const topYield = [...tradedPairs].sort((a, b) => (b.pnl || b.total_pnl || 0) - (a.pnl || a.total_pnl || 0))[0];
+            const bestWR = [...tradedPairs].sort((a, b) => (b.win_rate || 0) - (a.win_rate || 0))[0];
+            const topLabel = document.getElementById('topYieldLabel');
+            if (topLabel && topYield) {
+              const pnl = topYield.pnl || topYield.total_pnl || 0;
+              const pnlSign = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+              topLabel.innerHTML = `Top Yield: <strong class="text-primary font-semibold">${topYield.symbol} (${pnlSign})</strong>`;
+            }
+            const lowLabel = document.getElementById('lowDrawdownLabel');
+            if (lowLabel && bestWR) {
+              lowLabel.innerHTML = `Best Win Rate: <strong class="text-on-surface font-semibold">${bestWR.symbol} (${bestWR.win_rate}%)</strong>`;
+            }
+          }
         }
       }
 
@@ -606,22 +729,28 @@
         if (shadow && shadow.status === 'success') {
           // Model badge & accuracy
           const accVal = parseFloat(shadow.prediction_accuracy_pct || 0).toFixed(1);
-          document.getElementById('shadowAccuracyVal').textContent = `${accVal}%`;
-          document.getElementById('modalAcc').textContent = `${accVal}%`;
+          const shadowAccEl = document.getElementById('shadowAccuracyVal');
+          if (shadowAccEl) shadowAccEl.textContent = `${accVal}%`;
+          const modalAccEl = document.getElementById('modalAcc');
+          if (modalAccEl) modalAccEl.textContent = `${accVal}%`;
 
           const evaluated = shadow.evaluated_events || shadow.predicted_events || 0;
-          document.getElementById('shadowSignalsText').textContent = `Real-time Shadow Benchmark • ${evaluated} Signals Evaluated`;
-          document.getElementById('modalSubhead').textContent = `Evaluated: ${evaluated} setups across active pairs`;
+          const signalsTextEl = document.getElementById('shadowSignalsText');
+          if (signalsTextEl) signalsTextEl.textContent = `Real-time Shadow Benchmark • ${evaluated} Signals Evaluated`;
+          const modalSubheadEl = document.getElementById('modalSubhead');
+          if (modalSubheadEl) modalSubheadEl.textContent = `Evaluated: ${evaluated} setups across active pairs`;
 
           const trapsRate = parseFloat(shadow.trap_detection_rate_pct || 0).toFixed(1);
           const trapsCaught = shadow.traps_caught || 0;
           const totalTraps = shadow.total_traps || 0;
           const trapEl = document.getElementById('shadowTrapsRate');
           if (trapEl) trapEl.textContent = `${trapsRate}%`;
-          document.getElementById('modalTraps').textContent = `${trapsCaught}/${totalTraps}`;
+          const modalTrapsEl = document.getElementById('modalTraps');
+          if (modalTrapsEl) modalTrapsEl.textContent = `${trapsCaught}/${totalTraps}`;
 
           const winRate = parseFloat(shadow.win_prediction_rate_pct || 0).toFixed(1);
-          document.getElementById('modalWins').textContent = `${winRate}%`;
+          const modalWinsEl = document.getElementById('modalWins');
+          if (modalWinsEl) modalWinsEl.textContent = `${winRate}%`;
 
           // Render recent predictions log
           const logContainer = document.getElementById('shadowLogEntries');

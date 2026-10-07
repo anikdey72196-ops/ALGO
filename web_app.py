@@ -295,28 +295,28 @@ async def get_service_worker():
 async def serve_terminal(request: Request):
     """Serve the dedicated Mobile Terminal PWA web app."""
     tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
-    return templates.TemplateResponse(request=request, name=tpl)
+    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
 
 
 @app.get("/terminal/controls", response_class=HTMLResponse)
 async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
     tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
-    return templates.TemplateResponse(request=request, name=tpl)
+    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
 
 
 @app.get("/terminal/strategy", response_class=HTMLResponse)
 async def serve_terminal_strategy(request: Request):
     """Serve Glacier Terminal Strategy tab."""
     tpl = "terminal_strategy.html" if (TEMPLATES_DIR / "terminal_strategy.html").exists() else "terminal_controls.html"
-    return templates.TemplateResponse(request=request, name=tpl)
+    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
 
 
 @app.get("/terminal/analysis", response_class=HTMLResponse)
 async def serve_terminal_analysis(request: Request):
     """Serve Glacier Terminal Analysis tab."""
     tpl = "terminal_analysis.html" if (TEMPLATES_DIR / "terminal_analysis.html").exists() else "terminal_controls.html"
-    return templates.TemplateResponse(request=request, name=tpl)
+    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
 
 
 
@@ -806,6 +806,7 @@ async def activate_bot():
     bot_instance.config.selected_symbols = active_syms
 
     bot_instance.is_active = True
+    bot_instance.save_settings()
     invalidate_state_cache()
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols,
@@ -839,6 +840,7 @@ async def deactivate_bot():
         return {"status": "already_inactive", "message": "Bot is already deactivated."}
 
     bot_instance.is_active = False
+    bot_instance.save_settings()
     invalidate_state_cache()
     closed_id = bot_instance.state.record_deactivation("Manual User Stop")
     bot_instance.log(f"🔴 BOT DEACTIVATED by user (Session #{closed_id or '---'}). No trade execution will occur.")
@@ -948,12 +950,73 @@ async def handle_dashboard_update(payload: dict):
         bot_instance.save_settings()
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
+    elif action == "save_all_pairs":
+        pairs_data = payload.get("pairs", {})
+        if not pairs_data:
+            raise HTTPException(status_code=400, detail="No pair configuration provided")
+
+        if isinstance(pairs_data, list):
+            pairs_dict = {}
+            for item in pairs_data:
+                if isinstance(item, dict) and "symbol" in item:
+                    pairs_dict[item["symbol"]] = item
+            pairs_data = pairs_dict
+
+        from core.config import PairSettings
+        if not hasattr(bot_instance.config, "pair_configs"):
+            bot_instance.config.pair_configs = {}
+
+        selected_symbols = list(bot_instance.config.selected_symbols)
+        for sym_raw, p_vals in pairs_data.items():
+            sym = str(sym_raw).upper().strip()
+            if sym not in bot_instance.config.pair_configs:
+                bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+
+            p_cfg = bot_instance.config.pair_configs[sym]
+            if "lot" in p_vals and p_vals["lot"] is not None:
+                p_cfg.fixed_lot_size = round(float(p_vals["lot"]), 2)
+            if "sl" in p_vals and p_vals["sl"] is not None:
+                p_cfg.fixed_sl_pips = round(float(p_vals["sl"]), 1)
+            if "enabled" in p_vals:
+                is_en = bool(p_vals["enabled"])
+                p_cfg.enabled = is_en
+                if is_en and sym not in selected_symbols:
+                    selected_symbols.append(sym)
+                elif not is_en and sym in selected_symbols:
+                    selected_symbols.remove(sym)
+
+            # Sync primary pair references
+            if getattr(bot_instance.config, "pair1", None) and bot_instance.config.pair1.symbol == sym:
+                if p_cfg.fixed_lot_size is not None: bot_instance.config.pair1.fixed_lot_size = p_cfg.fixed_lot_size
+                if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair1.fixed_sl_pips = p_cfg.fixed_sl_pips
+                if "enabled" in p_vals: bot_instance.config.pair1.enabled = p_cfg.enabled
+            elif getattr(bot_instance.config, "pair2", None) and bot_instance.config.pair2.symbol == sym:
+                if p_cfg.fixed_lot_size is not None: bot_instance.config.pair2.fixed_lot_size = p_cfg.fixed_lot_size
+                if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair2.fixed_sl_pips = p_cfg.fixed_sl_pips
+                if "enabled" in p_vals: bot_instance.config.pair2.enabled = p_cfg.enabled
+            elif getattr(bot_instance.config, "pair3", None) and bot_instance.config.pair3.symbol == sym:
+                if p_cfg.fixed_lot_size is not None: bot_instance.config.pair3.fixed_lot_size = p_cfg.fixed_lot_size
+                if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair3.fixed_sl_pips = p_cfg.fixed_sl_pips
+                if "enabled" in p_vals: bot_instance.config.pair3.enabled = p_cfg.enabled
+
+        bot_instance.config.selected_symbols = selected_symbols
+        bot_instance.save_settings()
+        invalidate_state_cache()
+        bot_instance.log(f"💾 Applied & saved all pair parameters to Engine: {list(pairs_data.keys())}")
+        return {
+            "status": "success",
+            "message": "All pair parameters successfully saved and transmitted to Engine",
+            "pairs": {
+                s: {
+                    "lot": bot_instance.config.pair_configs[s].fixed_lot_size,
+                    "sl": bot_instance.config.pair_configs[s].fixed_sl_pips,
+                    "enabled": bot_instance.config.pair_configs[s].enabled,
+                }
+                for s in bot_instance.config.pair_configs
+            }
+        }
+
     elif action == "update_pair_settings":
-        if bot_instance.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail="Pair risk settings are LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
-            )
         pair_id = payload.get("pair")
         lot_val = payload.get("lot")
         sl_val = payload.get("sl")
@@ -987,6 +1050,7 @@ async def handle_dashboard_update(payload: dict):
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
         bot_instance.save_settings()
+        invalidate_state_cache()
         return {
             "status": "success",
             "symbol": sym,

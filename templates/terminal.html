@@ -1,4 +1,4 @@
-<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<!DOCTYPE html><html class="light" lang="en"><head>
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
 <meta content="mobile_tab" name="shell-type">
@@ -80,9 +80,10 @@
 <div class="flex flex-col min-w-0">
 <div class="flex items-center gap-1.5">
 <span class="text-xs font-bold tracking-wider uppercase text-slate-900 truncate">GLACIER</span>
-<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200" id="headerLiveStatusBadge">
-<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" id="headerLiveDot"></span><span id="headerLiveStatusText">LIVE</span>
-            </span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded {% if is_active %}bg-emerald-50 text-emerald-700 border border-emerald-200{% else %}bg-amber-50 text-amber-700 border border-amber-200{% endif %}" id="headerLiveStatusBadge">
+<span class="w-1.5 h-1.5 rounded-full {% if is_active %}bg-emerald-500 animate-pulse{% else %}bg-amber-500{% endif %}" id="headerLiveDot"></span>
+<span id="headerLiveStatusText">{% if is_active %}LIVE{% else %}STANDBY{% endif %}</span>
+</span>
 </div>
 <span class="text-[10px] font-medium text-slate-500 truncate">Institutional Terminal</span>
 </div>
@@ -91,7 +92,7 @@
 <div class="hidden sm:flex flex-col items-end text-right px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
 <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 font-mono">
 <span class="material-symbols-outlined text-[12px] text-emerald-600">wifi_tethering</span><span id="headerLatencyText">12ms NY4</span>
-          </div>
+</div>
 <span class="text-[9px] text-slate-500 font-mono" id="headerAccountText">ACC: #4902-INST</span>
 </div>
 <button class="flex items-center gap-1.5 px-2.5 h-8 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors text-left">
@@ -114,27 +115,26 @@
 <div class="rounded-lg bg-white border border-slate-200 p-4 shadow-sm" id="masterStatusCard">
 <div class="flex items-center justify-between gap-3">
 <div class="flex items-center gap-3">
-<div class="flex items-center justify-center w-10 h-10 rounded-md bg-brand-50 border border-brand-200 text-brand-700" id="botOrb">
-<span class="material-symbols-outlined text-[22px]" id="botIcon">smart_toy</span>
+<div class="flex items-center justify-center w-10 h-10 rounded-md {% if is_active %}bg-brand-50 border border-brand-200 text-brand-700{% else %}bg-slate-100 border border-slate-200 text-slate-400{% endif %}" id="botOrb">
+<span class="material-symbols-outlined text-[22px] {% if is_active %}text-brand-700{% else %}text-slate-400{% endif %}" id="botIcon">smart_toy</span>
 </div>
 <div class="flex flex-col">
 <div class="flex items-center gap-2">
-<span class="text-sm font-bold text-slate-900 tracking-tight" id="botStatusLabel">ALGO ENGINE ACTIVE</span>
-<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200" id="botBadge">ROUTING</span>
+<span class="text-sm font-bold {% if is_active %}text-slate-900{% else %}text-slate-500{% endif %} tracking-tight" id="botStatusLabel">{% if is_active %}ALGO ENGINE ACTIVE{% else %}ALGO ENGINE STANDBY{% endif %}</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider {% if is_active %}bg-emerald-50 text-emerald-700 border border-emerald-200{% else %}bg-slate-100 text-slate-600 border border-slate-200{% endif %}" id="botBadge">{% if is_active %}ROUTING{% else %}STANDBY{% endif %}</span>
 </div>
 <span class="text-[11px] text-slate-500 font-mono mt-0.5">Glacier HFT Core v4.1 • Multi-Asset Grid</span>
 </div>
 </div>
 <!-- Master Toggle -->
-<button aria-pressed="true" class="relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full bg-brand-600 p-0.5 transition-colors duration-200 focus:outline-none" id="masterBotToggle" type="button">
-<span class="pointer-events-none inline-block h-6 w-6 transform translate-x-5 rounded-full bg-white shadow-sm transition duration-200 flex items-center justify-center" id="toggleKnob">
+<button aria-pressed="{% if is_active %}true{% else %}false{% endif %}" class="relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full {% if is_active %}bg-brand-600{% else %}bg-slate-300{% endif %} p-0.5 transition-colors duration-200 focus:outline-none" id="masterBotToggle" type="button">
+<span class="pointer-events-none inline-block h-6 w-6 transform {% if is_active %}translate-x-5{% else %}translate-x-0{% endif %} rounded-full bg-white shadow-sm transition duration-200 flex items-center justify-center" id="toggleKnob">
 <span class="material-symbols-outlined text-[13px] text-brand-600 font-bold" id="knobIcon">power_settings_new</span>
 </span>
 </button>
 </div>
-<!-- Telemetry Row -->
-
 </div>
+
 <!-- Section Title -->
 <div class="flex items-center justify-between px-0.5 pt-1">
 <div class="flex items-center gap-1.5">
@@ -143,30 +143,28 @@
 </div>
 <span class="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200" id="activePairsCountBadge">5 Pairs Configured</span>
 </div>
-<!-- Active Lock Notice Banner -->
-<div id="controlsLockNotice" class="hidden flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium shadow-sm transition-all duration-200">
-  <span class="material-symbols-outlined text-[18px] text-amber-600 shrink-0">lock</span>
-  <span><strong class="font-bold text-amber-800">Bot is ACTIVE:</strong> Pair routing, lot sizing, and risk parameters are LOCKED during execution. Put bot into STANDBY to modify.</span>
-</div>
+
 <!-- Individual Pair Execution Cards (5 Instruments) -->
 <div class="space-y-3" id="pairMatrixList">
+
 <!-- PAIR 1: XAUUSD -->
 <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="XAUUSD" data-tick-val="10">
 <div class="flex items-center justify-between pb-3 border-b border-slate-100">
 <div class="flex items-center gap-2.5">
 <div class="w-8 h-8 rounded bg-amber-50 border border-amber-200 flex items-center justify-center font-mono text-[11px] font-bold text-amber-800">
-                AU
-              </div>
+  AU
+</div>
 <div class="flex flex-col">
 <div class="flex items-center gap-1.5">
 <span class="text-sm font-bold tracking-tight text-slate-900">XAUUSD</span>
 <span class="text-[11px] text-slate-500 font-medium">Gold / US Dollar</span>
+<span class="pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 hidden">EDITED</span>
 </div>
 <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
-
+<span>B: <strong class="text-slate-700 font-semibold bid-val">2,348.40</strong></span>
 <span class="text-slate-300">•</span>
-
-
+<span>A: <strong class="text-slate-700 font-semibold ask-val">2,348.80</strong></span>
+<span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">0.4 spd</span>
 </div>
 </div>
 </div>
@@ -175,7 +173,6 @@
 <div class="text-xs font-mono font-bold text-slate-900 pair-price">$2,348.60</div>
 <div class="text-[10px] font-mono font-semibold text-emerald-600 pair-chg">+0.84%</div>
 </div>
-<!-- Route Switch -->
 <label class="relative inline-flex items-center cursor-pointer">
 <input checked="" class="sr-only pair-switch" type="checkbox">
 <div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer">
@@ -186,68 +183,76 @@
 </div>
 <!-- Dedicated Pair Controls -->
 <div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-<!-- Lot Size dedicated -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<!-- Lot Sizing Module -->
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
-<span class="text-[10px] font-mono text-slate-400">100 oz contract</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-brand-600">equalizer</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Lot Sizing</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
-<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+<span class="text-[9px] font-mono text-slate-500">100 oz contract</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
-<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
-<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.25" type="button">0.25</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.50" type="button">0.50</button>
 </div>
-<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-lot w-16 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" min="0.01" max="50" step="0.01" type="number" value="0.05">
+<span class="text-[10px] text-slate-400 font-sans font-medium">Lots</span>
+</div>
+<button class="btn-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
-<!-- Stop Loss dedicated -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<!-- Stop Loss Module -->
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
-<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$25.00 est.</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-rose-500">shield</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Stop Loss</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="15" type="button">15p</button>
-<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="25" type="button">25p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="100" type="button">100p</button>
+<span class="text-[10px] font-mono text-rose-700 font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 border border-rose-100">-$12.50 est.</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
-<div class="flex items-center gap-1 text-[11px] text-slate-500">
-<span class="material-symbols-outlined text-[14px]">shield</span>
-<span class="">Offset</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="15" type="button">15p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-pips="25" type="button">25p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="35" type="button">35p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="50" type="button">50p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="100" type="button">100p</button>
 </div>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="25">
-<span class="text-[10px] text-slate-500">pips</span>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-sl-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-sl w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" max="500" min="1" step="1" type="number" value="25">
+<span class="text-[10px] text-slate-400 font-sans font-medium">pips</span>
+</div>
+<button class="btn-sl-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
 <!-- PAIR 2: GBPUSD -->
 <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="GBPUSD" data-tick-val="10">
 <div class="flex items-center justify-between pb-3 border-b border-slate-100">
 <div class="flex items-center gap-2.5">
 <div class="w-8 h-8 rounded bg-blue-50 border border-blue-200 flex items-center justify-center font-mono text-[11px] font-bold text-blue-800">
-                GB
-              </div>
+  GB
+</div>
 <div class="flex flex-col">
 <div class="flex items-center gap-1.5">
 <span class="text-sm font-bold tracking-tight text-slate-900">GBPUSD</span>
 <span class="text-[11px] text-slate-500 font-medium">British Pound / USD</span>
+<span class="pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 hidden">EDITED</span>
 </div>
 <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
-<span class="">B: <strong class="text-slate-700 font-semibold bid-val">1.27410</strong></span>
+<span>B: <strong class="text-slate-700 font-semibold bid-val">1.27410</strong></span>
 <span class="text-slate-300">•</span>
-<span class="">A: <strong class="text-slate-700 font-semibold ask-val">1.27430</strong></span>
+<span>A: <strong class="text-slate-700 font-semibold ask-val">1.27430</strong></span>
 <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">0.2 spd</span>
 </div>
 </div>
@@ -265,70 +270,75 @@
 </label>
 </div>
 </div>
-<!-- Dedicated Pair Controls -->
 <div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-<!-- Lot Size -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
-<span class="text-[10px] font-mono text-slate-400">100k standard</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-brand-600">equalizer</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Lot Sizing</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
-<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.25" type="button">0.25</button>
+<span class="text-[9px] font-mono text-slate-500">100k standard</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
-<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
-<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-val="0.12" type="button">0.12</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.25" type="button">0.25</button>
 </div>
-<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-lot w-16 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" min="0.01" max="50" step="0.01" type="number" value="0.12">
+<span class="text-[10px] text-slate-400 font-sans font-medium">Lots</span>
+</div>
+<button class="btn-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
-<!-- Stop Loss -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
-<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$20.00 est.</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-rose-500">shield</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Stop Loss</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="15" type="button">15p</button>
-<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="20" type="button">20p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="35" type="button">35p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
+<span class="text-[10px] font-mono text-rose-700 font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 border border-rose-100">-$24.00 est.</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
-<div class="flex items-center gap-1 text-[11px] text-slate-500">
-<span class="material-symbols-outlined text-[14px]">shield</span>
-<span class="">Offset</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="15" type="button">15p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-pips="20" type="button">20p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="30" type="button">30p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="40" type="button">40p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="50" type="button">50p</button>
 </div>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="20">
-<span class="text-[10px] text-slate-500">pips</span>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-sl-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-sl w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" max="500" min="1" step="1" type="number" value="20">
+<span class="text-[10px] text-slate-400 font-sans font-medium">pips</span>
+</div>
+<button class="btn-sl-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
 <!-- PAIR 3: EURUSD -->
 <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="EURUSD" data-tick-val="10">
 <div class="flex items-center justify-between pb-3 border-b border-slate-100">
 <div class="flex items-center gap-2.5">
 <div class="w-8 h-8 rounded bg-indigo-50 border border-indigo-200 flex items-center justify-center font-mono text-[11px] font-bold text-indigo-800">
-                EU
-              </div>
+  EU
+</div>
 <div class="flex flex-col">
 <div class="flex items-center gap-1.5">
 <span class="text-sm font-bold tracking-tight text-slate-900">EURUSD</span>
 <span class="text-[11px] text-slate-500 font-medium">Euro / US Dollar</span>
+<span class="pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 hidden">EDITED</span>
 </div>
 <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
-<span class="">B: <strong class="text-slate-700 font-semibold bid-val">1.08940</strong></span>
+<span>B: <strong class="text-slate-700 font-semibold bid-val">1.08940</strong></span>
 <span class="text-slate-300">•</span>
-<span class="">A: <strong class="text-slate-700 font-semibold ask-val">1.08960</strong></span>
+<span>A: <strong class="text-slate-700 font-semibold ask-val">1.08960</strong></span>
 <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">0.2 spd</span>
 </div>
 </div>
@@ -346,70 +356,75 @@
 </label>
 </div>
 </div>
-<!-- Dedicated Pair Controls -->
 <div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-<!-- Lot Size -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
-<span class="text-[10px] font-mono text-slate-400">100k standard</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-brand-600">equalizer</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Lot Sizing</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.10" type="button">0.10</button>
-<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.20" type="button">0.20</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+<span class="text-[9px] font-mono text-slate-500">100k standard</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
-<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.20">
-<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.20" type="button">0.20</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.50" type="button">0.50</button>
 </div>
-<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-lot w-16 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" min="0.01" max="50" step="0.01" type="number" value="0.10">
+<span class="text-[10px] text-slate-400 font-sans font-medium">Lots</span>
+</div>
+<button class="btn-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
-<!-- Stop Loss -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
-<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$30.00 est.</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-rose-500">shield</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Stop Loss</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="15" type="button">15p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="25" type="button">25p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="40" type="button">40p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="60" type="button">60p</button>
+<span class="text-[10px] font-mono text-rose-700 font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 border border-rose-100">-$15.00 est.</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
-<div class="flex items-center gap-1 text-[11px] text-slate-500">
-<span class="material-symbols-outlined text-[14px]">shield</span>
-<span class="">Offset</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-pips="15" type="button">15p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="20" type="button">20p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="25" type="button">25p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="35" type="button">35p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="50" type="button">50p</button>
 </div>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="15">
-<span class="text-[10px] text-slate-500">pips</span>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-sl-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-sl w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" max="500" min="1" step="1" type="number" value="15">
+<span class="text-[10px] text-slate-400 font-sans font-medium">pips</span>
+</div>
+<button class="btn-sl-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
 <!-- PAIR 4: BTCUSD -->
 <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="BTCUSD" data-tick-val="1">
 <div class="flex items-center justify-between pb-3 border-b border-slate-100">
 <div class="flex items-center gap-2.5">
 <div class="w-8 h-8 rounded bg-orange-50 border border-orange-200 flex items-center justify-center font-mono text-[11px] font-bold text-orange-800">
-                BTC
-              </div>
+  BTC
+</div>
 <div class="flex flex-col">
 <div class="flex items-center gap-1.5">
 <span class="text-sm font-bold tracking-tight text-slate-900">BTCUSD</span>
 <span class="text-[11px] text-slate-500 font-medium">Bitcoin / US Dollar</span>
+<span class="pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 hidden">EDITED</span>
 </div>
 <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
-<span class="">B: <strong class="text-slate-700 font-semibold bid-val">64,275</strong></span>
+<span>B: <strong class="text-slate-700 font-semibold bid-val">64,275</strong></span>
 <span class="text-slate-300">•</span>
-<span class="">A: <strong class="text-slate-700 font-semibold ask-val">64,285</strong></span>
+<span>A: <strong class="text-slate-700 font-semibold ask-val">64,285</strong></span>
 <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">10.0 spd</span>
 </div>
 </div>
@@ -427,70 +442,75 @@
 </label>
 </div>
 </div>
-<!-- Dedicated Pair Controls -->
 <div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-<!-- Lot Size -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
-<span class="text-[10px] font-mono text-slate-400">1 BTC / 100 CFD</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-brand-600">equalizer</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Lot Sizing</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.01" type="button">0.01</button>
-<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.02" type="button">0.02</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.10" type="button">0.10</button>
+<span class="text-[9px] font-mono text-slate-500">1 BTC / 100 CFD</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
-<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.02">
-<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.02" type="button">0.02</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.25" type="button">0.25</button>
 </div>
-<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-lot w-16 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" min="0.01" max="50" step="0.01" type="number" value="0.01">
+<span class="text-[10px] text-slate-400 font-sans font-medium">Lots</span>
+</div>
+<button class="btn-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
-<!-- Stop Loss -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
-<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$2.00 est.</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-rose-500">shield</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Stop Loss</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="50" type="button">50p</button>
-<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="100" type="button">100p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="150" type="button">150p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="250" type="button">250p</button>
+<span class="text-[10px] font-mono text-rose-700 font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 border border-rose-100">-$1.50 est.</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
-<div class="flex items-center gap-1 text-[11px] text-slate-500">
-<span class="material-symbols-outlined text-[14px]">shield</span>
-<span class="">Offset</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="50" type="button">50p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="100" type="button">100p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-pips="150" type="button">150p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="250" type="button">250p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="500" type="button">500p</button>
 </div>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="1000" min="5" type="number" value="100">
-<span class="text-[10px] text-slate-500">pts</span>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-sl-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-sl w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" max="1000" min="5" step="5" type="number" value="150">
+<span class="text-[10px] text-slate-400 font-sans font-medium">pts</span>
+</div>
+<button class="btn-sl-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
 <!-- PAIR 5: ETHUSD -->
 <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-symbol="ETHUSD" data-tick-val="2">
 <div class="flex items-center justify-between pb-3 border-b border-slate-100">
 <div class="flex items-center gap-2.5">
 <div class="w-8 h-8 rounded bg-purple-50 border border-purple-200 flex items-center justify-center font-mono text-[11px] font-bold text-purple-800">
-                ETH
-              </div>
+  ETH
+</div>
 <div class="flex flex-col">
 <div class="flex items-center gap-1.5">
 <span class="text-sm font-bold tracking-tight text-slate-900">ETHUSD</span>
 <span class="text-[11px] text-slate-500 font-medium">Ethereum / US Dollar</span>
+<span class="pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 hidden">EDITED</span>
 </div>
 <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 mt-0.5">
-<span class="">B: <strong class="text-slate-700 font-semibold bid-val">3,449.50</strong></span>
+<span>B: <strong class="text-slate-700 font-semibold bid-val">3,449.50</strong></span>
 <span class="text-slate-300">•</span>
-<span class="">A: <strong class="text-slate-700 font-semibold ask-val">3,450.50</strong></span>
+<span>A: <strong class="text-slate-700 font-semibold ask-val">3,450.50</strong></span>
 <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium spd-badge">1.0 spd</span>
 </div>
 </div>
@@ -508,55 +528,60 @@
 </label>
 </div>
 </div>
-<!-- Dedicated Pair Controls -->
 <div class="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-<!-- Lot Size -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Lot Sizing</span>
-<span class="text-[10px] font-mono text-slate-400">10 ETH CFD</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-brand-600">equalizer</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Lot Sizing</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.05" type="button">0.05</button>
-<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-val="0.10" type="button">0.10</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.25" type="button">0.25</button>
-<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-val="0.50" type="button">0.50</button>
+<span class="text-[9px] font-mono text-slate-500">10 ETH CFD</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-1 py-0.5">
-<button class="btn-step-minus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">-</button>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-lot w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none" min="0.01" step="0.01" type="number" value="0.10">
-<span class="text-[10px] text-slate-400 font-sans">Lots</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.01" type="button">0.01</button>
+<button class="lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-val="0.05" type="button">0.05</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.10" type="button">0.10</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.25" type="button">0.25</button>
+<button class="lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-val="0.50" type="button">0.50</button>
 </div>
-<button class="btn-step-plus w-7 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs" type="button">+</button>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-lot w-16 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" min="0.01" max="50" step="0.01" type="number" value="0.05">
+<span class="text-[10px] text-slate-400 font-sans font-medium">Lots</span>
+</div>
+<button class="btn-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
-<!-- Stop Loss -->
-<div class="bg-slate-50 p-2.5 rounded border border-slate-100">
+<div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 shadow-xs">
 <div class="flex items-center justify-between mb-1.5">
-<span class="text-[10px] uppercase font-bold tracking-wider text-slate-600">Stop Loss Boundary</span>
-<span class="text-[10px] font-mono text-rose-700 font-semibold est-risk">-$10.00 est.</span>
+<div class="flex items-center gap-1">
+  <span class="material-symbols-outlined text-[13px] text-rose-500">shield</span>
+  <span class="text-[10px] uppercase font-bold tracking-wider text-slate-700">Stop Loss</span>
 </div>
-<div class="grid grid-cols-4 gap-1 mb-2">
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="25" type="button">25p</button>
-<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white" data-pips="50" type="button">50p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="75" type="button">75p</button>
-<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500" data-pips="120" type="button">120p</button>
+<span class="text-[10px] font-mono text-rose-700 font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 border border-rose-100">-$8.00 est.</span>
 </div>
-<div class="flex items-center justify-between bg-white rounded border border-slate-200 px-2 py-0.5">
-<div class="flex items-center gap-1 text-[11px] text-slate-500">
-<span class="material-symbols-outlined text-[14px]">shield</span>
-<span class="">Offset</span>
+<div class="grid grid-cols-5 gap-1 mb-2">
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="25" type="button">25p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="50" type="button">50p</button>
+<button class="sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs" data-pips="80" type="button">80p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="120" type="button">120p</button>
+<button class="sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors" data-pips="200" type="button">200p</button>
 </div>
-<div class="flex items-center gap-1 font-mono text-xs">
-<input class="input-sl w-12 text-right font-bold text-slate-900 bg-transparent focus:outline-none" max="500" min="1" type="number" value="50">
-<span class="text-[10px] text-slate-500">pts</span>
+<div class="flex items-center justify-between bg-white rounded-md border border-slate-300 px-1 py-1 shadow-inner focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+<button class="btn-sl-step-minus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">−</button>
+<div class="flex items-center gap-1.5 font-mono text-xs">
+<input class="input-sl w-14 text-center font-bold text-slate-900 bg-transparent focus:outline-none text-sm" max="500" min="5" step="5" type="number" value="80">
+<span class="text-[10px] text-slate-400 font-sans font-medium">pts</span>
 </div>
-</div>
-</div>
-</div>
+<button class="btn-sl-step-plus w-8 h-7 rounded bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors" type="button">+</button>
 </div>
 </div>
+</div>
+</div>
+
+</div>
+
 <!-- Global Engine Guard Rails -->
 <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
 <div class="flex items-center justify-between">
@@ -572,15 +597,18 @@
 </label>
 </div>
 </div>
-<!-- Action Button -->
-<div class="pt-1">
-<button class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs tracking-wider uppercase shadow-sm transition-all active:scale-[0.99]" id="applyParamsBtn" type="button">
-<span class="material-symbols-outlined text-[16px]">sync_alt</span>
-<span class="">Transmit All Parameters to Engine</span>
+
+<!-- Primary Action Button: Save All Parameters -->
+<div class="pt-2 sticky bottom-20 z-40">
+<button class="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-brand-500/20 transition-all active:scale-[0.99] cursor-pointer" id="applyParamsBtn" type="button">
+<span class="material-symbols-outlined text-[18px]">save</span>
+<span id="applyParamsBtnText">Save &amp; Transmit All Parameters to Engine</span>
 </button>
 </div>
+
 </div>
 </main>
+
 <!-- Clean Institutional Tab Bar -->
 <nav class="fixed bottom-0 w-full z-50 pb-safe bg-white border-t border-slate-200 shadow-sm" data-active-classes="text-brand-700 bg-brand-50">
 <div class="flex items-center justify-around h-14 px-4 max-w-lg mx-auto">
@@ -598,9 +626,11 @@
 </a>
 </div>
 </nav>
+
 <script>
     (function initLightControls() {
-      let isBotActive = true;
+      let isBotActive = {{ 'true' if is_active else 'false' }};
+      let isActionPending = false;
       const masterBtn = document.getElementById('masterBotToggle');
       const toggleKnob = document.getElementById('toggleKnob');
       const botStatusLabel = document.getElementById('botStatusLabel');
@@ -612,6 +642,16 @@
       const trailingBg = document.getElementById('trailingBg');
       const trailingDot = document.getElementById('trailingDot');
       const applyBtn = document.getElementById('applyParamsBtn');
+      const applyBtnText = document.getElementById('applyParamsBtnText');
+
+      // Local State Cache per pair
+      const pairsLocal = {
+        'XAUUSD': { lot: 0.05, sl: 25.0, enabled: true, isDirty: false, tickVal: 10 },
+        'GBPUSD': { lot: 0.12, sl: 20.0, enabled: true, isDirty: false, tickVal: 10 },
+        'EURUSD': { lot: 0.10, sl: 15.0, enabled: true, isDirty: false, tickVal: 10 },
+        'BTCUSD': { lot: 0.01, sl: 150.0, enabled: true, isDirty: false, tickVal: 1 },
+        'ETHUSD': { lot: 0.05, sl: 80.0, enabled: true, isDirty: false, tickVal: 2 }
+      };
 
       function showToast(msg) {
         const bar = document.getElementById('controlsToastBar');
@@ -619,336 +659,368 @@
         if (bar && txt) {
           txt.textContent = msg;
           bar.classList.remove('hidden');
-          setTimeout(() => bar.classList.add('hidden'), 3200);
+          setTimeout(() => bar.classList.add('hidden'), 3500);
         }
       }
 
       function updateBotUI(active) {
         isBotActive = active;
-        const lockNotice = document.getElementById('controlsLockNotice');
-        if (lockNotice) {
-          if (isBotActive) lockNotice.classList.remove('hidden');
-          else lockNotice.classList.add('hidden');
-        }
-
-        // Lock / Unlock inputs and buttons
-        pairCards.forEach(card => {
-          const routeSwitch = card.querySelector('.pair-switch');
-          const lotInput = card.querySelector('.input-lot');
-          const slInput = card.querySelector('.input-sl');
-          const lotChips = card.querySelectorAll('.lot-chip');
-          const slChips = card.querySelectorAll('.sl-chip');
-          const minusBtn = card.querySelector('.btn-step-minus');
-          const plusBtn = card.querySelector('.btn-step-plus');
-
-          if (routeSwitch) {
-            routeSwitch.disabled = isBotActive;
-            if (isBotActive) routeSwitch.parentElement.classList.add('cursor-not-allowed', 'opacity-70');
-            else routeSwitch.parentElement.classList.remove('cursor-not-allowed', 'opacity-70');
-          }
-          if (lotInput) {
-            lotInput.disabled = isBotActive;
-            if (isBotActive) lotInput.classList.add('cursor-not-allowed', 'opacity-60');
-            else lotInput.classList.remove('cursor-not-allowed', 'opacity-60');
-          }
-          if (slInput) {
-            slInput.disabled = isBotActive;
-            if (isBotActive) slInput.classList.add('cursor-not-allowed', 'opacity-60');
-            else slInput.classList.remove('cursor-not-allowed', 'opacity-60');
-          }
-          if (minusBtn) minusBtn.disabled = isBotActive;
-          if (plusBtn) plusBtn.disabled = isBotActive;
-          lotChips.forEach(c => {
-            c.disabled = isBotActive;
-            if (isBotActive) c.classList.add('cursor-not-allowed', 'opacity-60');
-            else c.classList.remove('cursor-not-allowed', 'opacity-60');
-          });
-          slChips.forEach(c => {
-            c.disabled = isBotActive;
-            if (isBotActive) c.classList.add('cursor-not-allowed', 'opacity-60');
-            else c.classList.remove('cursor-not-allowed', 'opacity-60');
-          });
-        });
-
-        if (trailingToggle) {
-          trailingToggle.disabled = isBotActive;
-          if (isBotActive) trailingToggle.parentElement.classList.add('cursor-not-allowed', 'opacity-70');
-          else trailingToggle.parentElement.classList.remove('cursor-not-allowed', 'opacity-70');
-        }
-
-        if (applyBtn) {
-          applyBtn.disabled = isBotActive;
+        if (masterBtn) {
+          masterBtn.setAttribute('aria-pressed', isBotActive ? 'true' : 'false');
           if (isBotActive) {
-            applyBtn.className = 'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-slate-200 text-slate-400 font-semibold text-xs tracking-wider uppercase cursor-not-allowed shadow-none';
-            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">lock</span><span>Parameters Locked (Bot Active)</span>';
+            masterBtn.classList.remove('bg-slate-300');
+            masterBtn.classList.add('bg-brand-600');
+            toggleKnob.classList.remove('translate-x-0');
+            toggleKnob.classList.add('translate-x-5');
+            botStatusLabel.textContent = 'ALGO ENGINE ACTIVE';
+            botStatusLabel.className = 'text-sm font-bold text-slate-900 tracking-tight';
+            botBadge.textContent = 'ROUTING';
+            botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200';
+            botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-brand-50 border border-brand-200 text-brand-700';
+            botIcon.className = 'material-symbols-outlined text-[22px] text-brand-700';
+            const headerBadge = document.getElementById('headerLiveStatusBadge');
+            if (headerBadge) {
+              headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200';
+              document.getElementById('headerLiveStatusText').textContent = 'LIVE';
+              document.getElementById('headerLiveDot').className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse';
+            }
           } else {
-            applyBtn.className = 'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs tracking-wider uppercase shadow-sm transition-all active:scale-[0.99] cursor-pointer';
-            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">sync_alt</span><span>Transmit All Parameters to Engine</span>';
-          }
-        }
-
-        if (isBotActive) {
-          masterBtn.classList.replace('bg-slate-300', 'bg-brand-600');
-          toggleKnob.classList.replace('translate-x-0', 'translate-x-5');
-          botStatusLabel.textContent = 'ALGO ENGINE ACTIVE';
-          botStatusLabel.className = 'text-sm font-bold text-slate-900 tracking-tight';
-          botBadge.textContent = 'ROUTING';
-          botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200';
-          botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-brand-50 border border-brand-200 text-brand-700';
-          botIcon.className = 'material-symbols-outlined text-[22px] text-brand-700';
-          const headerBadge = document.getElementById('headerLiveStatusBadge');
-          if (headerBadge) {
-            headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-50 text-[10px] font-semibold text-emerald-700 border border-emerald-200';
-            document.getElementById('headerLiveStatusText').textContent = 'LIVE';
-          }
-        } else {
-          masterBtn.classList.replace('bg-brand-600', 'bg-slate-300');
-          toggleKnob.classList.replace('translate-x-5', 'translate-x-0');
-          botStatusLabel.textContent = 'ALGO ENGINE PAUSED';
-          botStatusLabel.className = 'text-sm font-bold text-slate-500 tracking-tight';
-          botBadge.textContent = 'STANDBY';
-          botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200';
-          botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-slate-100 border border-slate-200 text-slate-400';
-          botIcon.className = 'material-symbols-outlined text-[22px] text-slate-400';
-          const headerBadge = document.getElementById('headerLiveStatusBadge');
-          if (headerBadge) {
-            headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200';
-            document.getElementById('headerLiveStatusText').textContent = 'PAUSED';
+            masterBtn.classList.remove('bg-brand-600');
+            masterBtn.classList.add('bg-slate-300');
+            toggleKnob.classList.remove('translate-x-5');
+            toggleKnob.classList.add('translate-x-0');
+            botStatusLabel.textContent = 'ALGO ENGINE STANDBY';
+            botStatusLabel.className = 'text-sm font-bold text-slate-500 tracking-tight';
+            botBadge.textContent = 'STANDBY';
+            botBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200';
+            botOrb.className = 'flex items-center justify-center w-10 h-10 rounded-md bg-slate-100 border border-slate-200 text-slate-400';
+            botIcon.className = 'material-symbols-outlined text-[22px] text-slate-400';
+            const headerBadge = document.getElementById('headerLiveStatusBadge');
+            if (headerBadge) {
+              headerBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200';
+              document.getElementById('headerLiveStatusText').textContent = 'STANDBY';
+              document.getElementById('headerLiveDot').className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
+            }
           }
         }
       }
 
-      // Master Bot Toggle logic with live API sync
-      masterBtn.addEventListener('click', async () => {
-        const nextState = !isBotActive;
-        updateBotUI(nextState);
-        try {
-          const endpoint = nextState ? '/api/activate' : '/api/deactivate';
-          await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-          showToast(nextState ? 'Trading Engine ACTIVE — Features Locked' : 'Trading Engine STANDBY — Features Unlocked');
-        } catch (err) {
-          console.warn('Bot toggle API sync error:', err);
+      // Master Bot Toggle logic with live API sync and double-click lock
+      if (masterBtn) {
+        masterBtn.addEventListener('click', async () => {
+          if (isActionPending) return;
+          isActionPending = true;
+          masterBtn.disabled = true;
+
+          const nextState = !isBotActive;
+          updateBotUI(nextState);
+
+          try {
+            const endpoint = nextState ? '/api/activate' : '/api/deactivate';
+            const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            if (res.ok) {
+              showToast(nextState ? '🟢 Trading Engine ACTIVATED — Live trade routing engaged' : '🔴 Trading Engine STANDBY — Execution paused');
+            } else {
+              const err = await res.json().catch(() => ({}));
+              updateBotUI(!nextState); // revert
+              showToast(err.detail || 'Failed to toggle engine state');
+            }
+          } catch (err) {
+            console.warn('Bot toggle API sync error:', err);
+            updateBotUI(!nextState); // revert
+            showToast('Network error: Unable to toggle engine');
+          } finally {
+            isActionPending = false;
+            masterBtn.disabled = false;
+          }
+        });
+      }
+
+      function updateCardRisk(card, lot, sl, tickVal) {
+        const estRiskLabel = card.querySelector('.est-risk');
+        if (estRiskLabel) {
+          const dollar = (lot * sl * tickVal).toFixed(2);
+          estRiskLabel.textContent = `-$${dollar} est.`;
         }
-      });
+      }
+
+      function updateDirtyPill(card, isDirty) {
+        const dirtyPill = card.querySelector('.pair-dirty-pill');
+        if (dirtyPill) {
+          if (isDirty) dirtyPill.classList.remove('hidden');
+          else dirtyPill.classList.add('hidden');
+        }
+      }
+
+      function syncChipsActive(chips, currentVal, attrName) {
+        chips.forEach(c => {
+          const cVal = parseFloat(c.getAttribute(attrName));
+          if (Math.abs(cVal - currentVal) < 0.001) {
+            c.className = 'py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs';
+          } else {
+            c.className = 'py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors';
+          }
+        });
+      }
 
       // Individual Pair Calculation & Control Binding
       pairCards.forEach(card => {
-        const symbol = card.getAttribute('data-symbol');
+        const symbol = card.getAttribute('data-symbol').toUpperCase();
         const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
         const lotInput = card.querySelector('.input-lot');
         const slInput = card.querySelector('.input-sl');
         const lotChips = card.querySelectorAll('.lot-chip');
         const slChips = card.querySelectorAll('.sl-chip');
-        const minusBtn = card.querySelector('.btn-step-minus');
-        const plusBtn = card.querySelector('.btn-step-plus');
-        const estRiskLabel = card.querySelector('.est-risk');
+        const minusLotBtn = card.querySelector('.btn-step-minus');
+        const plusLotBtn = card.querySelector('.btn-step-plus');
+        const minusSlBtn = card.querySelector('.btn-sl-step-minus');
+        const plusSlBtn = card.querySelector('.btn-sl-step-plus');
         const routeSwitch = card.querySelector('.pair-switch');
 
-        function updateCardRisk() {
-          const lot = parseFloat(lotInput.value) || 0.01;
-          const sl = parseFloat(slInput.value) || 10;
-          const dollar = (lot * sl * tickVal).toFixed(2);
-          if (estRiskLabel) {
-            estRiskLabel.textContent = `-$${dollar} est.`;
-          }
+        if (!pairsLocal[symbol]) {
+          pairsLocal[symbol] = {
+            lot: parseFloat(lotInput?.value) || 0.05,
+            sl: parseFloat(slInput?.value) || 25,
+            enabled: routeSwitch ? !!routeSwitch.checked : true,
+            isDirty: false,
+            tickVal: tickVal
+          };
         }
 
-        // Lot chips
+        // Lot chips click
         lotChips.forEach(chip => {
-          chip.addEventListener('click', () => {
-            if (isBotActive) {
-              showToast('⚠️ Lot sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return;
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const val = parseFloat(chip.dataset.val);
+            if (!isNaN(val) && lotInput) {
+              lotInput.value = val.toFixed(2);
+              pairsLocal[symbol].lot = val;
+              pairsLocal[symbol].isDirty = true;
+              syncChipsActive(lotChips, val, 'data-val');
+              updateCardRisk(card, val, pairsLocal[symbol].sl, tickVal);
+              updateDirtyPill(card, true);
             }
-            lotChips.forEach(c => {
-              c.className = 'lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
-            });
-            chip.className = 'lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white';
-            lotInput.value = parseFloat(chip.dataset.val).toFixed(2);
-            updateCardRisk();
           });
         });
 
-        // SL chips
+        // SL chips click
         slChips.forEach(chip => {
-          chip.addEventListener('click', () => {
-            if (isBotActive) {
-              showToast('⚠️ Stop Loss is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return;
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pips = parseFloat(chip.dataset.pips);
+            if (!isNaN(pips) && slInput) {
+              slInput.value = Math.round(pips);
+              pairsLocal[symbol].sl = pips;
+              pairsLocal[symbol].isDirty = true;
+              syncChipsActive(slChips, pips, 'data-pips');
+              updateCardRisk(card, pairsLocal[symbol].lot, pips, tickVal);
+              updateDirtyPill(card, true);
             }
-            slChips.forEach(c => {
-              c.className = 'sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500';
-            });
-            chip.className = 'sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white';
-            slInput.value = parseInt(chip.dataset.pips, 10);
-            updateCardRisk();
           });
         });
 
-        // Lot Stepper
-        if (minusBtn && plusBtn) {
-          minusBtn.addEventListener('click', () => {
-            if (isBotActive) {
-              showToast('⚠️ Stepper sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return;
-            }
-            let v = Math.max(0.01, +(parseFloat(lotInput.value) - 0.01).toFixed(2));
-            lotInput.value = v.toFixed(2);
-            updateCardRisk();
+        // Lot Stepper buttons (- / +)
+        if (minusLotBtn && lotInput) {
+          minusLotBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let cur = parseFloat(lotInput.value) || 0.05;
+            let next = Math.max(0.01, +(cur - 0.01).toFixed(2));
+            lotInput.value = next.toFixed(2);
+            pairsLocal[symbol].lot = next;
+            pairsLocal[symbol].isDirty = true;
+            syncChipsActive(lotChips, next, 'data-val');
+            updateCardRisk(card, next, pairsLocal[symbol].sl, tickVal);
+            updateDirtyPill(card, true);
           });
-          plusBtn.addEventListener('click', () => {
-            if (isBotActive) {
-              showToast('⚠️ Stepper sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return;
-            }
-            let v = +(parseFloat(lotInput.value) + 0.01).toFixed(2);
-            lotInput.value = v.toFixed(2);
-            updateCardRisk();
+        }
+        if (plusLotBtn && lotInput) {
+          plusLotBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let cur = parseFloat(lotInput.value) || 0.05;
+            let next = Math.min(50.0, +(cur + 0.01).toFixed(2));
+            lotInput.value = next.toFixed(2);
+            pairsLocal[symbol].lot = next;
+            pairsLocal[symbol].isDirty = true;
+            syncChipsActive(lotChips, next, 'data-val');
+            updateCardRisk(card, next, pairsLocal[symbol].sl, tickVal);
+            updateDirtyPill(card, true);
           });
         }
 
-        lotInput.addEventListener('change', () => {
-          if (isBotActive) {
-            showToast('⚠️ Lot sizing is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-            return;
-          }
-          updateCardRisk();
-        });
-        slInput.addEventListener('input', () => {
-          if (isBotActive) {
-            showToast('⚠️ Stop Loss is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-            return;
-          }
-          updateCardRisk();
-        });
+        // SL Stepper buttons (- / +)
+        if (minusSlBtn && slInput) {
+          minusSlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let cur = parseFloat(slInput.value) || 25;
+            let step = symbol.includes('BTC') ? 10 : 5;
+            let next = Math.max(1, Math.round(cur - step));
+            slInput.value = next;
+            pairsLocal[symbol].sl = next;
+            pairsLocal[symbol].isDirty = true;
+            syncChipsActive(slChips, next, 'data-pips');
+            updateCardRisk(card, pairsLocal[symbol].lot, next, tickVal);
+            updateDirtyPill(card, true);
+          });
+        }
+        if (plusSlBtn && slInput) {
+          plusSlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let cur = parseFloat(slInput.value) || 25;
+            let step = symbol.includes('BTC') ? 10 : 5;
+            let next = Math.min(1000, Math.round(cur + step));
+            slInput.value = next;
+            pairsLocal[symbol].sl = next;
+            pairsLocal[symbol].isDirty = true;
+            syncChipsActive(slChips, next, 'data-pips');
+            updateCardRisk(card, pairsLocal[symbol].lot, next, tickVal);
+            updateDirtyPill(card, true);
+          });
+        }
+
+        // Direct input typing handlers
+        if (lotInput) {
+          const onLotType = () => {
+            let parsed = parseFloat(lotInput.value);
+            if (!isNaN(parsed) && parsed > 0) {
+              parsed = Math.max(0.01, Math.min(50.0, +(parsed).toFixed(2)));
+              pairsLocal[symbol].lot = parsed;
+              pairsLocal[symbol].isDirty = true;
+              syncChipsActive(lotChips, parsed, 'data-val');
+              updateCardRisk(card, parsed, pairsLocal[symbol].sl, tickVal);
+              updateDirtyPill(card, true);
+            }
+          };
+          lotInput.addEventListener('input', onLotType);
+          lotInput.addEventListener('change', onLotType);
+        }
+
+        if (slInput) {
+          const onSlType = () => {
+            let parsed = parseFloat(slInput.value);
+            if (!isNaN(parsed) && parsed > 0) {
+              parsed = Math.max(1, Math.min(1000, Math.round(parsed)));
+              pairsLocal[symbol].sl = parsed;
+              pairsLocal[symbol].isDirty = true;
+              syncChipsActive(slChips, parsed, 'data-pips');
+              updateCardRisk(card, pairsLocal[symbol].lot, parsed, tickVal);
+              updateDirtyPill(card, true);
+            }
+          };
+          slInput.addEventListener('input', onSlType);
+          slInput.addEventListener('change', onSlType);
+        }
 
         // Pair Route Toggle
         if (routeSwitch) {
-          routeSwitch.addEventListener('click', (e) => {
-            if (isBotActive) {
-              e.preventDefault();
-              showToast('⚠️ Pair modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return false;
-            }
-          });
           routeSwitch.addEventListener('change', (e) => {
-            if (isBotActive) {
-              e.preventDefault();
-              routeSwitch.checked = !routeSwitch.checked;
-              showToast('⚠️ Pair modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-              return;
-            }
+            const isChecked = e.target.checked;
+            pairsLocal[symbol].enabled = isChecked;
+            pairsLocal[symbol].isDirty = true;
+            updateDirtyPill(card, true);
+
             const toggleBg = e.target.nextElementSibling;
             const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
-            if (e.target.checked) {
+            if (isChecked) {
               card.style.opacity = '1';
               if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
               if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
             } else {
-              card.style.opacity = '0.5';
+              card.style.opacity = '0.55';
               if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
               if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
             }
           });
         }
-
-        updateCardRisk();
       });
 
-      // Trailing switch
+      // Trailing stop toggle
       if (trailingToggle) {
-        trailingToggle.addEventListener('click', (e) => {
-          if (isBotActive) {
-            e.preventDefault();
-            showToast('⚠️ Trailing Stop modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-            return false;
-          }
-        });
-        trailingToggle.addEventListener('change', (e) => {
-          if (isBotActive) {
-            e.preventDefault();
-            trailingToggle.checked = !trailingToggle.checked;
-            showToast('⚠️ Trailing Stop modification is LOCKED while bot is ACTIVE! Switch to STANDBY first.');
-            return;
-          }
-          if (e.target.checked) {
-            trailingBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5';
-            trailingDot.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
-          } else {
-            trailingBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
-            trailingDot.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
-          }
+        trailingToggle.addEventListener('change', async (e) => {
+          const isChecked = e.target.checked;
+          if (trailingBg) trailingBg.className = isChecked ? 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5' : 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
+          if (trailingDot) trailingDot.className = isChecked ? 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm' : 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+
+          await fetch('/api/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'toggle_trailing', enabled: isChecked })
+          }).catch(() => {});
         });
       }
 
-      // Transmit button feedback & live backend transmission
+      // Unified Save & Transmit Button
       if (applyBtn) {
         applyBtn.addEventListener('click', async () => {
-          if (isBotActive) {
-            showToast('⚠️ Cannot transmit parameters while bot is ACTIVE! Switch to STANDBY first.');
-            return;
-          }
-          const original = applyBtn.innerHTML;
-          applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">sync</span><span>Syncing with HFT Gateway...</span>';
-          applyBtn.classList.replace('bg-brand-600', 'bg-slate-800');
+          const originalHTML = applyBtn.innerHTML;
+          applyBtn.disabled = true;
+          applyBtn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-slate-800 text-white font-bold text-xs tracking-wider uppercase shadow-md transition-all cursor-wait';
+          applyBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">sync</span><span>Transmitting All Parameters to Engine...</span>';
 
           try {
-            // Collect pair parameters
-            const pairUpdates = [];
+            const pairsPayload = {};
             pairCards.forEach(card => {
-              const symbol = card.getAttribute('data-symbol');
-              const lot = parseFloat(card.querySelector('.input-lot')?.value || 0.10);
-              const sl = parseFloat(card.querySelector('.input-sl')?.value || 25);
-              const active = !!card.querySelector('.pair-switch')?.checked;
-              pairUpdates.push({ symbol, lot, sl, active });
+              const sym = card.getAttribute('data-symbol').toUpperCase();
+              const lotInput = card.querySelector('.input-lot');
+              const slInput = card.querySelector('.input-sl');
+              const routeSwitch = card.querySelector('.pair-switch');
+
+              const lot = lotInput ? (parseFloat(lotInput.value) || 0.05) : 0.05;
+              const sl = slInput ? (parseFloat(slInput.value) || 25) : 25;
+              const enabled = routeSwitch ? !!routeSwitch.checked : true;
+
+              pairsPayload[sym] = { lot: lot, sl: sl, enabled: enabled };
+              if (pairsLocal[sym]) {
+                pairsLocal[sym].lot = lot;
+                pairsLocal[sym].sl = sl;
+                pairsLocal[sym].enabled = enabled;
+                pairsLocal[sym].isDirty = false;
+              }
+              updateDirtyPill(card, false);
             });
 
-            // Send each pair setting to backend /api/update
-            for (const p of pairUpdates) {
-              await fetch('/api/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'update_pair_settings', pair: p.symbol, lot: p.lot, sl: p.sl })
-              });
-              await fetch('/api/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'toggle_pair', pair: p.symbol, active: p.active })
-              });
-            }
-
-            // Also update trailing stop mode if configured
-            const trailingOn = trailingToggle ? trailingToggle.checked : true;
-            await fetch('/api/update', {
+            const res = await fetch('/api/update', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'toggle_trailing', enabled: trailingOn })
-            }).catch(() => {});
+              body: JSON.stringify({
+                action: 'save_all_pairs',
+                pairs: pairsPayload
+              })
+            });
 
-            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span><span>Parameters Transmitted Successfully</span>';
-            applyBtn.classList.replace('bg-slate-800', 'bg-emerald-600');
-            setTimeout(() => {
-              applyBtn.innerHTML = original;
-              applyBtn.classList.replace('bg-emerald-600', 'bg-brand-600');
-            }, 1400);
+            if (res.ok) {
+              applyBtn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-emerald-600 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-emerald-600/30 transition-all';
+              applyBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span><span>Parameters Saved &amp; Transmitted Successfully!</span>';
+              showToast('💾 Saved: All 5 pairs parameters committed to Trading Engine!');
+              setTimeout(() => {
+                applyBtn.innerHTML = originalHTML;
+                applyBtn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-brand-500/20 transition-all active:scale-[0.99] cursor-pointer';
+                applyBtn.disabled = false;
+              }, 2200);
+            } else {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.detail || 'Transmission failed');
+            }
           } catch (err) {
-            console.error('Failed to transmit parameters:', err);
-            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">error</span><span>Transmission Error</span>';
-            applyBtn.classList.replace('bg-slate-800', 'bg-rose-600');
+            console.error('Save error:', err);
+            applyBtn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-rose-600 text-white font-bold text-xs tracking-wider uppercase shadow-md';
+            applyBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">error</span><span>Error Transmitting Parameters</span>';
+            showToast('⚠️ Transmission Error: ' + err.message);
             setTimeout(() => {
-              applyBtn.innerHTML = original;
-              applyBtn.classList.replace('bg-rose-600', 'bg-brand-600');
-            }, 1800);
+              applyBtn.innerHTML = originalHTML;
+              applyBtn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-brand-500/20 transition-all active:scale-[0.99] cursor-pointer';
+              applyBtn.disabled = false;
+            }, 2500);
           }
         });
       }
 
-      // Live state poll to keep status and numbers fresh
-      async function pollLiveState() {
+      // Initial Hydration from /api/state
+      async function hydrateState() {
         try {
           const res = await fetch('/api/state');
           if (!res.ok) return;
           const data = await res.json();
+
           if (data && typeof data.is_active === 'boolean') {
             updateBotUI(data.is_active);
           }
@@ -956,24 +1028,50 @@
             const accEl = document.getElementById('headerAccountText');
             if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
           }
-          if (data && data.selected_symbols) {
-            const selectedSet = new Set(data.selected_symbols.map(s => s.toUpperCase()));
+
+          // Hydrate pairs configuration
+          if (data && data.pairs_config) {
             pairCards.forEach(card => {
               const sym = card.getAttribute('data-symbol').toUpperCase();
-              const sw = card.querySelector('.pair-switch');
-              if (sw) {
-                const isSelected = selectedSet.has(sym);
-                sw.checked = isSelected;
-                const toggleBg = sw.nextElementSibling;
-                const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
-                if (isSelected) {
-                  card.style.opacity = '1';
-                  if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
-                  if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
-                } else {
-                  card.style.opacity = '0.5';
-                  if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
-                  if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+              const pData = data.pairs_config[sym.toLowerCase()] || data.pairs_config[sym];
+              if (pData) {
+                const lotInput = card.querySelector('.input-lot');
+                const slInput = card.querySelector('.input-sl');
+                const lotChips = card.querySelectorAll('.lot-chip');
+                const slChips = card.querySelectorAll('.sl-chip');
+                const routeSwitch = card.querySelector('.pair-switch');
+                const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
+
+                // Only hydrate if user has not made unsaved local edits
+                if (!pairsLocal[sym].isDirty && document.activeElement !== lotInput && document.activeElement !== slInput) {
+                  if (pData.lot != null && lotInput) {
+                    const lotVal = parseFloat(pData.lot);
+                    lotInput.value = lotVal.toFixed(2);
+                    pairsLocal[sym].lot = lotVal;
+                    syncChipsActive(lotChips, lotVal, 'data-val');
+                  }
+                  if (pData.sl != null && slInput) {
+                    const slVal = parseFloat(pData.sl);
+                    slInput.value = Math.round(slVal);
+                    pairsLocal[sym].sl = slVal;
+                    syncChipsActive(slChips, slVal, 'data-pips');
+                  }
+                  if (pData.active != null && routeSwitch) {
+                    routeSwitch.checked = !!pData.active;
+                    pairsLocal[sym].enabled = !!pData.active;
+                    const toggleBg = routeSwitch.nextElementSibling;
+                    const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
+                    if (pData.active) {
+                      card.style.opacity = '1';
+                      if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+                      if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+                    } else {
+                      card.style.opacity = '0.55';
+                      if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+                      if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+                    }
+                  }
+                  updateCardRisk(card, pairsLocal[sym].lot, pairsLocal[sym].sl, tickVal);
                 }
               }
             });
@@ -982,8 +1080,9 @@
           // ignore transient poll errors
         }
       }
-      setInterval(pollLiveState, 4000);
-      pollLiveState();
+
+      hydrateState();
+      setInterval(hydrateState, 4000);
     })();
   </script>
 </body></html>
