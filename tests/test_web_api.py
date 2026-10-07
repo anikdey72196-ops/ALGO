@@ -226,6 +226,7 @@ def test_mobile_terminal_and_pwa_endpoints():
     # 3. Mobile Terminal Template
     res_term = client.get("/terminal")
     assert res_term.status_code == 200
+    assert "Glacier Terminal" in res_term.text or "Glacier" in res_term.text
     assert "Terminal" in res_term.text
     assert "Controls" in res_term.text
     assert "main" in res_term.text

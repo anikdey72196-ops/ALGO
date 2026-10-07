@@ -158,8 +158,13 @@ async def lifespan(app: FastAPI):
     interval = 60
     
     # Tick job runs every interval, but bot.tick() checks `if not self.is_active: return`
+    async def safe_tick_wrapper():
+        if bot_instance.is_active:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, bot_instance.tick)
+
     scheduler_instance.add_job(
-        bot_instance.tick,
+        safe_tick_wrapper,
         trigger=IntervalTrigger(seconds=interval),
         id="web_trading_tick",
         name="Web Trading Tick",

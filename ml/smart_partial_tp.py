@@ -34,6 +34,32 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import joblib
+memory = joblib.Memory(location="/tmp/partial_tp_cache", verbose=0)
+
+@memory.cache
+def _cached_model_predict(classifier, online_clf, regressor, x_vec, pct_to_tp):
+    if classifier is not None:
+        probs = classifier.predict_proba(x_vec)[0]
+        p_rev = float(probs[0])
+        p_cont = float(probs[1])
+    elif online_clf is not None:
+        probs = online_clf.predict_proba(x_vec)[0]
+        p_rev = float(probs[0])
+        p_cont = float(probs[1])
+    else:
+        p_rev = 0.50
+        p_cont = 0.50
+
+    p_full_tp = p_cont * math.exp(-0.8 * max(0.0, 1.0 - pct_to_tp))
+    p_full_tp = float(np.clip(p_full_tp, 0.05, 0.95))
+
+    if regressor is not None:
+        pred_r = float(regressor.predict(x_vec)[0])
+    else:
+        pred_r = 1.0 + p_cont * 1.5
+
+    return p_rev, p_full_tp, pred_r
+
 import shap
 import numpy as np
 import pandas as pd
