@@ -712,6 +712,19 @@ async def deactivate_bot():
     }
 
 
+@app.post("/api/halt")
+async def halt_bot(close_trades: bool = True):
+    """
+    Emergency HALT trading bot. Stops execution loop and immediately closes all open trades.
+    """
+    if not bot_instance:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
+    result = bot_instance.halt(close_trades=close_trades, reason="Emergency HALT via Web")
+    invalidate_state_cache()
+    return result
+
+
 @app.post("/api/update")
 async def handle_dashboard_update(payload: dict):
     """
@@ -722,16 +735,26 @@ async def handle_dashboard_update(payload: dict):
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
     action = payload.get("action")
+    if action == "halt":
+        result = bot_instance.halt(close_trades=True, reason="Emergency HALT via Dashboard")
+        invalidate_state_cache()
+        return result
+
     if action == "set_status":
         status = payload.get("status")
         if status in ("RUNNING", "ACTIVATED"):
             if not bot_instance.is_active:
                 await activate_bot()
             return {"status": "success", "botStatus": "RUNNING"}
-        elif status in ("HALTED", "IDLE", "DEACTIVATED"):
+        elif status == "HALTED":
+            result = bot_instance.halt(close_trades=True, reason="Emergency HALT via Dashboard")
+            invalidate_state_cache()
+            return result
+        elif status in ("IDLE", "DEACTIVATED"):
             if bot_instance.is_active:
                 await deactivate_bot()
             return {"status": "success", "botStatus": status}
+
 
     elif action == "toggle_strategy":
         if bot_instance.is_active:

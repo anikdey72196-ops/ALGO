@@ -462,6 +462,63 @@ class TradingBot:
         self.state.close()
         logger.info("Shutdown complete.")
 
+    def close_all_open_positions(self, reason: str = "Emergency HALT") -> int:
+        """
+        Emergency method: Immediately close all open positions across broker and database state.
+        Returns count of positions closed.
+        """
+        count = 0
+        try:
+            # 1. Close all broker open positions
+            if hasattr(self.broker, "close_all_positions"):
+                count = self.broker.close_all_positions()
+            elif hasattr(self.broker, "get_open_positions"):
+                live_positions = self.broker.get_open_positions()
+                for p in live_positions:
+                    t = p.get("ticket") or p.get("order_id")
+                    if t and hasattr(self.broker, "close_position"):
+                        if self.broker.close_position(t):
+                            count += 1
+
+            # 2. Sync database trade log with broker deals
+            self._sync_open_positions()
+
+            # 3. For any remaining open trades in the state table, mark them closed
+            open_trades = self.state.get_open_positions()
+            for trade in open_trades:
+                if trade.id is not None:
+                    self.state.update_trade_pnl(trade.id, 0.0, "CLOSED_MANUAL")
+                    if hasattr(self, "position_manager") and self.position_manager:
+                        self.position_manager.on_trade_closed(trade, 0.0, "CLOSED_MANUAL")
+                    self.log(f"🛑 [HALT] Closed trade #{trade.id} ({trade.symbol}) in database ({reason}).")
+
+            self.log(f"🚨 [EMERGENCY HALT] Closed {count} live broker position(s) and synchronized state ({reason}).")
+        except Exception as e:
+            logger.error(f"Error during close_all_open_positions: {e}")
+        return count
+
+    def halt(self, close_trades: bool = True, reason: str = "Emergency HALT") -> dict:
+        """
+        Emergency halt the bot: deactivates trading engine and closes all open trades.
+        """
+        self.is_active = False
+        self.save_settings()
+        closed_session_id = self.state.record_deactivation(reason)
+
+        closed_trades_count = 0
+        if close_trades:
+            closed_trades_count = self.close_all_open_positions(reason=reason)
+
+        self.log(f"🔴 BOT HALTED by user (Session #{closed_session_id or '---'}). Closed {closed_trades_count} trade(s).")
+        return {
+            "status": "success",
+            "botStatus": "HALTED",
+            "session_id": closed_session_id,
+            "closed_trades": closed_trades_count,
+            "message": f"Bot halted successfully. Closed {closed_trades_count} open trade(s).",
+        }
+
+
     def _check_day_rollover(self) -> None:
         """Reset daily state if we've crossed into a new UTC day."""
         today = datetime.now(timezone.utc).date()

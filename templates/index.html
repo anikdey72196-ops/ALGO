@@ -778,9 +778,9 @@
           </button>
 
           <!-- Emergency HALT Button -->
-          <button id="haltBtn" class="px-3.5 sm:px-5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-600 hover:text-white text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer">
+          <button id="haltBtn" class="px-3.5 sm:px-5 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-600 hover:text-white text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer" title="Emergency Stop: Closes all open trades and halts trading engine">
             <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
-            <span>HALT</span>
+            <span>HALT (CLOSE ALL)</span>
           </button>
         </div>
 
@@ -850,6 +850,12 @@
         <button id="activateBtn" class="group px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs sm:text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
           <span class="material-symbols-outlined text-[20px]">play_circle</span>
           <span id="activateBtnText">ACTIVATE BOT</span>
+        </button>
+
+        <!-- Master Deactivate Button -->
+        <button id="deactivateBtn" class="group px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs sm:text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:from-amber-600 hover:to-amber-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer" title="Pause bot execution (Open positions remain active and managed by SL/TP)">
+          <span class="material-symbols-outlined text-[20px]">pause_circle</span>
+          <span id="deactivateBtnText">DEACTIVATE</span>
         </button>
       </div>
 
@@ -1871,10 +1877,11 @@
     }
 
     // -------------------------------------------------------------------------
-    // F. MAIN BOT LIFECYCLE (ACTIVATE & HALT)
+    // F. MAIN BOT LIFECYCLE (ACTIVATE, DEACTIVATE & HALT)
     // -------------------------------------------------------------------------
     const activateBtn = document.getElementById('activateBtn');
     const activateBtnText = document.getElementById('activateBtnText');
+    const deactivateBtn = document.getElementById('deactivateBtn');
     const haltBtn = document.getElementById('haltBtn');
     const statusBadge = document.getElementById('statusBadgeContainer');
     const statusDot = document.getElementById('statusIndicatorDot');
@@ -1889,6 +1896,9 @@
 
         activateBtn.disabled = true;
         activateBtnText.innerText = "ENGINE RUNNING";
+        if (deactivateBtn) {
+          deactivateBtn.disabled = false;
+        }
       } else if (state.botStatus === 'HALTED') {
         statusBadge.className = "flex items-center gap-2.5 bg-rose-50 border border-rose-300 px-4 py-2 rounded-xl shadow-sm transition-all duration-300 pulse-glow-red";
         statusDot.className = "w-3 h-3 rounded-full bg-rose-600";
@@ -1897,6 +1907,9 @@
 
         activateBtn.disabled = false;
         activateBtnText.innerText = "RESTART BOT";
+        if (deactivateBtn) {
+          deactivateBtn.disabled = true;
+        }
       } else { // IDLE
         statusBadge.className = "flex items-center gap-2.5 bg-purple-50 border border-purple-200 px-4 py-2 rounded-xl shadow-sm transition-all duration-300";
         statusDot.className = "w-3 h-3 rounded-full bg-slate-400";
@@ -1905,26 +1918,79 @@
 
         activateBtn.disabled = false;
         activateBtnText.innerText = "ACTIVATE BOT";
+        if (deactivateBtn) {
+          deactivateBtn.disabled = true;
+        }
       }
       renderPairs();
     }
 
     activateBtn.addEventListener('click', async () => {
-      state.botStatus = 'RUNNING';
-      updateBotStatusUI();
-      showToast("🚀 Bot successfully activated into continuous scanning loop!");
+      activateBtn.disabled = true;
+      showToast("🚀 Activating bot into continuous scanning loop...");
 
-      await fetch('/api/activate', { method: 'POST' });
-      await apiUpdate('/api/update', { action: 'set_status', status: 'RUNNING' });
+      try {
+        const res = await fetch('/api/activate', { method: 'POST' });
+        if (res.ok) {
+          state.botStatus = 'RUNNING';
+          updateBotStatusUI();
+          showToast("🚀 Bot successfully activated into continuous scanning loop!");
+          await fetchLiveState();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || "Failed to activate bot", true);
+        }
+      } catch (err) {
+        showToast("Network error activating bot: " + err, true);
+      } finally {
+        if (state.botStatus !== 'RUNNING') activateBtn.disabled = false;
+      }
     });
 
-    haltBtn.addEventListener('click', async () => {
-      state.botStatus = 'HALTED';
-      updateBotStatusUI();
-      showToast("🛑 Emergency HALT triggered — Trading engine stopped!", true);
+    if (deactivateBtn) {
+      deactivateBtn.addEventListener('click', async () => {
+        deactivateBtn.disabled = true;
+        showToast("⏸️ Deactivating bot — Trade execution paused...");
 
-      await fetch('/api/deactivate', { method: 'POST' });
-      await apiUpdate('/api/update', { action: 'set_status', status: 'HALTED' });
+        try {
+          const res = await fetch('/api/deactivate', { method: 'POST' });
+          if (res.ok) {
+            state.botStatus = 'IDLE';
+            updateBotStatusUI();
+            showToast("⏸️ Bot successfully deactivated (Standby mode). Existing positions remain managed.");
+            await fetchLiveState();
+          } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.detail || "Failed to deactivate bot", true);
+          }
+        } catch (err) {
+          showToast("Network error deactivating bot: " + err, true);
+        } finally {
+          deactivateBtn.disabled = (state.botStatus !== 'RUNNING');
+        }
+      });
+    }
+
+    haltBtn.addEventListener('click', async () => {
+      const confirmHalt = confirm("🚨 EMERGENCY HALT:\n\nAre you sure you want to stop the trading bot and IMMEDIATELY CLOSE ALL OPEN TRADES?");
+      if (!confirmHalt) return;
+
+      haltBtn.disabled = true;
+      showToast("🛑 Emergency HALT triggered — Closing all open trades and stopping engine...", true);
+
+      try {
+        const res = await fetch('/api/halt', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        state.botStatus = 'HALTED';
+        updateBotStatusUI();
+        const closedCount = data.closed_trades != null ? data.closed_trades : 0;
+        showToast(`🛑 Emergency HALT complete: Engine stopped, ${closedCount} open trade(s) closed!`, true);
+        await fetchLiveState();
+      } catch (err) {
+        showToast("Error during Emergency HALT: " + err, true);
+      } finally {
+        haltBtn.disabled = false;
+      }
     });
 
     // -------------------------------------------------------------------------

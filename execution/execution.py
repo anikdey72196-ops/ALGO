@@ -89,6 +89,14 @@ class BrokerAdapter(ABC):
         """Ensure connection to the broker is active."""
         return True
 
+    def close_position(self, ticket: int, symbol: str | None = None, volume: float | None = None, direction: str | None = None) -> bool:
+        """Close a specific open position. Subclasses must implement."""
+        return False
+
+    def close_all_positions(self) -> int:
+        """Close all open positions. Returns the count of closed positions."""
+        return 0
+
 
 class MT5Adapter(BrokerAdapter):
     r"""
@@ -443,6 +451,89 @@ class MT5Adapter(BrokerAdapter):
             return total_profit, status
         return None
 
+    def close_position(self, ticket: int, symbol: str | None = None, volume: float | None = None, direction: str | None = None) -> bool:
+        """
+        Close a specific open position in MT5 by sending an offsetting deal order.
+        """
+        if mt5 is None:
+            return False
+        self.ensure_connected()
+        try:
+            magic = 0
+            if not symbol or volume is None or direction is None:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions:
+                    logger.warning(f"Position #{ticket} not found in MT5 to close.")
+                    return False
+                pos = positions[0]._asdict()
+                symbol = pos["symbol"]
+                volume = pos["volume"]
+                order_type = mt5.ORDER_TYPE_SELL if pos["type"] == 0 else mt5.ORDER_TYPE_BUY
+                magic = pos.get("magic", 0)
+            else:
+                is_buy = str(direction).upper().endswith("BUY") or direction == 0
+                order_type = mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY
+
+            broker_symbol = self.resolve_symbol(symbol)
+            mt5.symbol_select(broker_symbol, True)
+            sym_info = mt5.symbol_info(broker_symbol)
+            digits = sym_info.digits if sym_info else 5
+
+            filling_modes = []
+            if sym_info is not None:
+                mode = sym_info.filling_mode
+                if mode & 1:
+                    filling_modes.append(mt5.ORDER_FILLING_FOK)
+                if mode & 2:
+                    filling_modes.append(mt5.ORDER_FILLING_IOC)
+                filling_modes.append(mt5.ORDER_FILLING_RETURN)
+            if not filling_modes:
+                filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
+
+            for current_filling in filling_modes:
+                tick = mt5.symbol_info_tick(broker_symbol)
+                price = (tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask) if tick else 0.0
+                req = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "position": ticket,
+                    "symbol": broker_symbol,
+                    "volume": float(volume),
+                    "type": order_type,
+                    "price": round(price, digits),
+                    "deviation": 25,
+                    "magic": magic,
+                    "comment": "HALT Emergency",
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": current_filling,
+                }
+                res = mt5.order_send(req)
+                if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE:
+                    logger.info(f"✅ Closed MT5 position #{ticket} for {broker_symbol} ({volume} lots) @ {res.price}")
+                    return True
+                elif res is not None:
+                    logger.warning(f"Close attempt for position #{ticket} failed ({res.comment}, retcode: {res.retcode})")
+
+            return False
+        except Exception as e:
+            logger.error(f"Error closing MT5 position #{ticket}: {e}")
+            return False
+
+    def close_all_positions(self) -> int:
+        """Close all open positions in MT5. Returns count of positions closed."""
+        if mt5 is None:
+            return 0
+        self.ensure_connected()
+        positions = mt5.positions_get()
+        if not positions:
+            logger.info("No open MT5 positions to close.")
+            return 0
+        closed_count = 0
+        for p in positions:
+            pos = p._asdict()
+            if self.close_position(pos["ticket"], symbol=pos["symbol"], volume=pos["volume"], direction="BUY" if pos["type"] == 0 else "SELL"):
+                closed_count += 1
+        return closed_count
+
 
 class MockBrokerAdapter(BrokerAdapter):
     """Mock broker for local testing. Simulates fills and tracks positions."""
@@ -554,3 +645,22 @@ class MockBrokerAdapter(BrokerAdapter):
         
     def get_open_positions(self, symbol: str | None = None) -> list[dict]:
         return [p for p in self._positions.values() if (symbol is None or p['symbol'] == symbol)]
+
+    def close_position(self, ticket: int, symbol: str | None = None, volume: float | None = None, direction: str | None = None) -> bool:
+        """Simulate closing a mock position."""
+        if ticket in self._positions:
+            pos = self._positions[ticket]
+            quote = self.get_current_price(pos["symbol"])
+            close_price = quote.bid if quote else pos["entry_price"]
+            self.simulate_close(ticket, close_price, 10.0)
+            return True
+        return False
+
+    def close_all_positions(self) -> int:
+        """Simulate closing all open mock positions."""
+        tickets = list(self._positions.keys())
+        closed = 0
+        for t in tickets:
+            if self.close_position(t):
+                closed += 1
+        return closed
