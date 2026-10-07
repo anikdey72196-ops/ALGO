@@ -234,6 +234,11 @@ def get_all_lan_ips() -> list[str]:
     return sorted(list(ips)) if ips else ["127.0.0.1"]
 
 
+def invalidate_state_cache() -> None:
+    """Safe no-op hook for state cache invalidation (state is evaluated dynamically)."""
+    pass
+
+
 # ─────────────────────────────────────────────
 #  Web API Routes
 # ─────────────────────────────────────────────
@@ -647,16 +652,33 @@ async def activate_bot():
     bot_instance.is_active = True
     bot_instance.save_settings()
     invalidate_state_cache()
+
+    p1 = getattr(bot_instance.config, "pair1", None)
+    p2 = getattr(bot_instance.config, "pair2", None)
+    p3 = getattr(bot_instance.config, "pair3", None)
+
+    p1_lot = getattr(p1, "fixed_lot_size", None) or "Dyn"
+    p2_lot = getattr(p2, "fixed_lot_size", None) or "Dyn"
+    p3_lot = getattr(p3, "fixed_lot_size", None) or "Dyn"
+
+    p1_sl = getattr(p1, "fixed_sl_pips", None) or "Dyn"
+    p2_sl = getattr(p2, "fixed_sl_pips", None) or "Dyn"
+    p3_sl = getattr(p3, "fixed_sl_pips", None) or "Dyn"
+
+    p1_sym = getattr(p1, "symbol", "Pair 1")
+    p2_sym = getattr(p2, "symbol", "Pair 2")
+    p3_sym = getattr(p3, "symbol", "Pair 3")
+
     session_id = bot_instance.state.record_activation(
         symbols=bot_instance.config.selected_symbols,
-        lot_size=f"P1:{bot_instance.config.pair1.fixed_lot_size or 'Dyn'} | P2:{bot_instance.config.pair2.fixed_lot_size or 'Dyn'} | P3:{bot_instance.config.pair3.fixed_lot_size or 'Dyn'}",
+        lot_size=f"P1:{p1_lot} | P2:{p2_lot} | P3:{p3_lot}",
         trigger_source="Web Dashboard",
     )
     bot_instance.log(
         f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring pairs: [{', '.join(bot_instance.config.selected_symbols)}] | "
-        f"Pair 1 ({bot_instance.config.pair1.symbol}, lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
-        f"Pair 2 ({bot_instance.config.pair2.symbol}, lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
-        f"Pair 3 ({bot_instance.config.pair3.symbol}, lot={bot_instance.config.pair3.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair3.fixed_sl_pips or 'Dyn'}) | "
+        f"Pair 1 ({p1_sym}, lot={p1_lot}, SL={p1_sl}) | "
+        f"Pair 2 ({p2_sym}, lot={p2_lot}, SL={p2_sl}) | "
+        f"Pair 3 ({p3_sym}, lot={p3_lot}, SL={p3_sl}) | "
         f"Active Strategies: {bot_instance.config.enabled_strategies}"
     )
 
@@ -870,21 +892,21 @@ async def handle_dashboard_update(payload: dict):
         if lot_val is not None:
             val_f = round(float(lot_val), 2)
             bot_instance.config.pair_configs[sym].fixed_lot_size = val_f
-            if sym == bot_instance.config.pair1.symbol:
+            if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
                 bot_instance.config.pair1.fixed_lot_size = val_f
-            elif sym == bot_instance.config.pair2.symbol:
+            elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
                 bot_instance.config.pair2.fixed_lot_size = val_f
-            elif sym == bot_instance.config.pair3.symbol:
+            elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
                 bot_instance.config.pair3.fixed_lot_size = val_f
 
         if sl_val is not None:
             sl_f = round(float(sl_val), 1)
             bot_instance.config.pair_configs[sym].fixed_sl_pips = sl_f
-            if sym == bot_instance.config.pair1.symbol:
+            if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
                 bot_instance.config.pair1.fixed_sl_pips = sl_f
-            elif sym == bot_instance.config.pair2.symbol:
+            elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
                 bot_instance.config.pair2.fixed_sl_pips = sl_f
-            elif sym == bot_instance.config.pair3.symbol:
+            elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
         bot_instance.save_settings()
@@ -953,15 +975,15 @@ async def handle_dashboard_update(payload: dict):
                 if lot_val is not None:
                     lf = round(float(lot_val), 2)
                     bot_instance.config.pair_configs[sym].fixed_lot_size = lf
-                    if sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_lot_size = lf
-                    elif sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_lot_size = lf
-                    elif sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_lot_size = lf
+                    if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_lot_size = lf
+                    elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_lot_size = lf
+                    elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_lot_size = lf
                 if sl_val is not None:
                     sf = round(float(sl_val), 1)
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = sf
-                    if sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_sl_pips = sf
-                    elif sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_sl_pips = sf
-                    elif sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_sl_pips = sf
+                    if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_sl_pips = sf
+                    elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_sl_pips = sf
+                    elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_sl_pips = sf
 
             bot_instance.config.selected_symbols = enabled_pairs
 
