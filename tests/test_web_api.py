@@ -227,6 +227,8 @@ def test_mobile_terminal_and_pwa_endpoints():
     res_term = client.get("/terminal")
     assert res_term.status_code == 200
     assert "Terminal" in res_term.text
+    assert "Controls" in res_term.text
+    assert "main" in res_term.text
 
     # 4. Network Info Endpoint
     res_net = client.get("/api/network-info")
