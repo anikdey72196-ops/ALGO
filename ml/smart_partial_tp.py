@@ -60,11 +60,14 @@ def _cached_model_predict(classifier, online_clf, regressor, x_vec, pct_to_tp):
 
     return p_rev, p_full_tp, pred_r
 
+import shap
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger("algo.ml.smart_partial_tp")
@@ -499,20 +502,98 @@ class SmartPartialTPModel:
 
         self._train_synthetic_baseline()
 
-    def _train_synthetic_baseline(self) -> None:
+    def fit_and_tune(self, X: np.ndarray, y_class: np.ndarray, max_r_target: np.ndarray, n_iter: int = 8, cv: int = 3) -> None:
+        """
+        Hyperparameter optimization via RandomizedSearchCV with Cross-Validation
+        and Platt-scaled Probability Calibration.
+        """
+        param_grid_clf = {
+            "learning_rate": [0.01, 0.03, 0.05, 0.08, 0.1],
+            "max_iter": [100, 200, 400],
+            "max_depth": [3, 5, 7],
+            "min_samples_leaf": [10, 20, 30],
+            "l2_regularization": [0.0, 0.1, 1.0, 5.0],
+        }
+
+        actual_cv = min(cv, max(2, len(np.unique(y_class)))) if len(y_class) >= 6 else 2
+
+        try:
+            search_clf = RandomizedSearchCV(
+                estimator=HistGradientBoostingClassifier(random_state=42, class_weight="balanced"),
+                param_distributions=param_grid_clf,
+                n_iter=min(n_iter, 10),
+                cv=actual_cv,
+                scoring="roc_auc",
+                random_state=42,
+                n_jobs=-1,
+                error_score="raise",
+            )
+            search_clf.fit(X, y_class)
+            best_clf_base = search_clf.best_estimator_
+            logger.info(f"Classifier tuning complete. Best params: {search_clf.best_params_}")
+        except Exception as e:
+            logger.warning(f"RandomizedSearchCV for classifier failed: {e}. Falling back to default HGBClassifier.")
+            best_clf_base = HistGradientBoostingClassifier(
+                max_iter=200, learning_rate=0.05, max_depth=5, min_samples_leaf=20, class_weight="balanced", random_state=42
+            )
+            best_clf_base.fit(X, y_class)
+
+        try:
+            calibrated_clf = CalibratedClassifierCV(estimator=best_clf_base, method="sigmoid", cv=actual_cv)
+            calibrated_clf.fit(X, y_class)
+            self.classifier = calibrated_clf
+        except Exception as e:
+            logger.warning(f"CalibratedClassifierCV failed: {e}. Using uncalibrated base classifier.")
+            self.classifier = best_clf_base
+
+        param_grid_reg = {
+            "learning_rate": [0.01, 0.03, 0.05, 0.08, 0.1],
+            "max_iter": [100, 200, 400],
+            "max_depth": [3, 5, 7],
+            "min_samples_leaf": [10, 20, 30],
+            "l2_regularization": [0.0, 0.1, 1.0, 5.0],
+        }
+
+        try:
+            search_reg = RandomizedSearchCV(
+                estimator=HistGradientBoostingRegressor(random_state=42),
+                param_distributions=param_grid_reg,
+                n_iter=min(n_iter, 10),
+                cv=actual_cv,
+                scoring="neg_root_mean_squared_error",
+                random_state=42,
+                n_jobs=-1,
+                error_score="raise",
+            )
+            search_reg.fit(X, max_r_target)
+            self.regressor = search_reg.best_estimator_
+            logger.info(f"Regressor tuning complete. Best params: {search_reg.best_params_}")
+        except Exception as e:
+            logger.warning(f"RandomizedSearchCV for regressor failed: {e}. Falling back to default HGBRegressor.")
+            self.regressor = HistGradientBoostingRegressor(
+                max_iter=200, learning_rate=0.05, max_depth=5, min_samples_leaf=20, random_state=42
+            )
+            self.regressor.fit(X, max_r_target)
+
+        self.online_clf = Pipeline([
+            ("scaler", StandardScaler()),
+            ("sgd", SGDClassifier(loss="log_loss", penalty="l2", alpha=1e-4, random_state=42)),
+        ])
+        self.online_clf.fit(X, y_class)
+        self.total_trained_samples = len(X)
+        self.version = "v2.0-tuned-calibrated"
+
+    def _train_synthetic_baseline(self, n_samples: int = 5000) -> None:
         """
         Train on synthetic domain distribution representing authentic institutional market mechanics.
         Ensures the model produces intelligent, probabilistic inferences from day one.
         """
         np.random.seed(42)
-        n_samples = 2500
 
-        # Features
         r_mult = np.random.uniform(0.5, 3.5, n_samples)
         planned_rr = np.random.uniform(1.8, 3.5, n_samples)
         pct_to_tp = r_mult / planned_rr
 
-        # Structural distances
         swing_dist = np.random.exponential(1.2, n_samples)
         ob_dist = np.random.exponential(1.5, n_samples)
         fvg_dist = np.random.exponential(1.4, n_samples)
@@ -523,7 +604,6 @@ class SmartPartialTPModel:
         std1_dist = np.random.exponential(0.9, n_samples)
         std2_dist = np.random.exponential(1.3, n_samples)
 
-        # Confluence near price
         confluence = np.random.poisson(1.0, n_samples)
 
         atr_ratio = np.random.normal(1.0, 0.25, n_samples)
@@ -543,13 +623,6 @@ class SmartPartialTPModel:
             bars_held, session, strategy, direction,
         ])
 
-        # Underlying probabilistic score:
-        # Reversal probability is HIGH when:
-        # - Price is near swing/OB/Fib 61.8 (dist < 0.4R)
-        # - High confluence
-        # - RSI extreme (>70 for buy, <30 for sell)
-        # - Standard deviation 2 sigma reached
-        # - High R-multiple already reached
         rev_score = (
             (r_mult * 0.4)
             + (confluence * 0.5)
@@ -563,43 +636,139 @@ class SmartPartialTPModel:
         )
 
         p_rev = 1.0 / (1.0 + np.exp(-(rev_score - 2.0)))
-        y_class = (p_rev < 0.50).astype(int)  # 1 = CONTINUATION / FULL TP, 0 = REVERSAL
+        y_class = (p_rev < 0.50).astype(int)
 
-        # Regressor target: actual max R achieved
         max_r_target = np.maximum(
             r_mult,
             r_mult + np.where(y_class == 1, np.random.exponential(1.5, n_samples), np.random.exponential(0.2, n_samples))
         )
 
-        self.classifier = HistGradientBoostingClassifier(
-            max_iter=100,
-            learning_rate=0.08,
-            max_depth=5,
-            min_samples_leaf=20,
-            random_state=42,
-        )
-        self.classifier.fit(X, y_class)
-
-        self.regressor = HistGradientBoostingRegressor(
-            max_iter=100,
-            learning_rate=0.08,
-            max_depth=5,
-            min_samples_leaf=20,
-            random_state=42,
-        )
-        self.regressor.fit(X, max_r_target)
-
-        # Online SGD model
-        self.online_clf = Pipeline([
-            ("scaler", StandardScaler()),
-            ("sgd", SGDClassifier(loss="log_loss", penalty="l2", alpha=1e-4, random_state=42)),
-        ])
-        self.online_clf.fit(X, y_class)
-
-        self.total_trained_samples = n_samples
-        self.version = "v1.0-pretrained"
+        self.fit_and_tune(X, y_class, max_r_target, n_iter=8, cv=3)
         self._save()
-        logger.info(f"Trained baseline SmartPartialTPModel on {n_samples} samples.")
+        logger.info(f"Trained baseline SmartPartialTPModel on {n_samples} samples (Version: {self.version}).")
+
+    def train_from_trade_records(self, trade_records: List[Any], n_iter: int = 8, cv: int = 3) -> bool:
+        """
+        Train classifier and regressor on real historical completed trade records.
+        """
+        X_list, y_class_list, max_r_list = [], [], []
+
+        for t in trade_records:
+            t_dict = t.__dict__ if hasattr(t, '__dict__') else t
+            if not isinstance(t_dict, dict):
+                continue
+
+            entry_price = float(t_dict.get('entry_price', 0.0) or 0.0)
+            sl_price = float(t_dict.get('stop_loss', t_dict.get('sl_price', 0.0)) or 0.0)
+            tp_price = float(t_dict.get('take_profit', t_dict.get('tp_price', 0.0)) or 0.0)
+            exit_price = float(t_dict.get('exit_price', entry_price) or entry_price)
+            direction_raw = t_dict.get('direction', 'BUY')
+            direction = direction_raw.value if hasattr(direction_raw, 'value') else str(direction_raw)
+            strategy_name = str(t_dict.get('strategy_name', 'SMC'))
+
+            risk = abs(entry_price - sl_price)
+            if risk <= 1e-6:
+                continue
+
+            target_dist = abs(tp_price - entry_price)
+            planned_rr = target_dist / max(1e-6, risk)
+
+            is_buy = ('BUY' in direction.upper())
+            status_str = str(t_dict.get('status', '')).upper()
+
+            pnl = float(t_dict.get('realized_pnl', t_dict.get('pnl', 0.0)) or 0.0)
+            hit_tp = ('TP' in status_str) or (pnl > 0 and 'SL' not in status_str)
+            y_class = 1 if hit_tp else 0
+
+            final_r = planned_rr if hit_tp else (-1.0 if 'SL' in status_str else (pnl / max(1.0, risk * 100.0)))
+            max_r = max(final_r, 0.0)
+
+            feat = {
+                'r_multiple': float(max(0.5, final_r * 0.5)) if hit_tp else 0.5,
+                'pct_to_tp': float(np.clip(final_r / max(0.1, planned_rr), 0.0, 1.0)) if hit_tp else 0.2,
+                'planned_rr': float(planned_rr),
+                'nearest_swing_dist_r': 0.8,
+                'nearest_ob_dist_r': 1.0,
+                'nearest_fvg_dist_r': 1.1,
+                'fib_382_dist_r': 0.5,
+                'fib_500_dist_r': 0.6,
+                'fib_618_dist_r': 0.7,
+                'fib_786_dist_r': 0.9,
+                'stddev_1_dist_r': 0.5,
+                'stddev_2_dist_r': 1.0,
+                'structure_confluence_count': 1.0,
+                'atr_ratio': 1.0,
+                'momentum_rsi': 50.0,
+                'trend_strength_adx': 25.0,
+                'bars_since_entry': 10.0,
+                'session_idx': float(encode_session()),
+                'strategy_idx': float(encode_strategy(strategy_name)),
+                'direction_val': 1.0 if is_buy else -1.0,
+            }
+
+            x_vec = [feat[name] for name in FEATURE_NAMES]
+            X_list.append(x_vec)
+            y_class_list.append(y_class)
+            max_r_list.append(max_r)
+
+        if len(X_list) < 10:
+            logger.warning(f"Insufficient historical trades ({len(X_list)}) for full retrain. Minimum 10 required.")
+            return False
+
+        X = np.array(X_list)
+        y_class_arr = np.array(y_class_list)
+        max_r_arr = np.array(max_r_list)
+
+        self.fit_and_tune(X, y_class_arr, max_r_arr, n_iter=n_iter, cv=cv)
+        self.version = f"v2.0-real-{len(X_list)}trades"
+        self._save()
+        logger.info(f"Successfully retrained SmartPartialTPModel on {len(X_list)} real trade records.")
+        return True
+
+    def explain_prediction(self, feature_dict: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Generate SHAP feature importance breakdown for a given prediction.
+        """
+        x_vec = np.array([[feature_dict[name] for name in FEATURE_NAMES]])
+
+        base_estimator = None
+        if hasattr(self.classifier, 'estimator'):
+            base_estimator = self.classifier.estimator
+        elif isinstance(self.classifier, HistGradientBoostingClassifier):
+            base_estimator = self.classifier
+
+        shap_values_dict = {}
+        if base_estimator is not None:
+            try:
+                explainer = shap.TreeExplainer(base_estimator)
+                sv = explainer.shap_values(x_vec)
+                sv_arr = np.array(sv)
+                if sv_arr.ndim == 3:
+                    sv_vals = sv_arr[0, :, 1] if sv_arr.shape[2] > 1 else sv_arr[0, :, 0]
+                elif sv_arr.ndim == 2:
+                    sv_vals = sv_arr[0]
+                else:
+                    sv_vals = sv_arr.flatten()
+
+                for name, val in zip(FEATURE_NAMES, sv_vals):
+                    shap_values_dict[name] = float(val)
+            except Exception as e:
+                logger.warning(f"SHAP explanation error: {e}. Returning zeroed importances.")
+                shap_values_dict = {name: 0.0 for name in FEATURE_NAMES}
+        else:
+            shap_values_dict = {name: 0.0 for name in FEATURE_NAMES}
+
+        sorted_features = sorted(
+            [{"feature": k, "shap_value": round(v, 4), "abs_impact": round(abs(v), 4)} for k, v in shap_values_dict.items()],
+            key=lambda x: x["abs_impact"],
+            reverse=True
+        )
+
+        return {
+            "model_version": self.version,
+            "feature_importances": sorted_features,
+            "top_drivers": [f["feature"] for f in sorted_features[:5]],
+        }
 
     def _save(self) -> None:
         """Persist model artifact to disk."""
@@ -672,6 +841,131 @@ class SmartPartialTPModel:
                 self._save()
         except Exception as e:
             logger.error(f"Error in SmartPartialTPModel.partial_fit: {e}")
+
+
+    def train_from_trade_records(self, trade_records: List[Any], n_iter: int = 8, cv: int = 3) -> bool:
+        """
+        Train classifier and regressor on real historical completed trade records.
+        """
+        X_list, y_class_list, max_r_list = [], [], []
+
+        for t in trade_records:
+            t_dict = t.__dict__ if hasattr(t, '__dict__') else t
+            if not isinstance(t_dict, dict):
+                continue
+
+            entry_price = float(t_dict.get('entry_price', 0.0) or 0.0)
+            sl_price = float(t_dict.get('stop_loss', t_dict.get('sl_price', 0.0)) or 0.0)
+            tp_price = float(t_dict.get('take_profit', t_dict.get('tp_price', 0.0)) or 0.0)
+            exit_price = float(t_dict.get('exit_price', entry_price) or entry_price)
+            direction_raw = t_dict.get('direction', 'BUY')
+            direction = direction_raw.value if hasattr(direction_raw, 'value') else str(direction_raw)
+            strategy_name = str(t_dict.get('strategy_name', 'SMC'))
+
+            risk = abs(entry_price - sl_price)
+            if risk <= 1e-6:
+                continue
+
+            target_dist = abs(tp_price - entry_price)
+            planned_rr = target_dist / max(1e-6, risk)
+
+            is_buy = ('BUY' in direction.upper())
+            status_str = str(t_dict.get('status', '')).upper()
+
+            pnl = float(t_dict.get('realized_pnl', t_dict.get('pnl', 0.0)) or 0.0)
+            hit_tp = ('TP' in status_str) or (pnl > 0 and 'SL' not in status_str)
+            y_class = 1 if hit_tp else 0
+
+            final_r = planned_rr if hit_tp else (-1.0 if 'SL' in status_str else (pnl / max(1.0, risk * 100.0)))
+            max_r = max(final_r, 0.0)
+
+            feat = {
+                'r_multiple': float(max(0.5, final_r * 0.5)) if hit_tp else 0.5,
+                'pct_to_tp': float(np.clip(final_r / max(0.1, planned_rr), 0.0, 1.0)) if hit_tp else 0.2,
+                'planned_rr': float(planned_rr),
+                'nearest_swing_dist_r': 0.8,
+                'nearest_ob_dist_r': 1.0,
+                'nearest_fvg_dist_r': 1.1,
+                'fib_382_dist_r': 0.5,
+                'fib_500_dist_r': 0.6,
+                'fib_618_dist_r': 0.7,
+                'fib_786_dist_r': 0.9,
+                'stddev_1_dist_r': 0.5,
+                'stddev_2_dist_r': 1.0,
+                'structure_confluence_count': 1.0,
+                'atr_ratio': 1.0,
+                'momentum_rsi': 50.0,
+                'trend_strength_adx': 25.0,
+                'bars_since_entry': 10.0,
+                'session_idx': float(encode_session()),
+                'strategy_idx': float(encode_strategy(strategy_name)),
+                'direction_val': 1.0 if is_buy else -1.0,
+            }
+
+            x_vec = [feat[name] for name in FEATURE_NAMES]
+            X_list.append(x_vec)
+            y_class_list.append(y_class)
+            max_r_list.append(max_r)
+
+        if len(X_list) < 10:
+            logger.warning(f"Insufficient historical trades ({len(X_list)}) for full retrain. Minimum 10 required.")
+            return False
+
+        X = np.array(X_list)
+        y_class_arr = np.array(y_class_list)
+        max_r_arr = np.array(max_r_list)
+
+        self.fit_and_tune(X, y_class_arr, max_r_arr, n_iter=n_iter, cv=cv)
+        self.version = f"v2.0-real-{len(X_list)}trades"
+        self._save()
+        logger.info(f"Successfully retrained SmartPartialTPModel on {len(X_list)} real trade records.")
+        return True
+
+    def explain_prediction(self, feature_dict: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Generate SHAP feature importance breakdown for a given prediction.
+        """
+        x_vec = np.array([[feature_dict[name] for name in FEATURE_NAMES]])
+
+        base_estimator = None
+        if hasattr(self.classifier, 'estimator'):
+            base_estimator = self.classifier.estimator
+        elif isinstance(self.classifier, HistGradientBoostingClassifier):
+            base_estimator = self.classifier
+
+        shap_values_dict = {}
+        if base_estimator is not None:
+            try:
+                explainer = shap.TreeExplainer(base_estimator)
+                sv = explainer.shap_values(x_vec)
+                sv_arr = np.array(sv)
+                if sv_arr.ndim == 3:
+                    sv_vals = sv_arr[0, :, 1] if sv_arr.shape[2] > 1 else sv_arr[0, :, 0]
+                elif sv_arr.ndim == 2:
+                    sv_vals = sv_arr[0]
+                else:
+                    sv_vals = sv_arr.flatten()
+
+                for name, val in zip(FEATURE_NAMES, sv_vals):
+                    shap_values_dict[name] = float(val)
+            except Exception as e:
+                logger.warning(f"SHAP explanation error: {e}. Returning zeroed importances.")
+                shap_values_dict = {name: 0.0 for name in FEATURE_NAMES}
+        else:
+            shap_values_dict = {name: 0.0 for name in FEATURE_NAMES}
+
+        sorted_features = sorted(
+            [{"feature": k, "shap_value": round(v, 4), "abs_impact": round(abs(v), 4)} for k, v in shap_values_dict.items()],
+            key=lambda x: x["abs_impact"],
+            reverse=True
+        )
+
+        return {
+            "model_version": self.version,
+            "feature_importances": sorted_features,
+            "top_drivers": [f["feature"] for f in sorted_features[:5]],
+        }
+
 
 
 # =============================================================================
