@@ -2321,147 +2321,226 @@
     }
 
     // -------------------------------------------------------------------------
-    // J. REAL-TIME DATA POLLING (3000ms Interval)
+    // J. REAL-TIME DATA SYNC (HYBRID WEBSOCKET + FALLBACK POLLING)
     // -------------------------------------------------------------------------
+    function updateLiveState(data) {
+      if (!data) return;
+
+      // 0. Sync Today's Directional Bias
+      if (data.daily_bias) {
+        updateDailyBiasUI(data.daily_bias);
+      }
+
+      // 1. Sync Bot Status
+      if (data.is_active && state.botStatus !== 'RUNNING') {
+        state.botStatus = 'RUNNING';
+        updateBotStatusUI();
+      } else if (!data.is_active && state.botStatus === 'RUNNING') {
+        state.botStatus = 'IDLE';
+        updateBotStatusUI();
+      }
+
+      // 2. Win Accuracy %
+      const winAcc = data.accuracy != null ? data.accuracy : 31.5;
+      const formattedAcc = winAcc > 0 ? `${winAcc.toFixed(1)}%` : '31.5%';
+      const winAccEl = document.getElementById('headerWinAccuracy');
+      if (winAccEl) winAccEl.innerText = formattedAcc;
+      const cardWinRateEl = document.getElementById('cardWinRateValue');
+      if (cardWinRateEl) cardWinRateEl.innerText = formattedAcc;
+
+      // 3. Execution Hits (TP / SL) & Target R:R
+      const tp = data.winning_trades ?? 14;
+      const sl = data.losing_trades ?? 30;
+      const headerHitsEl = document.getElementById('headerHits');
+      if (headerHitsEl) headerHitsEl.innerText = `${tp} TP · ${sl} SL`;
+      const cardRRExecEl = document.getElementById('cardRRExecution');
+      if (cardRRExecEl) cardRRExecEl.innerText = `${tp}W / ${sl}L`;
+
+      // Total Closed
+      const closedCount = data.total_closed_trades || (tp + sl) || 44;
+      const totalClosedEl = document.getElementById('cardTotalClosed');
+      if (totalClosedEl) totalClosedEl.innerText = `${closedCount} Trades`;
+
+      // Planned / Target R:R
+      const rr = (data.performance_metrics && data.performance_metrics.formatted_avg_rr) || '1:2.50';
+      const headerTargetRREl = document.getElementById('headerTargetRR');
+      if (headerTargetRREl) headerTargetRREl.innerText = `R:R ${rr}`;
+      const cardRREl = document.getElementById('cardRRValue');
+      if (cardRREl) cardRREl.innerText = rr;
+
+      // 3b. October 5-Window Interval Sync
+      if (data.current_window) {
+        const win = data.current_window;
+        const winTextEl = document.getElementById('activeWindowText');
+        if (winTextEl && win.id) {
+          winTextEl.innerText = `${win.id}: ${win.name} (${win.time_range})`;
+        }
+      }
+
+      // 4. AI Sentinel Gate
+      const rawThreshold = data.ai_confidence_threshold;
+      const aiThreshold = rawThreshold != null
+        ? (rawThreshold > 1 ? Math.round(rawThreshold) : Math.round(rawThreshold * 100))
+        : 75;
+      const cardAIThreshEl = document.getElementById('cardAIGateThreshold');
+      if (cardAIThreshEl) cardAIThreshEl.innerText = `≥ ${aiThreshold}% Confidence`;
+
+      const gatePct = Math.min(99, Math.max(aiThreshold, aiThreshold + 7));
+      const cardAIGateEl = document.getElementById('cardAIGateValue');
+      if (cardAIGateEl) cardAIGateEl.innerText = `${gatePct}%`;
+
+      // Update AI Gate Guard Badge
+      const gateBadge = document.getElementById('cardAIGateBadge');
+      if (gateBadge) {
+        const isGateOn = data.ai_confirmation_enabled !== false;
+        gateBadge.innerHTML = isGateOn
+          ? `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON`
+          : `<span class="w-2 h-2 rounded-full bg-slate-400"></span> BYPASS`;
+        gateBadge.className = isGateOn
+          ? "px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary text-xs font-black flex items-center gap-1"
+          : "px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-500 text-xs font-black flex items-center gap-1";
+      }
+
+      // 5. Active Strategies Sync
+      if (data.enabled_strategies && Array.isArray(data.enabled_strategies)) {
+        for (const strat of Object.values(state.strategies)) {
+          let isServerActive = data.enabled_strategies.includes(strat.code);
+          if (strat.id === 'reversal' && data.reversal_strategy_enabled !== undefined) {
+            isServerActive = isServerActive || !!data.reversal_strategy_enabled;
+          }
+          strat.active = isServerActive;
+          const chk = document.getElementById('luminousToggle_' + strat.id);
+          if (chk && chk.checked !== isServerActive) {
+            chk.checked = isServerActive;
+          }
+          const lbl = document.getElementById('luminousLabel_' + strat.id);
+          if (lbl) {
+            lbl.innerText = isServerActive ? 'ACTIVE' : 'INACTIVE';
+          }
+        }
+      }
+
+      // 6. Active Pairs & Lot/SL Sync
+      const isEditingInput = document.activeElement && (document.activeElement.tagName === 'INPUT');
+      let pairsNeedReRender = false;
+
+      if (data.pairs_config && typeof data.pairs_config === 'object') {
+        for (const [pKey, pVal] of Object.entries(data.pairs_config)) {
+          const pair = state.pairs[pKey.toLowerCase()];
+          if (pair) {
+            const isServerActive = !!pVal.active;
+            if (pair.active !== isServerActive) {
+              pair.active = isServerActive;
+              pairsNeedReRender = true;
+            }
+            if (!isEditingInput) {
+              if (pVal.lot != null) {
+                const sLot = parseFloat(pVal.lot);
+                if (Math.abs(pair.lot - sLot) > 0.001) {
+                  pair.lot = sLot;
+                  pairsNeedReRender = true;
+                }
+              }
+              if (pVal.sl != null) {
+                const sSL = parseFloat(pVal.sl);
+                if (Math.abs(pair.sl - sSL) > 0.1) {
+                  pair.sl = sSL;
+                  pairsNeedReRender = true;
+                }
+              }
+            }
+          }
+        }
+      } else if (data.selected_symbols && Array.isArray(data.selected_symbols)) {
+        for (const pair of Object.values(state.pairs)) {
+          const isServerActive = data.selected_symbols.includes(pair.symbol);
+          if (pair.active !== isServerActive) {
+            pair.active = isServerActive;
+            pairsNeedReRender = true;
+          }
+        }
+      }
+
+      if (pairsNeedReRender && !isEditingInput) {
+        renderPairs();
+      }
+    }
+
     async function fetchLiveState() {
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const data = await res.json();
-
-        // 0. Sync Today's Directional Bias
-        if (data.daily_bias) {
-          updateDailyBiasUI(data.daily_bias);
-        }
-
-        // 1. Sync Bot Status
-        if (data.is_active && state.botStatus !== 'RUNNING') {
-          state.botStatus = 'RUNNING';
-          updateBotStatusUI();
-        } else if (!data.is_active && state.botStatus === 'RUNNING') {
-          state.botStatus = 'IDLE';
-          updateBotStatusUI();
-        }
-
-        // 2. Win Accuracy %
-        const winAcc = data.accuracy != null ? data.accuracy : 31.5;
-        const formattedAcc = winAcc > 0 ? `${winAcc.toFixed(1)}%` : '31.5%';
-        document.getElementById('headerWinAccuracy').innerText = formattedAcc;
-        document.getElementById('cardWinRateValue').innerText = formattedAcc;
-
-        // 3. Execution Hits (TP / SL) & Target R:R
-        const tp = data.winning_trades ?? 14;
-        const sl = data.losing_trades ?? 30;
-        document.getElementById('headerHits').innerText = `${tp} TP · ${sl} SL`;
-        document.getElementById('cardRRExecution').innerText = `${tp}W / ${sl}L`;
-
-        // Total Closed
-        const closedCount = data.total_closed_trades || (tp + sl) || 44;
-        document.getElementById('cardTotalClosed').innerText = `${closedCount} Trades`;
-
-        // Planned / Target R:R
-        const rr = (data.performance_metrics && data.performance_metrics.formatted_avg_rr) || '1:2.50';
-        document.getElementById('headerTargetRR').innerText = `R:R ${rr}`;
-        document.getElementById('cardRRValue').innerText = rr;
-
-        // 3b. October 5-Window Interval Sync
-        if (data.current_window) {
-          const win = data.current_window;
-          const winTextEl = document.getElementById('activeWindowText');
-          if (winTextEl && win.id) {
-            winTextEl.innerText = `${win.id}: ${win.name} (${win.time_range})`;
-          }
-        }
-
-        // 4. AI Sentinel Gate
-        const trapStats = data.trap_stats || data.ml_trap_detector || {};
-        const rawThreshold = data.ai_confidence_threshold;
-        const aiThreshold = rawThreshold != null
-          ? (rawThreshold > 1 ? Math.round(rawThreshold) : Math.round(rawThreshold * 100))
-          : 75;
-        document.getElementById('cardAIGateThreshold').innerText = `≥ ${aiThreshold}% Confidence`;
-
-        const gatePct = Math.min(99, Math.max(aiThreshold, aiThreshold + 7));
-        document.getElementById('cardAIGateValue').innerText = `${gatePct}%`;
-
-        // Update AI Gate Guard Badge
-        const gateBadge = document.getElementById('cardAIGateBadge');
-        if (gateBadge) {
-          const isGateOn = data.ai_confirmation_enabled !== false;
-          gateBadge.innerHTML = isGateOn
-            ? `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON`
-            : `<span class="w-2 h-2 rounded-full bg-slate-400"></span> BYPASS`;
-          gateBadge.className = isGateOn
-            ? "px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary text-xs font-black flex items-center gap-1"
-            : "px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-500 text-xs font-black flex items-center gap-1";
-        }
-
-        // 5. Active Strategies Sync (without destroying DOM to preserve CSS transitions)
-        if (data.enabled_strategies && Array.isArray(data.enabled_strategies)) {
-          for (const strat of Object.values(state.strategies)) {
-            let isServerActive = data.enabled_strategies.includes(strat.code);
-            if (strat.id === 'reversal' && data.reversal_strategy_enabled !== undefined) {
-              isServerActive = isServerActive || !!data.reversal_strategy_enabled;
-            }
-            strat.active = isServerActive;
-            const chk = document.getElementById('luminousToggle_' + strat.id);
-            if (chk && chk.checked !== isServerActive) {
-              chk.checked = isServerActive;
-            }
-            const lbl = document.getElementById('luminousLabel_' + strat.id);
-            if (lbl) {
-              lbl.innerText = isServerActive ? 'ACTIVE' : 'INACTIVE';
-            }
-          }
-        }
-
-        // 6. Active Pairs & Lot/SL Sync
-        const isEditingInput = document.activeElement && (document.activeElement.tagName === 'INPUT');
-        let pairsNeedReRender = false;
-
-        if (data.pairs_config && typeof data.pairs_config === 'object') {
-          for (const [pKey, pVal] of Object.entries(data.pairs_config)) {
-            const pair = state.pairs[pKey.toLowerCase()];
-            if (pair) {
-              const isServerActive = !!pVal.active;
-              if (pair.active !== isServerActive) {
-                pair.active = isServerActive;
-                pairsNeedReRender = true;
-              }
-              if (!isEditingInput) {
-                if (pVal.lot != null) {
-                  const sLot = parseFloat(pVal.lot);
-                  if (Math.abs(pair.lot - sLot) > 0.001) {
-                    pair.lot = sLot;
-                    pairsNeedReRender = true;
-                  }
-                }
-                if (pVal.sl != null) {
-                  const sSL = parseFloat(pVal.sl);
-                  if (Math.abs(pair.sl - sSL) > 0.1) {
-                    pair.sl = sSL;
-                    pairsNeedReRender = true;
-                  }
-                }
-              }
-            }
-          }
-        } else if (data.selected_symbols && Array.isArray(data.selected_symbols)) {
-          for (const pair of Object.values(state.pairs)) {
-            const isServerActive = data.selected_symbols.includes(pair.symbol);
-            if (pair.active !== isServerActive) {
-              pair.active = isServerActive;
-              pairsNeedReRender = true;
-            }
-          }
-        }
-
-        if (pairsNeedReRender && !isEditingInput) {
-          renderPairs();
-        }
-
+        updateLiveState(data);
       } catch (err) {
         console.warn("Polling error (will retry):", err);
+      }
+    }
+
+    // ── WebSocket Real-Time Connection Manager ──
+    let ws = null;
+    let wsConnected = false;
+    let fallbackPollTimer = null;
+    let reconnectAttempts = 0;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/state`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          wsConnected = true;
+          reconnectAttempts = 0;
+          console.log("⚡ [WebSocket] Connected to Engine state stream. Stopped HTTP polling.");
+          // When WebSocket is active, turn off HTTP polling completely!
+          if (fallbackPollTimer) {
+            clearInterval(fallbackPollTimer);
+            fallbackPollTimer = null;
+          }
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            updateLiveState(data);
+          } catch (e) {
+            console.warn("WebSocket parse error:", e);
+          }
+        };
+
+        ws.onclose = () => {
+          wsConnected = false;
+          console.warn("⚡ [WebSocket] Disconnected. Activating fallback HTTP polling (10s)...");
+          startFallbackPolling();
+          scheduleReconnect();
+        };
+
+        ws.onerror = (err) => {
+          console.warn("⚡ [WebSocket] Error:", err);
+          try { ws.close(); } catch (_) {}
+        };
+      } catch (err) {
+        console.warn("Failed to initialize WebSocket:", err);
+        startFallbackPolling();
+        scheduleReconnect();
+      }
+    }
+
+    function scheduleReconnect() {
+      reconnectAttempts++;
+      const delay = Math.min(10000, 1000 * Math.pow(1.5, reconnectAttempts));
+      setTimeout(() => {
+        if (!wsConnected) {
+          connectWebSocket();
+        }
+      }, delay);
+    }
+
+    function startFallbackPolling() {
+      if (!fallbackPollTimer) {
+        fallbackPollTimer = setInterval(fetchLiveState, 10000);
       }
     }
 
@@ -2581,20 +2660,20 @@
     }
 
     // -------------------------------------------------------------------------
-    // INITIALIZATION & POLLING
+    // INITIALIZATION & HYBRID WEBSOCKET STREAM
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', () => {
       renderStrategies();
       renderPairs();
       updateBotStatusUI();
       
-      // Initial fetch
+      // Initial fetch for immediate page hydration
       fetchLiveState();
 
-      // Poll at a safe 3000ms (3 seconds) interval to prevent lag and CPU load
-      setInterval(fetchLiveState, 3000);
+      // Connect hybrid WebSocket (disables polling once connected)
+      connectWebSocket();
 
-      console.log(" ALGOQUANT Institutional Dashboard Initialized. Polling every 3s.");
+      console.log("⚡ ALGOQUANT Institutional Dashboard Initialized with Hybrid WebSocket.");
     });
   </script>
 </body>

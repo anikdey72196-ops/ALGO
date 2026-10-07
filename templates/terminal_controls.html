@@ -1014,75 +1014,149 @@
         });
       }
 
+      function applyServerState(data) {
+        if (!data) return;
+
+        if (typeof data.is_active === 'boolean') {
+          updateBotUI(data.is_active);
+        }
+        if (data.broker_info && data.broker_info.account_id) {
+          const accEl = document.getElementById('headerAccountText');
+          if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
+        }
+
+        // Hydrate pairs configuration
+        if (data.pairs_config) {
+          pairCards.forEach(card => {
+            const sym = card.getAttribute('data-symbol').toUpperCase();
+            const pData = data.pairs_config[sym.toLowerCase()] || data.pairs_config[sym];
+            if (pData) {
+              const lotInput = card.querySelector('.input-lot');
+              const slInput = card.querySelector('.input-sl');
+              const lotChips = card.querySelectorAll('.lot-chip');
+              const slChips = card.querySelectorAll('.sl-chip');
+              const routeSwitch = card.querySelector('.pair-switch');
+              const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
+
+              // Only hydrate if user has not made unsaved local edits
+              if (!pairsLocal[sym].isDirty && document.activeElement !== lotInput && document.activeElement !== slInput) {
+                if (pData.lot != null && lotInput) {
+                  const lotVal = parseFloat(pData.lot);
+                  lotInput.value = lotVal.toFixed(2);
+                  pairsLocal[sym].lot = lotVal;
+                  syncChipsActive(lotChips, lotVal, 'data-val');
+                }
+                if (pData.sl != null && slInput) {
+                  const slVal = parseFloat(pData.sl);
+                  slInput.value = Math.round(slVal);
+                  pairsLocal[sym].sl = slVal;
+                  syncChipsActive(slChips, slVal, 'data-pips');
+                }
+                if (pData.active != null && routeSwitch) {
+                  routeSwitch.checked = !!pData.active;
+                  pairsLocal[sym].enabled = !!pData.active;
+                  const toggleBg = routeSwitch.nextElementSibling;
+                  const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
+                  if (pData.active) {
+                    card.style.opacity = '1';
+                    if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+                    if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+                  } else {
+                    card.style.opacity = '0.55';
+                    if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+                    if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+                  }
+                }
+                updateCardRisk(card, pairsLocal[sym].lot, pairsLocal[sym].sl, tickVal);
+              }
+            }
+          });
+        }
+      }
+
       // Initial Hydration from /api/state
       async function hydrateState() {
         try {
           const res = await fetch('/api/state');
           if (!res.ok) return;
           const data = await res.json();
-
-          if (data && typeof data.is_active === 'boolean') {
-            updateBotUI(data.is_active);
-          }
-          if (data && data.broker_info && data.broker_info.account_id) {
-            const accEl = document.getElementById('headerAccountText');
-            if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
-          }
-
-          // Hydrate pairs configuration
-          if (data && data.pairs_config) {
-            pairCards.forEach(card => {
-              const sym = card.getAttribute('data-symbol').toUpperCase();
-              const pData = data.pairs_config[sym.toLowerCase()] || data.pairs_config[sym];
-              if (pData) {
-                const lotInput = card.querySelector('.input-lot');
-                const slInput = card.querySelector('.input-sl');
-                const lotChips = card.querySelectorAll('.lot-chip');
-                const slChips = card.querySelectorAll('.sl-chip');
-                const routeSwitch = card.querySelector('.pair-switch');
-                const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
-
-                // Only hydrate if user has not made unsaved local edits
-                if (!pairsLocal[sym].isDirty && document.activeElement !== lotInput && document.activeElement !== slInput) {
-                  if (pData.lot != null && lotInput) {
-                    const lotVal = parseFloat(pData.lot);
-                    lotInput.value = lotVal.toFixed(2);
-                    pairsLocal[sym].lot = lotVal;
-                    syncChipsActive(lotChips, lotVal, 'data-val');
-                  }
-                  if (pData.sl != null && slInput) {
-                    const slVal = parseFloat(pData.sl);
-                    slInput.value = Math.round(slVal);
-                    pairsLocal[sym].sl = slVal;
-                    syncChipsActive(slChips, slVal, 'data-pips');
-                  }
-                  if (pData.active != null && routeSwitch) {
-                    routeSwitch.checked = !!pData.active;
-                    pairsLocal[sym].enabled = !!pData.active;
-                    const toggleBg = routeSwitch.nextElementSibling;
-                    const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
-                    if (pData.active) {
-                      card.style.opacity = '1';
-                      if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
-                      if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
-                    } else {
-                      card.style.opacity = '0.55';
-                      if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
-                      if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
-                    }
-                  }
-                  updateCardRisk(card, pairsLocal[sym].lot, pairsLocal[sym].sl, tickVal);
-                }
-              }
-            });
-          }
+          applyServerState(data);
         } catch (e) {
           // ignore transient poll errors
         }
       }
 
+      // ── Hybrid WebSocket Real-Time Connection Manager ──
+      let ws = null;
+      let wsConnected = false;
+      let fallbackPollTimer = null;
+      let reconnectAttempts = 0;
+
+      function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/state`;
+
+        try {
+          ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            wsConnected = true;
+            reconnectAttempts = 0;
+            console.log("⚡ [WebSocket] Connected to Engine state stream. Stopped HTTP polling.");
+            const latencyEl = document.getElementById('headerLatencyText');
+            if (latencyEl) latencyEl.textContent = 'WS LIVE';
+            if (fallbackPollTimer) {
+              clearInterval(fallbackPollTimer);
+              fallbackPollTimer = null;
+            }
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              applyServerState(data);
+            } catch (e) {
+              console.warn("WebSocket parse error:", e);
+            }
+          };
+
+          ws.onclose = () => {
+            wsConnected = false;
+            const latencyEl = document.getElementById('headerLatencyText');
+            if (latencyEl) latencyEl.textContent = 'HTTP (10s)';
+            startFallbackPolling();
+            scheduleReconnect();
+          };
+
+          ws.onerror = (err) => {
+            try { ws.close(); } catch (_) {}
+          };
+        } catch (err) {
+          startFallbackPolling();
+          scheduleReconnect();
+        }
+      }
+
+      function scheduleReconnect() {
+        reconnectAttempts++;
+        const delay = Math.min(10000, 1000 * Math.pow(1.5, reconnectAttempts));
+        setTimeout(() => {
+          if (!wsConnected) {
+            connectWebSocket();
+          }
+        }, delay);
+      }
+
+      function startFallbackPolling() {
+        if (!fallbackPollTimer) {
+          fallbackPollTimer = setInterval(hydrateState, 10000);
+        }
+      }
+
+      // Initial fast hydration
       hydrateState();
-      setInterval(hydrateState, 4000);
+      // Connect real-time WebSocket
+      connectWebSocket();
     })();
   </script>
 </body></html>

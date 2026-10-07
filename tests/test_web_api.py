@@ -15,6 +15,8 @@ from web_app import app, bot_instance
 
 def test_api_workflow():
     client = TestClient(app)
+    # Ensure standby before starting assertions
+    client.post("/api/deactivate")
 
     print("1. Testing GET /api/state...")
     res = client.get("/api/state")

@@ -601,92 +601,160 @@
       }, 3000);
     }
 
+    function applyStrategyState(s) {
+      if (!s) return;
+
+      // 1. Bot active state
+      if (s.is_active !== undefined) {
+        updateBotState(s.is_active);
+      }
+
+      // 2. Account info
+      if (s.broker_info && s.broker_info.account_id) {
+        const accEl = document.getElementById('stratAccount');
+        if (accEl) accEl.textContent = `ACC: #${s.broker_info.account_id}`;
+      }
+
+      // 3. Enabled strategies sync
+      if (s.enabled_strategies) {
+        const enabledSet = new Set(s.enabled_strategies.map(x => x.toUpperCase()));
+        if (s.reversal_strategy_enabled) {
+          enabledSet.add('TREND_REVERSAL');
+        }
+
+        const stratMap = {
+          'scalp-5m': 'SMC_SCALP_5M',
+          'ict-inst': 'ICT',
+          'reversal': 'TREND_REVERSAL',
+          'swing': 'SMC',
+          'order-flow': 'ORDER_FLOW'
+        };
+
+        for (const [cardId, backendName] of Object.entries(stratMap)) {
+          const card = document.querySelector(`.strategy-card[data-id="${cardId}"]`);
+          if (card) {
+            const stratKey = card.getAttribute('data-backend-strat') || cardId;
+            let isEnabled;
+            // If user recently toggled this engine within 4.5 seconds, respect the optimistic UI
+            if (pendingOverrides[stratKey] && (Date.now() - pendingOverrides[stratKey].time < 4500)) {
+              isEnabled = pendingOverrides[stratKey].state;
+            } else {
+              delete pendingOverrides[stratKey];
+              isEnabled = enabledSet.has(backendName);
+            }
+            setCardVisualState(card, isEnabled);
+          }
+        }
+        updateActiveLoadCounter();
+      }
+
+      // 4. Live win rates per strategy & aggregate metrics
+      if (s.win_rate !== undefined) {
+        const winEl = document.getElementById('weightedWinVal');
+        if (winEl) winEl.textContent = `${parseFloat(s.win_rate).toFixed(1)}%`;
+      }
+      if (s.sharpe_ratio !== undefined && s.sharpe_ratio !== null) {
+        const sharpeEl = document.getElementById('combinedSharpeVal');
+        if (sharpeEl) sharpeEl.textContent = parseFloat(s.sharpe_ratio).toFixed(2);
+      }
+
+      if (s.stats_by_strategy) {
+        const stats = s.stats_by_strategy;
+        function setWR(cardId, keys) {
+          let found = null;
+          for (const k of keys) {
+            if (stats[k]) { found = stats[k]; break; }
+          }
+          if (found && found.win_rate !== undefined) {
+            const el = document.getElementById(`winRate-${cardId}`);
+            if (el) el.textContent = `${parseFloat(found.win_rate).toFixed(1)}%`;
+          }
+        }
+        setWR('scalp-5m', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m', '5m scalp']);
+        setWR('ict-inst', ['ICT', 'ICT Institutional', 'ict']);
+        setWR('swing', ['SMC Swing', 'SMC', 'smc', 'Swing']);
+        setWR('order-flow', ['Order Flow', 'Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
+        setWR('reversal', ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
+      }
+    }
+
     // Live state synchronization from /api/state
     async function syncStrategyState() {
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const s = await res.json();
-
-        // 1. Bot active state
-        if (s.is_active !== undefined) {
-          updateBotState(s.is_active);
-        }
-
-        // 2. Account info
-        if (s.broker_info && s.broker_info.account_id) {
-          const accEl = document.getElementById('stratAccount');
-          if (accEl) accEl.textContent = `ACC: #${s.broker_info.account_id}`;
-        }
-
-        // 3. Enabled strategies sync
-        if (s.enabled_strategies) {
-          const enabledSet = new Set(s.enabled_strategies.map(x => x.toUpperCase()));
-          if (s.reversal_strategy_enabled) {
-            enabledSet.add('TREND_REVERSAL');
-          }
-
-          const stratMap = {
-            'scalp-5m': 'SMC_SCALP_5M',
-            'ict-inst': 'ICT',
-            'reversal': 'TREND_REVERSAL',
-            'swing': 'SMC',
-            'order-flow': 'ORDER_FLOW'
-          };
-
-          for (const [cardId, backendName] of Object.entries(stratMap)) {
-            const card = document.querySelector(`.strategy-card[data-id="${cardId}"]`);
-            if (card) {
-              const stratKey = card.getAttribute('data-backend-strat') || cardId;
-              let isEnabled;
-              // If user recently toggled this engine within 4.5 seconds, respect the optimistic UI
-              if (pendingOverrides[stratKey] && (Date.now() - pendingOverrides[stratKey].time < 4500)) {
-                isEnabled = pendingOverrides[stratKey].state;
-              } else {
-                delete pendingOverrides[stratKey];
-                isEnabled = enabledSet.has(backendName);
-              }
-              setCardVisualState(card, isEnabled);
-            }
-          }
-          updateActiveLoadCounter();
-        }
-
-        // 4. Live win rates per strategy & aggregate metrics
-        if (s.win_rate !== undefined) {
-          const winEl = document.getElementById('weightedWinVal');
-          if (winEl) winEl.textContent = `${parseFloat(s.win_rate).toFixed(1)}%`;
-        }
-        if (s.sharpe_ratio !== undefined && s.sharpe_ratio !== null) {
-          const sharpeEl = document.getElementById('combinedSharpeVal');
-          if (sharpeEl) sharpeEl.textContent = parseFloat(s.sharpe_ratio).toFixed(2);
-        }
-
-        if (s.stats_by_strategy) {
-          const stats = s.stats_by_strategy;
-          function setWR(cardId, keys) {
-            let found = null;
-            for (const k of keys) {
-              if (stats[k]) { found = stats[k]; break; }
-            }
-            if (found && found.win_rate !== undefined) {
-              const el = document.getElementById(`winRate-${cardId}`);
-              if (el) el.textContent = `${parseFloat(found.win_rate).toFixed(1)}%`;
-            }
-          }
-          setWR('scalp-5m', ['5M Scalp', 'SMC_SCALP_5M', 'scalp5m', '5m scalp']);
-          setWR('ict-inst', ['ICT', 'ICT Institutional', 'ict']);
-          setWR('swing', ['SMC Swing', 'SMC', 'smc', 'Swing']);
-          setWR('order-flow', ['Order Flow', 'Order Flow Engine', 'ORDER_FLOW', 'orderFlow']);
-          setWR('reversal', ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal']);
-        }
+        applyStrategyState(s);
       } catch (err) {
         // silent transient polling error
       }
     }
 
+    // ── Hybrid WebSocket Real-Time Connection Manager ──
+    let ws = null;
+    let wsConnected = false;
+    let fallbackPollTimer = null;
+    let reconnectAttempts = 0;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/state`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          wsConnected = true;
+          reconnectAttempts = 0;
+          console.log("⚡ [WebSocket] Connected to Engine state stream. Stopped HTTP polling.");
+          if (fallbackPollTimer) {
+            clearInterval(fallbackPollTimer);
+            fallbackPollTimer = null;
+          }
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            applyStrategyState(data);
+          } catch (e) {
+            console.warn("WebSocket parse error:", e);
+          }
+        };
+
+        ws.onclose = () => {
+          wsConnected = false;
+          startFallbackPolling();
+          scheduleReconnect();
+        };
+
+        ws.onerror = (err) => {
+          try { ws.close(); } catch (_) {}
+        };
+      } catch (err) {
+        startFallbackPolling();
+        scheduleReconnect();
+      }
+    }
+
+    function scheduleReconnect() {
+      reconnectAttempts++;
+      const delay = Math.min(10000, 1000 * Math.pow(1.5, reconnectAttempts));
+      setTimeout(() => {
+        if (!wsConnected) {
+          connectWebSocket();
+        }
+      }, delay);
+    }
+
+    function startFallbackPolling() {
+      if (!fallbackPollTimer) {
+        fallbackPollTimer = setInterval(syncStrategyState, 10000);
+      }
+    }
+
     syncStrategyState();
-    setInterval(syncStrategyState, 5000);
+    connectWebSocket();
   })();
 </script></main>
 <!-- Clean Institutional Tab Bar -->

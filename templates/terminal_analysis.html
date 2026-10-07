@@ -505,13 +505,9 @@
     });
   }
 
-  // Live data sync from /api/state and /api/ml/shadow-stats
-  async function loadAnalysisData() {
-    try {
-      // 1. Fetch live bot state
-      const stateRes = await fetch('/api/state');
-      if (stateRes.ok) {
-        const s = await stateRes.json();
+  // Real-time state application from WebSocket or fallback poll
+  function applyAnalysisState(s) {
+    if (!s) return;
         
         // Header live status sync
         if (typeof s.is_active === 'boolean') {
@@ -721,8 +717,24 @@
           }
         }
       }
+    }
+  }
 
-      // 2. Fetch AI Shadow Mode Prediction Stats
+  async function fetchLiveState() {
+    try {
+      const stateRes = await fetch('/api/state');
+      if (stateRes.ok) {
+        const s = await stateRes.json();
+        applyAnalysisState(s);
+      }
+    } catch (err) {
+      // transient poll error
+    }
+  }
+
+  // 2. Fetch AI Shadow Mode Prediction Stats
+  async function fetchShadowStats() {
+    try {
       const shadowRes = await fetch('/api/ml/shadow-stats');
       if (shadowRes.ok) {
         const shadow = await shadowRes.json();
@@ -788,12 +800,80 @@
         }
       }
     } catch (err) {
-      console.warn('Error loading analysis data:', err);
+      console.warn('Error loading shadow stats:', err);
     }
   }
 
-  loadAnalysisData();
-  setInterval(loadAnalysisData, 5000);
+  // ── Hybrid WebSocket Real-Time Connection Manager ──
+  let ws = null;
+  let wsConnected = false;
+  let fallbackPollTimer = null;
+  let reconnectAttempts = 0;
+
+  function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/state`;
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        wsConnected = true;
+        reconnectAttempts = 0;
+        console.log("⚡ [WebSocket] Connected to Engine state stream. Stopped HTTP polling.");
+        if (fallbackPollTimer) {
+          clearInterval(fallbackPollTimer);
+          fallbackPollTimer = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          applyAnalysisState(data);
+        } catch (e) {
+          console.warn("WebSocket parse error:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        wsConnected = false;
+        startFallbackPolling();
+        scheduleReconnect();
+      };
+
+      ws.onerror = (err) => {
+        try { ws.close(); } catch (_) {}
+      };
+    } catch (err) {
+      startFallbackPolling();
+      scheduleReconnect();
+    }
+  }
+
+  function scheduleReconnect() {
+    reconnectAttempts++;
+    const delay = Math.min(10000, 1000 * Math.pow(1.5, reconnectAttempts));
+    setTimeout(() => {
+      if (!wsConnected) {
+        connectWebSocket();
+      }
+    }, delay);
+  }
+
+  function startFallbackPolling() {
+    if (!fallbackPollTimer) {
+      fallbackPollTimer = setInterval(fetchLiveState, 10000);
+    }
+  }
+
+  // Initial immediate hydration
+  fetchLiveState();
+  fetchShadowStats();
+  // Connect real-time WebSocket
+  connectWebSocket();
+  // Relaxed background check for ML shadow stats (every 15s)
+  setInterval(fetchShadowStats, 15000);
 </script>
 </main>
 <!-- Clean Institutional Tab Bar -->

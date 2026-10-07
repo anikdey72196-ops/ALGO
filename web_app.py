@@ -20,7 +20,8 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 # pyrefly: ignore [missing-import]
-from fastapi import Body, FastAPI, HTTPException, Request, Response
+from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -143,6 +144,8 @@ bot_instance: TradingBot = TradingBot(DEFAULT_CONFIG)
 bot_instance.startup()
 scheduler_instance: AsyncIOScheduler | None = None
 labeler_task_instance: asyncio.Task | None = None
+ws_task_instance: asyncio.Task | None = None
+active_websockets: set[WebSocket] = set()
 
 
 @asynccontextmanager
@@ -162,6 +165,7 @@ async def lifespan(app: FastAPI):
         if bot_instance.is_active:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, bot_instance.tick)
+            await broadcast_bot_state()
 
     scheduler_instance.add_job(
         safe_tick_wrapper,
@@ -184,9 +188,34 @@ async def lifespan(app: FastAPI):
     )
     logger.info("ML Trap Detector background labeler task active.")
 
+    # Schedule WebSocket background broadcaster for connected dashboards
+    async def ws_broadcaster_task():
+        while True:
+            try:
+                await asyncio.sleep(3.0)
+                if active_websockets:
+                    await broadcast_bot_state()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"WebSocket broadcaster error: {e}")
+                await asyncio.sleep(2.0)
+
+    ws_task_instance = asyncio.create_task(ws_broadcaster_task())
+    logger.info("WebSocket state streaming background task active.")
+
     yield
 
     # Shutdown
+    if ws_task_instance:
+        ws_task_instance.cancel()
+    for ws in list(active_websockets):
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    active_websockets.clear()
+
     if labeler_task_instance:
         labeler_task_instance.cancel()
     if scheduler_instance:
@@ -201,6 +230,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Templates and static directories
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -560,6 +597,59 @@ async def get_bot_state():
     )
 
 
+# ─────────────────────────────────────────────
+#  WebSocket State Streaming Manager
+# ─────────────────────────────────────────────
+
+async def broadcast_bot_state():
+    """Broadcast current bot state to all connected WebSockets in real time."""
+    if not active_websockets or not bot_instance:
+        return
+    try:
+        state_resp = await get_bot_state()
+        data = state_resp.model_dump()
+        dead_sockets = set()
+        for ws in list(active_websockets):
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead_sockets.add(ws)
+        for ws in dead_sockets:
+            active_websockets.discard(ws)
+    except Exception as e:
+        logger.debug(f"Error broadcasting bot state via WebSocket: {e}")
+
+
+@app.websocket("/ws/state")
+async def websocket_bot_state(websocket: WebSocket):
+    """
+    Real-time persistent state stream.
+    Replaces repetitive HTTP GET /api/state polling with low-latency event-driven push.
+    """
+    await websocket.accept()
+    active_websockets.add(websocket)
+    try:
+        # Push immediate snapshot upon initial connection
+        if bot_instance:
+            state_resp = await get_bot_state()
+            await websocket.send_json(state_resp.model_dump())
+
+        while True:
+            text = await websocket.receive_text()
+            if text == "ping":
+                await websocket.send_text("pong")
+            elif text == "refresh":
+                if bot_instance:
+                    state_resp = await get_bot_state()
+                    await websocket.send_json(state_resp.model_dump())
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.debug(f"WebSocket client disconnected: {e}")
+    finally:
+        active_websockets.discard(websocket)
+
+
 @app.get("/api/logs")
 async def get_system_logs(category: Optional[str] = None, limit: int = 200):
     """
@@ -682,8 +772,9 @@ async def activate_bot():
         f"Active Strategies: {bot_instance.config.enabled_strategies}"
     )
 
-    # Immediately trigger a tick cycle
+    # Immediately trigger a tick cycle & broadcast state
     asyncio.create_task(asyncio.to_thread(bot_instance.tick))
+    asyncio.create_task(broadcast_bot_state())
     return {
         "status": "success",
         "session_id": session_id,
@@ -705,6 +796,7 @@ async def deactivate_bot():
     invalidate_state_cache()
     closed_id = bot_instance.state.record_deactivation("Manual User Stop")
     bot_instance.log(f"🔴 BOT DEACTIVATED by user (Session #{closed_id or '---'}). No trade execution will occur.")
+    asyncio.create_task(broadcast_bot_state())
     return {
         "status": "success",
         "session_id": closed_id,
@@ -722,6 +814,7 @@ async def halt_bot(close_trades: bool = True):
 
     result = bot_instance.halt(close_trades=close_trades, reason="Emergency HALT via Web")
     invalidate_state_cache()
+    asyncio.create_task(broadcast_bot_state())
     return result
 
 
@@ -796,6 +889,8 @@ async def handle_dashboard_update(payload: dict):
             bot_instance.strategy.set_enabled_strategies(current)
 
         bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         return {
             "status": "success",
             "enabled_strategies": current,
@@ -820,6 +915,8 @@ async def handle_dashboard_update(payload: dict):
             current.remove(sym)
         bot_instance.config.selected_symbols = current
         bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         return {"status": "success", "selected_symbols": current}
 
     elif action == "toggle_trailing":
@@ -831,6 +928,8 @@ async def handle_dashboard_update(payload: dict):
         enabled = payload.get("enabled", True)
         bot_instance.config.trailing_stop_mode = "STRUCTURE" if enabled else "NONE"
         bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
     elif action == "save_all_pairs":
@@ -885,6 +984,7 @@ async def handle_dashboard_update(payload: dict):
         bot_instance.config.selected_symbols = selected_symbols
         bot_instance.save_settings()
         invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         bot_instance.log(f"💾 Applied & saved all pair parameters to Engine: {list(pairs_data.keys())}")
         return {
             "status": "success",
@@ -934,6 +1034,7 @@ async def handle_dashboard_update(payload: dict):
 
         bot_instance.save_settings()
         invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         return {
             "status": "success",
             "symbol": sym,
@@ -1014,6 +1115,8 @@ async def handle_dashboard_update(payload: dict):
             bot_instance.config.ai_confirmation_enabled = bool(config["aiGateEnabled"])
 
         bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
         return {"status": "success", "message": "Configuration and pair Lot/SL settings saved"}
 
     return {"status": "success", "message": "Acknowledged"}
@@ -1327,6 +1430,8 @@ async def update_configuration(payload: BotConfigUpdate):
 
     # Persist updated configuration to bot_settings.json
     bot_instance.save_settings()
+    invalidate_state_cache()
+    asyncio.create_task(broadcast_bot_state())
 
     bot_instance.log(
         f"⚙️ Configuration updated: "
