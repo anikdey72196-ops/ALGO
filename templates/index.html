@@ -2255,147 +2255,186 @@
     }
 
     // -------------------------------------------------------------------------
-    // J. REAL-TIME DATA POLLING (3000ms Interval)
+    // J. REAL-TIME DATA STREAMING & POLLING
     // -------------------------------------------------------------------------
-    async function fetchLiveState() {
-      try {
-        const res = await fetch('/api/state');
-        if (!res.ok) return;
-        const data = await res.json();
+    function applyLiveState(data) {
+      if (!data) return;
 
-        // 0. Sync Today's Directional Bias
-        if (data.daily_bias) {
-          updateDailyBiasUI(data.daily_bias);
+      // 0. Sync Today's Directional Bias
+      if (data.daily_bias) {
+        updateDailyBiasUI(data.daily_bias);
+      }
+
+      // 1. Sync Bot Status
+      if (data.is_active && state.botStatus !== 'RUNNING') {
+        state.botStatus = 'RUNNING';
+        updateBotStatusUI();
+      } else if (!data.is_active && state.botStatus === 'RUNNING') {
+        state.botStatus = 'IDLE';
+        updateBotStatusUI();
+      }
+
+      // 2. Win Accuracy %
+      const winAcc = data.accuracy != null ? data.accuracy : 31.5;
+      const formattedAcc = winAcc > 0 ? `${winAcc.toFixed(1)}%` : '31.5%';
+      document.getElementById('headerWinAccuracy').innerText = formattedAcc;
+      document.getElementById('cardWinRateValue').innerText = formattedAcc;
+
+      // 3. Execution Hits (TP / SL) & Target R:R
+      const tp = data.winning_trades ?? 14;
+      const sl = data.losing_trades ?? 30;
+      document.getElementById('headerHits').innerText = `${tp} TP · ${sl} SL`;
+      document.getElementById('cardRRExecution').innerText = `${tp}W / ${sl}L`;
+
+      // Total Closed
+      const closedCount = data.total_closed_trades || (tp + sl) || 44;
+      document.getElementById('cardTotalClosed').innerText = `${closedCount} Trades`;
+
+      // Planned / Target R:R
+      const rr = (data.performance_metrics && data.performance_metrics.formatted_avg_rr) || '1:2.50';
+      document.getElementById('headerTargetRR').innerText = `R:R ${rr}`;
+      document.getElementById('cardRRValue').innerText = rr;
+
+      // 3b. October 5-Window Interval Sync
+      if (data.current_window) {
+        const win = data.current_window;
+        const winTextEl = document.getElementById('activeWindowText');
+        if (winTextEl && win.id) {
+          winTextEl.innerText = `${win.id}: ${win.name} (${win.time_range})`;
         }
+      }
 
-        // 1. Sync Bot Status
-        if (data.is_active && state.botStatus !== 'RUNNING') {
-          state.botStatus = 'RUNNING';
-          updateBotStatusUI();
-        } else if (!data.is_active && state.botStatus === 'RUNNING') {
-          state.botStatus = 'IDLE';
-          updateBotStatusUI();
-        }
+      // 4. AI Sentinel Gate
+      const rawThreshold = data.ai_confidence_threshold;
+      const aiThreshold = rawThreshold != null 
+        ? (rawThreshold > 1 ? Math.round(rawThreshold) : Math.round(rawThreshold * 100))
+        : 75;
+      document.getElementById('cardAIGateThreshold').innerText = `≥ ${aiThreshold}% Confidence`;
+      
+      const gatePct = Math.min(99, Math.max(aiThreshold, aiThreshold + 7));
+      document.getElementById('cardAIGateValue').innerText = `${gatePct}%`;
 
-        // 2. Win Accuracy %
-        const winAcc = data.accuracy != null ? data.accuracy : 31.5;
-        const formattedAcc = winAcc > 0 ? `${winAcc.toFixed(1)}%` : '31.5%';
-        document.getElementById('headerWinAccuracy').innerText = formattedAcc;
-        document.getElementById('cardWinRateValue').innerText = formattedAcc;
+      // Update AI Gate Guard Badge
+      const gateBadge = document.getElementById('cardAIGateBadge');
+      if (gateBadge) {
+        const isGateOn = data.ai_confirmation_enabled !== false;
+        gateBadge.innerHTML = isGateOn 
+          ? `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON`
+          : `<span class="w-2 h-2 rounded-full bg-slate-400"></span> BYPASS`;
+        gateBadge.className = isGateOn
+          ? "px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary text-xs font-black flex items-center gap-1"
+          : "px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-500 text-xs font-black flex items-center gap-1";
+      }
 
-        // 3. Execution Hits (TP / SL) & Target R:R
-        const tp = data.winning_trades ?? 14;
-        const sl = data.losing_trades ?? 30;
-        document.getElementById('headerHits').innerText = `${tp} TP · ${sl} SL`;
-        document.getElementById('cardRRExecution').innerText = `${tp}W / ${sl}L`;
-
-        // Total Closed
-        const closedCount = data.total_closed_trades || (tp + sl) || 44;
-        document.getElementById('cardTotalClosed').innerText = `${closedCount} Trades`;
-
-        // Planned / Target R:R
-        const rr = (data.performance_metrics && data.performance_metrics.formatted_avg_rr) || '1:2.50';
-        document.getElementById('headerTargetRR').innerText = `R:R ${rr}`;
-        document.getElementById('cardRRValue').innerText = rr;
-
-        // 3b. October 5-Window Interval Sync
-        if (data.current_window) {
-          const win = data.current_window;
-          const winTextEl = document.getElementById('activeWindowText');
-          if (winTextEl && win.id) {
-            winTextEl.innerText = `${win.id}: ${win.name} (${win.time_range})`;
+      // 5. Active Strategies Sync (without destroying DOM to preserve CSS transitions)
+      if (data.enabled_strategies && Array.isArray(data.enabled_strategies)) {
+        for (const strat of Object.values(state.strategies)) {
+          let isServerActive = data.enabled_strategies.includes(strat.code);
+          if (strat.id === 'reversal' && data.reversal_strategy_enabled !== undefined) {
+            isServerActive = isServerActive || !!data.reversal_strategy_enabled;
+          }
+          strat.active = isServerActive;
+          const chk = document.getElementById('luminousToggle_' + strat.id);
+          if (chk && chk.checked !== isServerActive) {
+            chk.checked = isServerActive;
+          }
+          const lbl = document.getElementById('luminousLabel_' + strat.id);
+          if (lbl) {
+            lbl.innerText = isServerActive ? 'ACTIVE' : 'INACTIVE';
           }
         }
+      }
 
-        // 4. AI Sentinel Gate
-        const trapStats = data.trap_stats || data.ml_trap_detector || {};
-        const rawThreshold = data.ai_confidence_threshold;
-        const aiThreshold = rawThreshold != null 
-          ? (rawThreshold > 1 ? Math.round(rawThreshold) : Math.round(rawThreshold * 100))
-          : 75;
-        document.getElementById('cardAIGateThreshold').innerText = `≥ ${aiThreshold}% Confidence`;
-        
-        const gatePct = Math.min(99, Math.max(aiThreshold, aiThreshold + 7));
-        document.getElementById('cardAIGateValue').innerText = `${gatePct}%`;
+      // 6. Active Pairs & Lot/SL Sync
+      const isEditingInput = document.activeElement && (document.activeElement.tagName === 'INPUT');
+      let pairsNeedReRender = false;
 
-        // Update AI Gate Guard Badge
-        const gateBadge = document.getElementById('cardAIGateBadge');
-        if (gateBadge) {
-          const isGateOn = data.ai_confirmation_enabled !== false;
-          gateBadge.innerHTML = isGateOn 
-            ? `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GUARD ON`
-            : `<span class="w-2 h-2 rounded-full bg-slate-400"></span> BYPASS`;
-          gateBadge.className = isGateOn
-            ? "px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-primary text-xs font-black flex items-center gap-1"
-            : "px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-500 text-xs font-black flex items-center gap-1";
-        }
-
-        // 5. Active Strategies Sync (without destroying DOM to preserve CSS transitions)
-        if (data.enabled_strategies && Array.isArray(data.enabled_strategies)) {
-          for (const strat of Object.values(state.strategies)) {
-            let isServerActive = data.enabled_strategies.includes(strat.code);
-            if (strat.id === 'reversal' && data.reversal_strategy_enabled !== undefined) {
-              isServerActive = isServerActive || !!data.reversal_strategy_enabled;
-            }
-            strat.active = isServerActive;
-            const chk = document.getElementById('luminousToggle_' + strat.id);
-            if (chk && chk.checked !== isServerActive) {
-              chk.checked = isServerActive;
-            }
-            const lbl = document.getElementById('luminousLabel_' + strat.id);
-            if (lbl) {
-              lbl.innerText = isServerActive ? 'ACTIVE' : 'INACTIVE';
-            }
-          }
-        }
-
-        // 6. Active Pairs & Lot/SL Sync
-        const isEditingInput = document.activeElement && (document.activeElement.tagName === 'INPUT');
-        let pairsNeedReRender = false;
-
-        if (data.pairs_config && typeof data.pairs_config === 'object') {
-          for (const [pKey, pVal] of Object.entries(data.pairs_config)) {
-            const pair = state.pairs[pKey.toLowerCase()];
-            if (pair) {
-              const isServerActive = !!pVal.active;
-              if (pair.active !== isServerActive) {
-                pair.active = isServerActive;
-                pairsNeedReRender = true;
-              }
-              if (!isEditingInput) {
-                if (pVal.lot != null) {
-                  const sLot = parseFloat(pVal.lot);
-                  if (Math.abs(pair.lot - sLot) > 0.001) {
-                    pair.lot = sLot;
-                    pairsNeedReRender = true;
-                  }
-                }
-                if (pVal.sl != null) {
-                  const sSL = parseFloat(pVal.sl);
-                  if (Math.abs(pair.sl - sSL) > 0.1) {
-                    pair.sl = sSL;
-                    pairsNeedReRender = true;
-                  }
-                }
-              }
-            }
-          }
-        } else if (data.selected_symbols && Array.isArray(data.selected_symbols)) {
-          for (const pair of Object.values(state.pairs)) {
-            const isServerActive = data.selected_symbols.includes(pair.symbol);
+      if (data.pairs_config && typeof data.pairs_config === 'object') {
+        for (const [pKey, pVal] of Object.entries(data.pairs_config)) {
+          const pair = state.pairs[pKey.toLowerCase()];
+          if (pair) {
+            const isServerActive = !!pVal.active;
             if (pair.active !== isServerActive) {
               pair.active = isServerActive;
               pairsNeedReRender = true;
             }
+            if (!isEditingInput) {
+              if (pVal.lot != null) {
+                const sLot = parseFloat(pVal.lot);
+                if (Math.abs(pair.lot - sLot) > 0.001) {
+                  pair.lot = sLot;
+                  pairsNeedReRender = true;
+                }
+              }
+              if (pVal.sl != null) {
+                const sSL = parseFloat(pVal.sl);
+                if (Math.abs(pair.sl - sSL) > 0.1) {
+                  pair.sl = sSL;
+                  pairsNeedReRender = true;
+                }
+              }
+            }
           }
         }
-
-        if (pairsNeedReRender && !isEditingInput) {
-          renderPairs();
+      } else if (data.selected_symbols && Array.isArray(data.selected_symbols)) {
+        for (const pair of Object.values(state.pairs)) {
+          const isServerActive = data.selected_symbols.includes(pair.symbol);
+          if (pair.active !== isServerActive) {
+            pair.active = isServerActive;
+            pairsNeedReRender = true;
+          }
         }
+      }
 
+      if (pairsNeedReRender && !isEditingInput) {
+        renderPairs();
+      }
+    }
+
+    async function fetchLiveState() {
+      try {
+        const res = await fetch('/api/state/compact');
+        if (!res.ok) return;
+        const data = await res.json();
+        applyLiveState(data);
       } catch (err) {
         console.warn("Polling error (will retry):", err);
+      }
+    }
+
+    let stateWs = null;
+    let lastWsMessageTime = 0;
+
+    function initLiveStateWebSocket() {
+      try {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${proto}//${location.host}/ws/state`;
+        stateWs = new WebSocket(wsUrl);
+
+        stateWs.onopen = () => {
+          console.log("⚡ Live WebSocket connected to /ws/state");
+        };
+
+        stateWs.onmessage = (event) => {
+          try {
+            lastWsMessageTime = Date.now();
+            const data = JSON.parse(event.data);
+            applyLiveState(data);
+          } catch (err) {
+            console.warn("WebSocket parse error:", err);
+          }
+        };
+
+        stateWs.onclose = () => {
+          stateWs = null;
+          setTimeout(initLiveStateWebSocket, 5000);
+        };
+
+        stateWs.onerror = () => {
+          if (stateWs) stateWs.close();
+        };
+      } catch (err) {
+        stateWs = null;
       }
     }
 
@@ -2522,13 +2561,29 @@
       renderPairs();
       updateBotStatusUI();
       
-      // Initial fetch
+      // 1. Establish persistent low-latency WebSocket connection
+      initLiveStateWebSocket();
+
+      // 2. Initial fetch for instant display
       fetchLiveState();
 
-      // Poll at a safe 3000ms (3 seconds) interval to prevent lag and CPU load
-      setInterval(fetchLiveState, 3000);
+      // 3. Fallback poll loop: skips HTTP requests if WebSocket is active or phone tab is hidden
+      setInterval(() => {
+        if (document.hidden) return; // Pause polling when phone screen is locked or tab inactive
+        if (stateWs && stateWs.readyState === WebSocket.OPEN && (Date.now() - lastWsMessageTime < 6000)) {
+          return; // WebSocket is already pushing live data
+        }
+        fetchLiveState();
+      }, 3000);
 
-      console.log(" ALGOQUANT Institutional Dashboard Initialized. Polling every 3s.");
+      // 4. Instant catch-up upon returning to browser tab
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          fetchLiveState();
+        }
+      });
+
+      console.log("⚡ ALGOQUANT Mobile-Optimized Dashboard Initialized (GZip + WS/Compact State Active).");
     });
   </script>
 </body>
