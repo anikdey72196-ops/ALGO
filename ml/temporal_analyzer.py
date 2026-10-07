@@ -943,6 +943,8 @@ class TemporalEdgeMLModel:
 # 7. SERVICE WRAPPER
 # =============================================================================
 
+from functools import lru_cache
+
 class TemporalEdgeService:
     """
     Thread-safe runtime service for temporal profitability analysis, trade gating,
@@ -970,6 +972,8 @@ class TemporalEdgeService:
         with self._lock:
             self.model.fit()
             self.model.save()
+            if hasattr(self._cached_evaluate, "cache_clear"):
+                self._cached_evaluate.cache_clear()
             return self.get_summary()
 
     def evaluate(
@@ -981,6 +985,12 @@ class TemporalEdgeService:
     ) -> TemporalVerdict:
         """Evaluate a potential trade setup at the given timestamp."""
         ts = timestamp or datetime.now(timezone.utc)
+        ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        sig = f"{ts_str}|{symbol}|{strategy}|{planned_rr:.2f}"
+        return self._cached_evaluate(sig, ts, symbol, strategy, planned_rr)
+
+    @lru_cache(maxsize=2048)
+    def _cached_evaluate(self, sig: str, ts: Any, symbol: str, strategy: str, planned_rr: float) -> TemporalVerdict:
         with self._lock:
             return self.model.predict(ts, symbol=symbol, strategy=strategy, planned_rr=planned_rr)
 

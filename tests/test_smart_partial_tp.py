@@ -24,13 +24,16 @@ import pytest
 from core.config import Direction, PositionManagementRuleConfig, TradingConfig
 from core.state import StateManager, TradeRecord
 from execution.position_manager import PositionManager
+from core.state import TradeRecord, Direction
 from ml.smart_partial_tp import (
+    FEATURE_NAMES,
     SmartPartialTPModel,
     SmartPartialTPService,
     StructuralLevels,
     decide_partial_tp,
     extract_features,
     extract_structural_levels,
+    StructuralExtractor,
 )
 
 
@@ -365,3 +368,213 @@ def test_target_50_pct_partial_profit_and_cost_to_cost_sl():
                 pm.shutdown()
             state.close()
 
+
+
+def test_smart_partial_tp_optimization_and_explainability():
+    """Verify hyperparameter tuning, calibration, trade record training, and SHAP explanation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "test_opt_model.joblib"
+        model = SmartPartialTPModel(artifact_path=model_path)
+
+        # 1. Model version & sample count
+        assert model.version == "v2.0-tuned-calibrated"
+        assert model.total_trained_samples == 5000
+        assert model.classifier is not None
+        assert model.regressor is not None
+
+        # 2. Probability calibration
+        dummy_feat = {name: 1.0 for name in FEATURE_NAMES}
+        p_rev, p_full, pred_max_r = model.predict(dummy_feat)
+        assert 0.0 <= p_rev <= 1.0
+        assert 0.0 <= p_full <= 1.0
+        assert pred_max_r >= dummy_feat["r_multiple"]
+
+        # 3. SHAP Explainability
+        exp = model.explain_prediction(dummy_feat)
+        assert exp["model_version"] == model.version
+        assert len(exp["feature_importances"]) == len(FEATURE_NAMES)
+        assert len(exp["top_drivers"]) == 5
+
+        # 4. Retraining on historical TradeRecord list
+        records = []
+        for i in range(20):
+            t = TradeRecord(
+                id=i + 1,
+                timestamp=datetime.now(timezone.utc),
+                symbol="EURUSD",
+                direction=Direction.BUY if i % 2 == 0 else Direction.SELL,
+                entry_price=1.0800,
+                stop_loss=1.0770,
+                take_profit=1.0860,
+                lot_size=0.1,
+                realized_pnl=60.0 if i % 2 == 0 else -30.0,
+                status="CLOSED_TP" if i % 2 == 0 else "CLOSED_SL",
+                strategy_name="ICT",
+            )
+            records.append(t)
+
+        success = model.train_from_trade_records(records, n_iter=3, cv=2)
+        assert success is True
+        assert "v2.0-real-20trades" in model.version
+
+
+def test_extract_structural_levels_known_sequence():
+    """Test extract_structural_levels and extract_structural_levels_ndarray with known candle sequence."""
+    dates = pd.date_range("2025-01-01", periods=30, freq="5min")
+    highs = np.linspace(100, 110, 30)
+    lows = np.linspace(98, 108, 30)
+    closes = np.linspace(99, 109, 30)
+    opens = np.linspace(98.5, 108.5, 30)
+
+    # Insert a swing high pivot at index 15
+    highs[15] = 120.0
+    highs[13] = 112.0
+    highs[14] = 114.0
+    highs[16] = 114.0
+    highs[17] = 112.0
+
+    df = pd.DataFrame({"high": highs, "low": lows, "close": closes, "open": opens}, index=dates)
+
+    # 1. Test via DataFrame
+    struct_df = extract_structural_levels(
+        df=df,
+        direction="BUY",
+        entry_price=105.0,
+        current_price=108.0,
+        risk_dist=2.0,
+    )
+    assert struct_df.nearest_swing_price == 120.0
+    assert abs(struct_df.nearest_swing_dist_r - (120.0 - 108.0) / 2.0) < 1e-4
+
+    # 2. Test via raw NDArrays static method
+    struct_arr = StructuralExtractor.extract_structural_levels_ndarray(
+        highs=highs,
+        lows=lows,
+        closes=closes,
+        opens=opens,
+        direction="BUY",
+        entry_price=105.0,
+        current_price=108.0,
+        risk_dist=2.0,
+    )
+    assert struct_arr.nearest_swing_price == 120.0
+    assert abs(struct_arr.nearest_swing_dist_r - (120.0 - 108.0) / 2.0) < 1e-4
+
+
+def test_session_encoding_and_now_dt():
+    """Verify encode_session maps hours correctly according to SESSION_MAP."""
+    from datetime import datetime, timezone
+    from ml.smart_partial_tp import encode_session
+
+    dt_asian = datetime(2025, 1, 15, 3, 0, tzinfo=timezone.utc)
+    dt_london = datetime(2025, 1, 15, 9, 0, tzinfo=timezone.utc)
+    dt_overlap = datetime(2025, 1, 15, 14, 0, tzinfo=timezone.utc)
+    dt_ny = datetime(2025, 1, 15, 18, 0, tzinfo=timezone.utc)
+    dt_off = datetime(2025, 1, 15, 22, 0, tzinfo=timezone.utc)
+
+    assert encode_session(dt_asian) == 0
+    assert encode_session(dt_london) == 1
+    assert encode_session(dt_overlap) == 2
+    assert encode_session(dt_ny) == 3
+    assert encode_session(dt_off) == 4
+
+
+def test_zero_risk_guard_and_feature_registration():
+    """Test zero risk handling (entry == sl) and dynamic feature registration."""
+    from ml.smart_partial_tp import extract_features, register_new_feature, FEATURE_NAMES
+
+    # Register custom feature
+    register_new_feature("custom_volatility_score", lambda ctx: 42.0)
+    assert "custom_volatility_score" in FEATURE_NAMES
+
+    df = _generate_synthetic_ohlcv(30)
+
+    # Test with entry_price == sl_price (zero risk distance)
+    feats, struct = extract_features(
+        df=df,
+        direction="BUY",
+        entry_price=2000.0,
+        sl_price=2000.0,  # zero distance!
+        tp_price=2010.0,
+        current_price=2005.0,
+        bars_since_entry=3,
+        strategy_name="SMC",
+    )
+
+    assert not math.isnan(feats["r_multiple"])
+    assert not math.isinf(feats["r_multiple"])
+    assert feats["planned_rr"] > 0
+    assert feats["custom_volatility_score"] == 42.0
+
+
+def test_online_regressor_and_record_trade_outcome():
+    """Test online_reg pipeline in SmartPartialTPModel and record_trade_outcome in SmartPartialTPService."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "test_online_reg.joblib"
+        svc = SmartPartialTPService(artifact_path=model_path)
+
+        assert svc.model.online_reg is not None
+
+        # Test predict fallback when main regressor is None
+        svc.model.regressor = None
+        dummy_feat = {name: 1.0 for name in FEATURE_NAMES}
+        p_rev, p_full, pred_max_r = svc.model.predict(dummy_feat)
+        assert pred_max_r >= 0.0
+
+        # Test record trade outcome
+        prev_samples = svc.model.total_trained_samples
+        svc.record_trade_outcome(dummy_feat, hit_tp=True, final_r=2.5)
+        assert svc.model.total_trained_samples == prev_samples + 1
+
+
+def test_conflict_resolution_and_config():
+    """Test decision matrix in decide_partial_tp and YAML configuration loading."""
+    from ml.smart_partial_tp import decide_partial_tp, load_partial_tp_config, StructuralLevels
+
+    struct = StructuralLevels(nearest_level_dist_r=1.0, confluence_count_near_price=1)
+    feats = {"r_multiple": 1.5, "pct_to_tp": 0.50}
+
+    # Rule 1: High conviction runner -> HOLD
+    v1 = decide_partial_tp(
+        features=feats,
+        struct=struct,
+        p_reversal=0.2,
+        p_full_tp=0.8,
+        pred_max_r=3.0,
+        current_lot=0.1,
+        runner_threshold=0.65,
+    )
+    assert v1.action == "HOLD"
+
+    # Rule 2: Impending reversal -> PARTIAL_CLOSE
+    v2 = decide_partial_tp(
+        features=feats,
+        struct=struct,
+        p_reversal=0.70,
+        p_full_tp=0.3,
+        pred_max_r=1.6,
+        current_lot=0.1,
+        reversal_threshold=0.60,
+    )
+    assert v2.action == "PARTIAL_CLOSE"
+    assert v2.close_pct == 0.50
+
+    # Rule 3: Deep in profit -> PARTIAL_CLOSE
+    v3 = decide_partial_tp(
+        features={"r_multiple": 2.5, "pct_to_tp": 0.90},
+        struct=struct,
+        p_reversal=0.3,
+        p_full_tp=0.4,
+        pred_max_r=2.8,
+        current_lot=0.1,
+    )
+    assert v3.action == "PARTIAL_CLOSE"
+    # Test config loader
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg_path = Path(tmpdir) / "config.yaml"
+        with open(cfg_path, "w") as f:
+            f.write("smart_partial_tp:\n  reversal_threshold: 0.72\n  runner_threshold: 0.80\n")
+
+        cfg = load_partial_tp_config(cfg_path)
+        assert cfg["reversal_threshold"] == 0.72
+        assert cfg["runner_threshold"] == 0.80

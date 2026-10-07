@@ -344,9 +344,14 @@ class RiskConfig(BaseModel):
     """Quality and risk filter parameters."""
 
     min_rr_ratio: float = Field(
-        default=2.5,
+        default=1.5,
         ge=1.0,
         description="Minimum risk-to-reward ratio to accept a trade.",
+    )
+    max_rr_ratio: float = Field(
+        default=3.0,
+        ge=1.0,
+        description="Maximum risk-to-reward ratio allowed. TP is strictly clamped so R:R never exceeds this value.",
     )
     max_open_positions: int = Field(
         default=15,

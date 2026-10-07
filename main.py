@@ -27,7 +27,7 @@ from core.conflict_resolver import ConflictResolver
 from core.ai_analyst import AIAnalyst, AIDecision
 from core.market_regime import MarketRegimeDetector, MarketRegime
 
-from strategies.strategy import StrategyEngine, TradeSignal
+from strategies.strategy import StrategyEngine, TradeSignal, clamp_tp_to_rr
 from strategies.trend_reversal import (
     TrendReversalDetector, TrendReversalAnalysis, CHoCHType, ReversalStage
 )
@@ -1186,6 +1186,20 @@ class TradingBot:
                     f"| Equity: ${auth.account_equity:.2f}"
                 )
 
+                # Enforce strict R:R bounds [min 1:1.5, max 1:3.0] prior to submission
+                min_rr_limit = getattr(self.config.risk, 'min_rr_ratio', 1.5)
+                max_rr_limit = getattr(self.config.risk, 'max_rr_ratio', 3.0)
+                clamped_tp, eff_rr = clamp_tp_to_rr(
+                    best_signal.entry_price,
+                    best_signal.stop_loss,
+                    best_signal.take_profit,
+                    best_signal.direction,
+                    min_rr=min_rr_limit,
+                    max_rr=max_rr_limit,
+                )
+                best_signal.take_profit = clamped_tp
+                best_signal.rr_ratio = eff_rr
+
                 # Mark order submission in EQM
                 self.eqm.mark_submission(
                     order_id=eqm_order.order_id,
@@ -1453,9 +1467,8 @@ class TradingBot:
         if htf_data is None or len(htf_data) < 10:
             existing = self.state.get_daily_bias(symbol, today_str)
             if existing:
-                self._daily_bias_cache[symbol] = existing
                 return existing
-            fallback_res = {
+            return {
                 "symbol": symbol,
                 "bias": "NEUTRAL",
                 "trend_clarity_score": 10.0,
@@ -1480,8 +1493,6 @@ class TradingBot:
                 "summary": f"Awaiting market streaming data for {symbol}.",
                 "updated_at": now.isoformat(),
             }
-            self._daily_bias_cache[symbol] = fallback_res
-            return fallback_res
 
         # 2. Run HTF analysis
         htf_analysis = self.strategy.htf_analyzer.analyze(htf_data)
@@ -1695,14 +1706,6 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
 def main() -> None:
     """Entry point."""
     asyncio.run(run_scheduled())
-
-
-def __getattr__(name: str):
-    """Enable ASGI runners targeting `main:app` (e.g. uvicorn main:app) to resolve FastAPI app seamlessly."""
-    if name == "app":
-        import web_app
-        return web_app.app
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 if __name__ == "__main__":

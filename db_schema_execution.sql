@@ -119,3 +119,9 @@ CREATE INDEX IF NOT EXISTS idx_exec_orders_signal_time ON execution_orders(signa
 CREATE INDEX IF NOT EXISTS idx_exec_orders_trade_id ON execution_orders(trade_id);
 CREATE INDEX IF NOT EXISTS idx_exec_fills_order_id ON execution_fills(order_id);
 CREATE INDEX IF NOT EXISTS idx_exec_agg_lookup ON execution_aggregates_daily(date, dimension_type, dimension_value);
+
+-- Trade Log Indexes for High-Performance Queries
+CREATE INDEX IF NOT EXISTS idx_trade_timestamp ON trade_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_trade_symbol ON trade_log(symbol);
+CREATE INDEX IF NOT EXISTS idx_trade_strategy ON trade_log(strategy_name);
+CREATE INDEX IF NOT EXISTS idx_trade_status ON trade_log(status);

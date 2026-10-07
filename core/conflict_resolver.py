@@ -69,12 +69,15 @@ class ConflictResolver:
                 rejection_reasons.append(reason)
                 continue
                 
-            # Gate 2: Minimum R:R (Adaptive: 1.4 for 5M OB scalps, 1.5 for Reversal, 1.8 for ICT / Order Flow, standard min_rr_ratio for swing)
+            # Gate 2: Strict R:R bounds [min 1.5, max 3.0]
+            max_rr = getattr(self.risk_config, 'max_rr_ratio', 3.0)
             conf_val = getattr(signal.ltf_confirmation, 'value', str(signal.ltf_confirmation))
             strat_val = getattr(signal, 'strategy_name', '') or ''
             strat_id_val = getattr(signal, 'strategy_id', '') or ''
-            if conf_val == "OB_SCALP_5M" or "SCALP" in strat_val.upper():
-                min_rr = 1.4
+
+            # Base minimum R:R is strictly at least 1.5 across all strategies
+            if conf_val == "OB_SCALP_5M" or "SCALP" in strat_val.upper() or "SCALP" in strat_id_val.upper():
+                min_rr = 1.5
             elif "REVERSAL" in strat_id_val.upper() or "REVERSAL" in strat_val.upper() or conf_val.startswith("REVERSAL_"):
                 min_rr = 1.5
             elif conf_val.startswith("ICT_") or "ICT" in strat_val.upper():
@@ -82,7 +85,17 @@ class ConflictResolver:
             elif conf_val.startswith("OF_") or "ORDER_FLOW" in strat_id_val.upper() or "FLOW" in strat_val.upper():
                 min_rr = 1.8
             else:
-                min_rr = self.risk_config.min_rr_ratio
+                min_rr = max(1.5, getattr(self.risk_config, 'min_rr_ratio', 1.5))
+
+            # Clamp take profit if R:R exceeds maximum allowed (max 3.0R)
+            if signal.rr_ratio > max_rr:
+                sl_dist = abs(signal.entry_price - signal.stop_loss)
+                if signal.direction == Direction.BUY:
+                    signal.take_profit = signal.entry_price + (sl_dist * max_rr)
+                else:
+                    signal.take_profit = signal.entry_price - (sl_dist * max_rr)
+                signal.tp_distance = abs(signal.take_profit - signal.entry_price)
+                signal.rr_ratio = max_rr
 
             if signal.rr_ratio < min_rr:
                 reason = f"[LOW_RR] {signal.symbol} R:R {signal.rr_ratio:.2f} < minimum {min_rr}"

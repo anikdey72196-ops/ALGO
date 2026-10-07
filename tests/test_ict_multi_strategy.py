@@ -368,6 +368,9 @@ class TestStateDatabaseAnalytics(unittest.TestCase):
 class TestWebAPIEndpoints(unittest.TestCase):
 
     def setUp(self):
+        import web_app
+        if web_app.bot_instance:
+            web_app.bot_instance.is_active = False
         self.client = TestClient(app)
 
     def test_api_state(self):

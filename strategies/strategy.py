@@ -143,6 +143,38 @@ class TradeSignal:
 #  Mathematical & Indicator Helpers
 # ─────────────────────────────────────────────
 
+def clamp_tp_to_rr(
+    entry_price: float,
+    stop_loss: float,
+    take_profit: float,
+    direction: Direction,
+    min_rr: float = 1.5,
+    max_rr: float = 3.0,
+) -> tuple[float, float]:
+    """
+    Clamps take profit price so that the Risk:Reward ratio strictly stays within [min_rr, max_rr].
+    Returns (clamped_tp, effective_rr).
+    """
+    sl_dist = abs(entry_price - stop_loss)
+    if sl_dist <= 1e-9:
+        return take_profit, 0.0
+
+    min_tp_dist = sl_dist * min_rr
+    max_tp_dist = sl_dist * max_rr
+
+    tp_dist = abs(take_profit - entry_price)
+
+    # Strictly bound between min_rr (1.5) and max_rr (3.0)
+    clamped_tp_dist = max(min_tp_dist, min(tp_dist, max_tp_dist))
+
+    if direction == Direction.BUY:
+        clamped_tp = entry_price + clamped_tp_dist
+    else:
+        clamped_tp = entry_price - clamped_tp_dist
+
+    effective_rr = round(clamped_tp_dist / sl_dist, 2)
+    return clamped_tp, effective_rr
+
 def check_candle_body_confirmation(
     candle: pd.Series | dict,
     direction: Direction,
@@ -900,19 +932,21 @@ class SMCEntryDetector:
             if abs(current_close - stop_loss) < min_sl_dist:
                 stop_loss = current_close - min_sl_dist
 
-            # Target liquidity pool or HTF supply zone
+            # Target liquidity pool or HTF supply zone (strictly clamped to [1.5, 3.0] R:R)
             take_profit = 0.0
             opposing_pools = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > current_close]
             opposing_zones = [z.bottom for z in htf_analysis.supply_demand_zones if z.is_supply and z.bottom > current_close]
 
             if opposing_pools:
-                take_profit = min(opposing_pools)
+                raw_tp = min(opposing_pools)
             elif opposing_zones:
-                take_profit = min(opposing_zones)
+                raw_tp = min(opposing_zones)
             elif htf_analysis.last_swing_high and htf_analysis.last_swing_high > current_close:
-                take_profit = htf_analysis.last_swing_high
+                raw_tp = htf_analysis.last_swing_high
             else:
-                take_profit = current_close + (current_close - stop_loss) * 3.5
+                raw_tp = current_close + (current_close - stop_loss) * 2.0
+
+            take_profit, _ = clamp_tp_to_rr(current_close, stop_loss, raw_tp, Direction.BUY, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.BUY,
@@ -1021,13 +1055,15 @@ class SMCEntryDetector:
             opposing_zones = [z.top for z in htf_analysis.supply_demand_zones if not z.is_supply and z.top < current_close]
 
             if opposing_pools:
-                take_profit = max(opposing_pools)
+                raw_tp = max(opposing_pools)
             elif opposing_zones:
-                take_profit = max(opposing_zones)
+                raw_tp = max(opposing_zones)
             elif htf_analysis.last_swing_low and htf_analysis.last_swing_low < current_close:
-                take_profit = htf_analysis.last_swing_low
+                raw_tp = htf_analysis.last_swing_low
             else:
-                take_profit = current_close - (stop_loss - current_close) * 3.5
+                raw_tp = current_close - (stop_loss - current_close) * 2.0
+
+            take_profit, _ = clamp_tp_to_rr(current_close, stop_loss, raw_tp, Direction.SELL, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.SELL,
@@ -1221,10 +1257,12 @@ class SMCScalp5MEngine:
 
             # Take Profit: 1.5R target for partial profit
             take_profit = entry_price + (sl_distance * self.target_rr)
+            take_profit, _ = clamp_tp_to_rr(entry_price, stop_loss, take_profit, Direction.BUY, min_rr=1.5, max_rr=3.0)
 
-            # Potential runner target to the next 5M liquidity pool
+            # Potential runner target to the next 5M liquidity pool (clamped to max 3.0R)
             opposing_pools = [sp.price for sp in swing_highs if sp.price > take_profit]
-            runner_tp = min(opposing_pools) if opposing_pools else take_profit
+            raw_runner = min(opposing_pools) if opposing_pools else take_profit
+            runner_tp, _ = clamp_tp_to_rr(entry_price, stop_loss, raw_runner, Direction.BUY, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.BUY,
@@ -1329,10 +1367,12 @@ class SMCScalp5MEngine:
 
             # Take Profit: 1.5R target for partial profit
             take_profit = entry_price - (sl_distance * self.target_rr)
+            take_profit, _ = clamp_tp_to_rr(entry_price, stop_loss, take_profit, Direction.SELL, min_rr=1.5, max_rr=3.0)
 
-            # Potential runner target to the next 5M liquidity pool
+            # Potential runner target to the next 5M liquidity pool (clamped to max 3.0R)
             opposing_pools = [sp.price for sp in swing_lows if sp.price < take_profit]
-            runner_tp = max(opposing_pools) if opposing_pools else take_profit
+            raw_runner = max(opposing_pools) if opposing_pools else take_profit
+            runner_tp, _ = clamp_tp_to_rr(entry_price, stop_loss, raw_runner, Direction.SELL, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.SELL,
@@ -1637,9 +1677,10 @@ class ICTEngine:
                 sl_distance = min_buffer
                 stop_loss = entry_price - sl_distance
 
-            # Target Opposing External Range Liquidity (ERL)
+            # Target Opposing External Range Liquidity (ERL) clamped to [1.5, 3.0] R:R
             erl_targets = [p.level for p in htf_analysis.liquidity_pools if p.is_high and p.level > entry_price + (sl_distance * self.config.target_rr)]
-            take_profit = min(erl_targets) if erl_targets else entry_price + (sl_distance * self.config.target_rr)
+            raw_tp = min(erl_targets) if erl_targets else entry_price + (sl_distance * self.config.target_rr)
+            take_profit, _ = clamp_tp_to_rr(entry_price, stop_loss, raw_tp, Direction.BUY, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.BUY,
@@ -1773,7 +1814,8 @@ class ICTEngine:
                 stop_loss = entry_price + sl_distance
 
             erl_targets = [p.level for p in htf_analysis.liquidity_pools if not p.is_high and p.level < entry_price - (sl_distance * self.config.target_rr)]
-            take_profit = max(erl_targets) if erl_targets else entry_price - (sl_distance * self.config.target_rr)
+            raw_tp = max(erl_targets) if erl_targets else entry_price - (sl_distance * self.config.target_rr)
+            take_profit, _ = clamp_tp_to_rr(entry_price, stop_loss, raw_tp, Direction.SELL, min_rr=1.5, max_rr=3.0)
 
             return {
                 'direction': Direction.SELL,
@@ -2224,12 +2266,9 @@ class SMCSwingStrategy(BaseStrategy):
             sl_dist = min_buffer
             sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
 
-        # If raw opposing liquidity target does not satisfy swing minimum 2.5R, project institutional 3.0R target
-        if tp_dist < sl_dist * 2.5:
-            tp = entry + (sl_dist * 3.0) if direction == Direction.BUY else entry - (sl_dist * 3.0)
-            tp_dist = abs(entry - tp)
-
-        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
+        # Strictly clamp swing target to [1.5, 3.0] R:R
+        tp, rr_ratio = clamp_tp_to_rr(entry, sl, tp, direction, min_rr=1.5, max_rr=3.0)
+        tp_dist = abs(entry - tp)
 
         # Quality scoring
         quality_score = min(25.0, htf_analysis.trend_clarity_score)
@@ -2341,13 +2380,8 @@ class SMCScalp5MStrategy(BaseStrategy):
             sl_dist = abs(entry - sl)
 
         tp = raw['tp']
+        tp, rr_ratio = clamp_tp_to_rr(entry, sl, tp, direction, min_rr=1.5, max_rr=3.0)
         tp_dist = abs(entry - tp)
-        min_buffer = 1.0 * instrument.pip_size
-        if sl_dist < min_buffer:
-            sl_dist = min_buffer
-            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
-
-        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
 
         quality_score = min(25.0, htf_analysis.trend_clarity_score)
         quality_score += 35.0  # High-conviction BOS + OB retest
@@ -2447,13 +2481,8 @@ class ICTStrategy(BaseStrategy):
             sl_dist = abs(entry - sl)
 
         tp = raw['tp']
+        tp, rr_ratio = clamp_tp_to_rr(entry, sl, tp, direction, min_rr=1.5, max_rr=3.0)
         tp_dist = abs(entry - tp)
-        min_buffer = 1.0 * instrument.pip_size
-        if sl_dist < min_buffer:
-            sl_dist = min_buffer
-            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
-
-        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
 
         # Quality scoring
         quality_score = min(25.0, htf_analysis.trend_clarity_score)
@@ -2560,13 +2589,8 @@ class OrderFlowStrategy(BaseStrategy):
             sl_dist = abs(entry - sl)
 
         tp = raw['tp']
+        tp, rr_ratio = clamp_tp_to_rr(entry, sl, tp, direction, min_rr=1.5, max_rr=3.0)
         tp_dist = abs(entry - tp)
-        min_buffer = 1.0 * instrument.pip_size
-        if sl_dist < min_buffer:
-            sl_dist = min_buffer
-            sl = entry - sl_dist if direction == Direction.BUY else entry + sl_dist
-
-        rr_ratio = tp_dist / sl_dist if sl_dist > 0 else 0.0
 
         # Quality scoring
         quality_score = min(25.0, htf_analysis.trend_clarity_score)
@@ -2779,22 +2803,22 @@ class TrendReversalStrategy(BaseStrategy):
         if sl_dist <= 0:
             return []
 
-        # Take Profit targeting equilibrium or opposing liquidity pool (minimum 1.5R to 2.5R)
+        # Take Profit targeting equilibrium or opposing liquidity pool (strictly clamped to [1.5, 3.0] R:R)
         if analysis.suggested_tp and (
             (direction == Direction.BUY and analysis.suggested_tp > entry and (analysis.suggested_tp - entry) >= 1.5 * sl_dist) or
             (direction == Direction.SELL and analysis.suggested_tp < entry and (entry - analysis.suggested_tp) >= 1.5 * sl_dist)
         ):
-            tp = analysis.suggested_tp
+            raw_tp = analysis.suggested_tp
         else:
             if direction == Direction.BUY and getattr(htf_an, 'dealing_range_high', None) and htf_an.dealing_range_high > entry + 1.5 * sl_dist:
-                tp = htf_an.dealing_range_high
+                raw_tp = htf_an.dealing_range_high
             elif direction == Direction.SELL and getattr(htf_an, 'dealing_range_low', None) and htf_an.dealing_range_low < entry - 1.5 * sl_dist:
-                tp = htf_an.dealing_range_low
+                raw_tp = htf_an.dealing_range_low
             else:
-                tp = entry + 2.5 * sl_dist if direction == Direction.BUY else entry - 2.5 * sl_dist
+                raw_tp = entry + 2.0 * sl_dist if direction == Direction.BUY else entry - 2.0 * sl_dist
 
+        tp, rr_ratio = clamp_tp_to_rr(entry, sl, raw_tp, direction, min_rr=1.5, max_rr=3.0)
         tp_dist = abs(tp - entry)
-        rr_ratio = round(tp_dist / sl_dist, 2)
         if rr_ratio < 1.5:
             return []
 
@@ -2958,7 +2982,23 @@ class StrategyEngine:
             except Exception as e:
                 logger.error(f"Error evaluating strategy {strat_id} on {sym}: {e}")
 
-        return all_signals
+        # Master post-processor: strictly enforce [1.5, 3.0] R:R bounds on all signals
+        clamped_signals: list[TradeSignal] = []
+        for sig in all_signals:
+            clamped_tp, eff_rr = clamp_tp_to_rr(
+                sig.entry_price, sig.stop_loss, sig.take_profit, sig.direction, min_rr=1.5, max_rr=3.0
+            )
+            sig.take_profit = clamped_tp
+            sig.tp_distance = abs(clamped_tp - sig.entry_price)
+            sig.rr_ratio = eff_rr
+            if sig.runner_tp is not None:
+                clamped_runner, _ = clamp_tp_to_rr(
+                    sig.entry_price, sig.stop_loss, sig.runner_tp, sig.direction, min_rr=1.5, max_rr=3.0
+                )
+                sig.runner_tp = clamped_runner
+            clamped_signals.append(sig)
+
+        return clamped_signals
 
     def generate_signals(
         self,
