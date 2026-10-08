@@ -337,9 +337,28 @@ async def serve_terminal_strategy(request: Request):
 
 @app.get("/terminal/analysis", response_class=HTMLResponse)
 async def serve_terminal_analysis(request: Request):
-    """Serve Glacier Terminal Analysis tab."""
+    """Serve Glacier Terminal Analysis tab with pre-hydrated metrics."""
     tpl = "terminal_analysis.html" if (TEMPLATES_DIR / "terminal_analysis.html").exists() else "terminal_controls.html"
-    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
+    metrics = bot_instance.state.get_performance_metrics() if bot_instance else {}
+    acc = metrics.get("accuracy", 0.0)
+    closed = metrics.get("total_closed_trades", 0)
+    wins = metrics.get("winning_trades", 0)
+    losses = metrics.get("losing_trades", 0)
+    rr = metrics.get("formatted_avg_rr", "1:2.5")
+    return templates.TemplateResponse(
+        request=request, 
+        name=tpl, 
+        context={
+            "request": request,
+            "is_active": bot_instance.is_active if bot_instance else False,
+            "accuracy": acc,
+            "total_closed_trades": closed,
+            "winning_trades": wins,
+            "losing_trades": losses,
+            "formatted_avg_rr": rr,
+            "performance_metrics": metrics,
+        }
+    )
 
 
 
