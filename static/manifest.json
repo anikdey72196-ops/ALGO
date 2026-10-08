@@ -2,7 +2,7 @@
   "name": "Trading Bot Live Terminal",
   "short_name": "Bot Terminal",
   "description": "Real-time algorithmic trading logs, execution signals, and market structure alerts.",
-  "start_url": "/terminal",
+  "start_url": "/terminal/controls",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

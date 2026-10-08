@@ -709,7 +709,7 @@
       <span class="material-symbols-outlined text-cyan-400 text-[18px] flex-shrink-0 animate-pulse">smartphone</span>
       <span class="truncate text-slate-300">Using phone or tablet? Switch to the dedicated touch terminal.</span>
     </div>
-    <a href="/terminal" class="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black tracking-wide text-[11px] uppercase flex-shrink-0 flex items-center gap-1 shadow-md transition-all active:scale-95">
+    <a href="/terminal/controls" class="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black tracking-wide text-[11px] uppercase flex-shrink-0 flex items-center gap-1 shadow-md transition-all active:scale-95">
       <span>Open Terminal</span>
       <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
     </a>
@@ -1194,16 +1194,16 @@
       <p class="text-xs text-slate-500 mt-1 mb-5">Scan this QR code with your phone or tablet camera on the same Wi-Fi to monitor trades and control the bot on mobile.</p>
 
       <div class="p-3 bg-white border border-purple-200 rounded-2xl shadow-inner mb-4">
-        <img id="qrCodeImg" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=http://127.0.0.1:8000/terminal" alt="QR Code" class="w-44 h-44 rounded-xl">
+        <img id="qrCodeImg" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ (terminal_url|default('http://10.249.214.57:8000/terminal/controls'))|urlencode }}" alt="QR Code" class="w-44 h-44 rounded-xl">
       </div>
 
       <div class="w-full bg-slate-50 border border-purple-100 rounded-xl p-3 text-xs font-mono mb-4 text-left">
         <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Direct URL:</div>
-        <div id="phoneModalUrl" class="font-bold text-primary break-all">http://127.0.0.1:8000/terminal</div>
+        <div id="phoneModalUrl" class="font-bold text-primary break-all">{{ terminal_url|default('http://10.249.214.57:8000/terminal/controls') }}</div>
       </div>
 
       <div class="flex gap-3 w-full">
-        <a id="phoneModalDirectBtn" href="/terminal" target="_blank" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-950 text-cyan-300 border border-cyan-500/50 hover:border-cyan-400 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm">
+        <a id="phoneModalDirectBtn" href="/terminal/controls" target="_blank" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-950 text-cyan-300 border border-cyan-500/50 hover:border-cyan-400 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm">
           <span class="material-symbols-outlined text-[18px]">open_in_new</span> Open Mobile / Tablet Terminal
         </a>
         <button onclick="closePhoneTerminalModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-black uppercase tracking-wider transition-all cursor-pointer">
@@ -2089,7 +2089,7 @@
         const res = await fetch('/api/network-info');
         if (res.ok) {
           const data = await res.json();
-          const targetUrl = data.terminal_url || `http://${data.primary_ip || '127.0.0.1'}:8000/terminal`;
+          const targetUrl = data.terminal_url || `http://${data.primary_ip || '127.0.0.1'}:8000/terminal/controls`;
           document.getElementById('phoneModalUrl').innerText = targetUrl;
           document.getElementById('phoneModalDirectBtn').href = targetUrl;
           document.getElementById('qrCodeImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(targetUrl)}`;

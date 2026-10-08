@@ -32,7 +32,7 @@
 <div class="flex flex-col p-3 rounded-xl bg-surface-container shadow-sm">
 <span class="text-[10px] uppercase tracking-wider text-on-surface-variant">Active Load</span>
 <span class="text-sm font-semibold text-on-surface mt-0.5 flex items-center gap-1" id="activeLoadCount">
-        3 / 5 <span class="text-[10px] text-secondary font-normal">Engines</span>
+        {{ active_count|default(5) }} / 5 <span class="text-[10px] text-secondary font-normal">Engines</span>
 </span>
 </div>
 <div class="flex flex-col p-3 rounded-xl bg-surface-container shadow-sm">
@@ -55,7 +55,7 @@
 <!-- Strategy Cards List -->
 <div class="space-y-3" id="strategy-card-list">
 <!-- Card 1: 5m Scalp -->
-<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm transition-all duration-200" data-active="true" data-id="scalp-5m" data-backend-strat="scalp5m">
+<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm {% if enabled_strategies is defined and 'SMC_SCALP_5M' not in enabled_strategies %}opacity-80{% endif %} transition-all duration-200" data-active="{% if enabled_strategies is not defined or 'SMC_SCALP_5M' in enabled_strategies %}true{% else %}false{% endif %}" data-id="scalp-5m" data-backend-strat="scalp5m">
 <div class="flex items-start justify-between gap-3">
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-2">
@@ -68,8 +68,8 @@
 <p class="text-[11px] text-on-surface-variant mt-1 line-clamp-1">High frequency momentum, RSI + EMA volume divergence filters.</p>
 </div>
 <!-- Strategy Specific Toggle Switch -->
-<button aria-checked="true" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full bg-primary transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
-<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-on-primary translate-x-5 transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
+<button aria-checked="{% if enabled_strategies is not defined or 'SMC_SCALP_5M' in enabled_strategies %}true{% else %}false{% endif %}" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full {% if enabled_strategies is not defined or 'SMC_SCALP_5M' in enabled_strategies %}bg-primary{% else %}bg-surface-container-highest{% endif %} transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full {% if enabled_strategies is not defined or 'SMC_SCALP_5M' in enabled_strategies %}bg-on-primary translate-x-5{% else %}bg-on-surface-variant translate-x-1{% endif %} transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
 </button>
 </div>
 <!-- Strategy Stat Badges -->
@@ -95,15 +95,15 @@
 <div class="mt-3.5 pt-3 bg-surface-container-low/50 -mx-4 -mb-4 px-4 pb-3 rounded-b-2xl">
 <div class="flex items-center justify-between text-[11px] mb-1.5">
 <span class="text-on-surface-variant">Portfolio Allocation</span>
-<span class="font-semibold text-on-surface allocation-display">30%</span>
+<span class="font-semibold text-on-surface allocation-display">{% if enabled_strategies is defined and 'SMC_SCALP_5M' not in enabled_strategies %}0% (Standby){% else %}25%{% endif %}</span>
 </div>
 <div class="relative flex items-center">
-<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="30"/>
+<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="{% if enabled_strategies is defined and 'SMC_SCALP_5M' not in enabled_strategies %}0{% else %}25{% endif %}"/>
 </div>
 </div>
 </div>
 <!-- Card 2: ICT Institutional -->
-<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm transition-all duration-200" data-active="true" data-id="ict-inst" data-backend-strat="ict">
+<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm {% if enabled_strategies is defined and 'ICT' not in enabled_strategies %}opacity-80{% endif %} transition-all duration-200" data-active="{% if enabled_strategies is not defined or 'ICT' in enabled_strategies %}true{% else %}false{% endif %}" data-id="ict-inst" data-backend-strat="ict">
 <div class="flex items-start justify-between gap-3">
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-2">
@@ -115,8 +115,8 @@
 </div>
 <p class="text-[11px] text-on-surface-variant mt-1 line-clamp-1">Fair Value Gaps, Liquidity Sweeps, Order Block reclamation.</p>
 </div>
-<button aria-checked="true" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full bg-primary transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
-<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-on-primary translate-x-5 transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
+<button aria-checked="{% if enabled_strategies is not defined or 'ICT' in enabled_strategies %}true{% else %}false{% endif %}" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full {% if enabled_strategies is not defined or 'ICT' in enabled_strategies %}bg-primary{% else %}bg-surface-container-highest{% endif %} transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full {% if enabled_strategies is not defined or 'ICT' in enabled_strategies %}bg-on-primary translate-x-5{% else %}bg-on-surface-variant translate-x-1{% endif %} transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
 </button>
 </div>
 <div class="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
@@ -140,19 +140,19 @@
 <div class="mt-3.5 pt-3 bg-surface-container-low/50 -mx-4 -mb-4 px-4 pb-3 rounded-b-2xl">
 <div class="flex items-center justify-between text-[11px] mb-1.5">
 <span class="text-on-surface-variant">Portfolio Allocation</span>
-<span class="font-semibold text-on-surface allocation-display">35%</span>
+<span class="font-semibold text-on-surface allocation-display">{% if enabled_strategies is defined and 'ICT' not in enabled_strategies %}0% (Standby){% else %}25%{% endif %}</span>
 </div>
 <div class="relative flex items-center">
-<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="35"/>
+<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="{% if enabled_strategies is defined and 'ICT' not in enabled_strategies %}0{% else %}25{% endif %}"/>
 </div>
 </div>
 </div>
-<!-- Card 3: Reversal (Inactive) -->
-<div class="strategy-card relative rounded-2xl bg-surface-container/70 p-4 shadow-sm opacity-80 transition-all duration-200" data-active="false" data-id="reversal" data-backend-strat="reversal">
+<!-- Card 3: Reversal -->
+<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm {% if enabled_strategies is defined and 'TREND_REVERSAL' not in enabled_strategies %}opacity-80{% endif %} transition-all duration-200" data-active="{% if enabled_strategies is not defined or 'TREND_REVERSAL' in enabled_strategies %}true{% else %}false{% endif %}" data-id="reversal" data-backend-strat="reversal">
 <div class="flex items-start justify-between gap-3">
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-2">
-<span class="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-surface-container-high text-on-surface-variant">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-surface-container-high text-primary">
 <span class="material-symbols-outlined text-[15px]">sync_alt</span>
 </span>
 <h3 class="text-sm font-semibold text-on-surface truncate">Reversal</h3>
@@ -160,14 +160,14 @@
 </div>
 <p class="text-[11px] text-on-surface-variant mt-1 line-clamp-1">Mean reversion, Bollinger Band deviation &amp; volume exhaustion spikes.</p>
 </div>
-<button aria-checked="false" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full bg-surface-container-highest transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
-<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-on-surface-variant translate-x-1 transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
+<button aria-checked="{% if enabled_strategies is not defined or 'TREND_REVERSAL' in enabled_strategies %}true{% else %}false{% endif %}" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full {% if enabled_strategies is not defined or 'TREND_REVERSAL' in enabled_strategies %}bg-primary{% else %}bg-surface-container-highest{% endif %} transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full {% if enabled_strategies is not defined or 'TREND_REVERSAL' in enabled_strategies %}bg-on-primary translate-x-5{% else %}bg-on-surface-variant translate-x-1{% endif %} transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
 </button>
 </div>
 <div class="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
 <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface">
 <span class="text-[10px] text-on-surface-variant">Win</span>
-<span class="font-semibold text-on-surface-variant" id="winRate-reversal">59.8%</span>
+<span class="font-semibold text-primary" id="winRate-reversal">59.8%</span>
 </div>
 <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface">
 <span class="text-[10px] text-on-surface-variant">Avg RR</span>
@@ -181,15 +181,15 @@
 <div class="mt-3.5 pt-3 bg-surface-container-low/50 -mx-4 -mb-4 px-4 pb-3 rounded-b-2xl">
 <div class="flex items-center justify-between text-[11px] mb-1.5">
 <span class="text-on-surface-variant">Portfolio Allocation</span>
-<span class="font-semibold text-on-surface-variant allocation-display">0% (Standby)</span>
+<span class="font-semibold text-on-surface allocation-display">{% if enabled_strategies is defined and 'TREND_REVERSAL' not in enabled_strategies %}0% (Standby){% else %}15%{% endif %}</span>
 </div>
 <div class="relative flex items-center">
-<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-50" disabled="" max="60" min="0" type="range" value="0"/>
+<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="{% if enabled_strategies is defined and 'TREND_REVERSAL' not in enabled_strategies %}0{% else %}15{% endif %}"/>
 </div>
 </div>
 </div>
 <!-- Card 4: Swing -->
-<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm transition-all duration-200" data-active="true" data-id="swing" data-backend-strat="smc">
+<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm {% if enabled_strategies is defined and 'SMC' not in enabled_strategies %}opacity-80{% endif %} transition-all duration-200" data-active="{% if enabled_strategies is not defined or 'SMC' in enabled_strategies %}true{% else %}false{% endif %}" data-id="swing" data-backend-strat="smc">
 <div class="flex items-start justify-between gap-3">
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-2">
@@ -201,8 +201,8 @@
 </div>
 <p class="text-[11px] text-on-surface-variant mt-1 line-clamp-1">Multi-day market structure, Weekly pivot breakout continuation.</p>
 </div>
-<button aria-checked="true" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full bg-primary transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
-<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-on-primary translate-x-5 transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
+<button aria-checked="{% if enabled_strategies is not defined or 'SMC' in enabled_strategies %}true{% else %}false{% endif %}" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full {% if enabled_strategies is not defined or 'SMC' in enabled_strategies %}bg-primary{% else %}bg-surface-container-highest{% endif %} transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full {% if enabled_strategies is not defined or 'SMC' in enabled_strategies %}bg-on-primary translate-x-5{% else %}bg-on-surface-variant translate-x-1{% endif %} transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
 </button>
 </div>
 <div class="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
@@ -226,19 +226,19 @@
 <div class="mt-3.5 pt-3 bg-surface-container-low/50 -mx-4 -mb-4 px-4 pb-3 rounded-b-2xl">
 <div class="flex items-center justify-between text-[11px] mb-1.5">
 <span class="text-on-surface-variant">Portfolio Allocation</span>
-<span class="font-semibold text-on-surface allocation-display">35%</span>
+<span class="font-semibold text-on-surface allocation-display">{% if enabled_strategies is defined and 'SMC' not in enabled_strategies %}0% (Standby){% else %}20%{% endif %}</span>
 </div>
 <div class="relative flex items-center">
-<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="35"/>
+<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="{% if enabled_strategies is defined and 'SMC' not in enabled_strategies %}0{% else %}20{% endif %}"/>
 </div>
 </div>
 </div>
-<!-- Card 5: Order Flow Engine (Inactive) -->
-<div class="strategy-card relative rounded-2xl bg-surface-container/70 p-4 shadow-sm opacity-80 transition-all duration-200" data-active="false" data-id="order-flow" data-backend-strat="orderFlow">
+<!-- Card 5: Order Flow Engine -->
+<div class="strategy-card relative rounded-2xl bg-surface-container p-4 shadow-sm {% if enabled_strategies is defined and 'ORDER_FLOW' not in enabled_strategies %}opacity-80{% endif %} transition-all duration-200" data-active="{% if enabled_strategies is not defined or 'ORDER_FLOW' in enabled_strategies %}true{% else %}false{% endif %}" data-id="order-flow" data-backend-strat="orderFlow">
 <div class="flex items-start justify-between gap-3">
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-2">
-<span class="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-surface-container-high text-on-surface-variant">
+<span class="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-surface-container-high text-primary">
 <span class="material-symbols-outlined text-[15px]">waterfall_chart</span>
 </span>
 <h3 class="text-sm font-semibold text-on-surface truncate">Order Flow Engine</h3>
@@ -246,14 +246,14 @@
 </div>
 <p class="text-[11px] text-on-surface-variant mt-1 line-clamp-1">Footprint delta, Bid/Ask imbalance, DOM book absorption profiling.</p>
 </div>
-<button aria-checked="false" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full bg-surface-container-highest transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
-<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-on-surface-variant translate-x-1 transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
+<button aria-checked="{% if enabled_strategies is not defined or 'ORDER_FLOW' in enabled_strategies %}true{% else %}false{% endif %}" class="strat-toggle relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full {% if enabled_strategies is not defined or 'ORDER_FLOW' in enabled_strategies %}bg-primary{% else %}bg-surface-container-highest{% endif %} transition-colors duration-200 ease-in-out focus:outline-none" role="switch" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full {% if enabled_strategies is not defined or 'ORDER_FLOW' in enabled_strategies %}bg-on-primary translate-x-5{% else %}bg-on-surface-variant translate-x-1{% endif %} transition-transform duration-200 ease-in-out mt-1 ml-0.5 shadow-sm"></span>
 </button>
 </div>
 <div class="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
 <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface">
 <span class="text-[10px] text-on-surface-variant">Win</span>
-<span class="font-semibold text-on-surface-variant" id="winRate-order-flow">74.1%</span>
+<span class="font-semibold text-primary" id="winRate-order-flow">74.1%</span>
 </div>
 <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-container-high text-on-surface">
 <span class="text-[10px] text-on-surface-variant">Avg RR</span>
@@ -267,10 +267,10 @@
 <div class="mt-3.5 pt-3 bg-surface-container-low/50 -mx-4 -mb-4 px-4 pb-3 rounded-b-2xl">
 <div class="flex items-center justify-between text-[11px] mb-1.5">
 <span class="text-on-surface-variant">Portfolio Allocation</span>
-<span class="font-semibold text-on-surface-variant allocation-display">0% (Standby)</span>
+<span class="font-semibold text-on-surface allocation-display">{% if enabled_strategies is defined and 'ORDER_FLOW' not in enabled_strategies %}0% (Standby){% else %}15%{% endif %}</span>
 </div>
 <div class="relative flex items-center">
-<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-50" disabled="" max="60" min="0" type="range" value="0"/>
+<input class="allocation-slider w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-not-allowed accent-primary disabled:opacity-70" disabled="" max="60" min="0" type="range" value="{% if enabled_strategies is defined and 'ORDER_FLOW' not in enabled_strategies %}0{% else %}15{% endif %}"/>
 </div>
 </div>
 </div>
@@ -325,25 +325,29 @@
     function updateBotState(active) {
       isBotActive = active;
 
+      const beaconOrb = document.getElementById('statusBeaconOrb');
+      const beaconIcon = document.getElementById('statusBeaconIcon');
+      const pulseDot = document.getElementById('statusPulseDot');
+      const bannerTitle = document.getElementById('statusBannerTitle');
+      const bannerBadge = document.getElementById('statusBannerBadge');
+      const bannerSubtitle = document.getElementById('statusBannerSubtitle');
+      const liveBadge = document.getElementById('headerLiveStatusBadge');
+      const liveDot = document.getElementById('headerLiveDot');
+      const liveText = document.getElementById('headerLiveText');
+
       if (isBotActive) {
-        masterToggle.classList.remove('bg-surface-container-highest');
-        masterToggle.classList.add('bg-primary');
-        masterThumb.classList.remove('translate-x-1', 'bg-on-surface-variant');
-        masterThumb.classList.add('translate-x-6', 'bg-on-primary');
-        thumbIcon.textContent = 'check';
-        thumbIcon.classList.remove('text-on-surface');
-        thumbIcon.classList.add('text-primary');
-
-        masterIcon.textContent = 'lock';
-        masterPulse.classList.remove('hidden');
-        statusPill.textContent = 'ARMED';
-        statusPill.className = 'text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-primary/10 text-primary';
-        statusCaption.textContent = 'Live execution locked to NY4 memory nodes';
-
-        masterBanner.className = 'mt-3.5 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-surface-container text-on-surface-variant transition-all duration-200';
-        bannerIcon.textContent = 'verified_user';
-        bannerIcon.className = 'material-symbols-outlined text-[18px] text-primary shrink-0';
-        bannerText.innerHTML = '<strong class="font-medium text-primary">Trading Bot is ACTIVE</strong> — Strategy modifications and toggles are LOCKED during execution. Put bot in Standby to edit.';
+        if (beaconOrb) beaconOrb.className = 'relative flex items-center justify-center w-8 h-8 rounded-lg bg-primary-container text-primary';
+        if (beaconIcon) beaconIcon.textContent = 'lock';
+        if (pulseDot) pulseDot.classList.remove('hidden');
+        if (bannerTitle) bannerTitle.textContent = 'BOT ACTIVE';
+        if (bannerBadge) {
+          bannerBadge.textContent = 'STRATEGIES BLOCKED';
+          bannerBadge.className = 'text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20';
+        }
+        if (bannerSubtitle) bannerSubtitle.textContent = 'All algorithms locked during live execution to protect risk limits';
+        if (liveBadge) liveBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-primary';
+        if (liveDot) liveDot.className = 'w-1.5 h-1.5 rounded-full bg-primary animate-pulse';
+        if (liveText) liveText.textContent = 'LIVE';
 
         lockBadges.forEach(badge => {
           badge.innerHTML = '<span class="material-symbols-outlined text-[12px]">lock</span><span>Locked</span>';
@@ -361,27 +365,23 @@
           toggle.classList.add('cursor-not-allowed');
         });
 
-        btnDeploy.disabled = true;
-        btnDeploy.className = 'flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-surface-container-high text-on-surface-variant/40 font-medium text-xs cursor-not-allowed transition-all duration-150';
+        if (btnDeploy) {
+          btnDeploy.disabled = true;
+          btnDeploy.className = 'flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-surface-container-high text-on-surface-variant/40 font-medium text-xs cursor-not-allowed transition-all duration-150';
+        }
       } else {
-        masterToggle.classList.remove('bg-primary');
-        masterToggle.classList.add('bg-surface-container-highest');
-        masterThumb.classList.remove('translate-x-6', 'bg-on-primary');
-        masterThumb.classList.add('translate-x-1', 'bg-on-surface-variant');
-        thumbIcon.textContent = 'pause';
-        thumbIcon.classList.remove('text-primary');
-        thumbIcon.classList.add('text-on-surface');
-
-        masterIcon.textContent = 'lock_open';
-        masterPulse.classList.add('hidden');
-        statusPill.textContent = 'STANDBY';
-        statusPill.className = 'text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant';
-        statusCaption.textContent = 'Parameters editable — Engines paused';
-
-        masterBanner.className = 'mt-3.5 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-primary-container/30 text-on-surface transition-all duration-200';
-        bannerIcon.textContent = 'lock_open';
-        bannerIcon.className = 'material-symbols-outlined text-[18px] text-primary shrink-0';
-        bannerText.innerHTML = '<strong class="font-medium text-primary">Trading Bot is INACTIVE</strong> — Strategies unlocked. Adjust allocations and parameters below.';
+        if (beaconOrb) beaconOrb.className = 'relative flex items-center justify-center w-8 h-8 rounded-lg bg-surface-container-high text-on-surface-variant';
+        if (beaconIcon) beaconIcon.textContent = 'tune';
+        if (pulseDot) pulseDot.classList.add('hidden');
+        if (bannerTitle) bannerTitle.textContent = 'BOT STANDBY';
+        if (bannerBadge) {
+          bannerBadge.textContent = 'EDITABLE';
+          bannerBadge.className = 'text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20';
+        }
+        if (bannerSubtitle) bannerSubtitle.textContent = 'Engines idle — Click strategy cards to enable or disable';
+        if (liveBadge) liveBadge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium text-secondary';
+        if (liveDot) liveDot.className = 'w-1.5 h-1.5 rounded-full bg-secondary';
+        if (liveText) liveText.textContent = 'STANDBY';
 
         lockBadges.forEach(badge => {
           badge.innerHTML = '<span class="material-symbols-outlined text-[12px]">tune</span><span>Editable</span>';
@@ -399,12 +399,13 @@
           toggle.classList.remove('cursor-not-allowed');
         });
 
-        btnDeploy.disabled = false;
-        btnDeploy.className = 'flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:opacity-90 active:scale-[0.98] transition-all duration-150 shadow-md cursor-pointer';
+        if (btnDeploy) {
+          btnDeploy.disabled = false;
+          btnDeploy.className = 'flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-primary text-on-primary font-semibold text-xs hover:opacity-90 active:scale-[0.98] transition-all duration-150 shadow-md cursor-pointer';
+        }
       }
     }
 
-    // Immediately reflect initial server state
     updateBotState(isBotActive);
 
     // Helper function to update visual appearance of strategy cards

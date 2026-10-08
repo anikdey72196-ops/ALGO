@@ -105,12 +105,13 @@
 </div>
 </div>
 <div class="mt-2.5 pt-2 flex items-center justify-between text-[10px] text-on-surface-variant bg-surface-container/40 -mx-3.5 -mb-3.5 px-3.5 py-2">
-<span class="flex items-center gap-1" id="shadowAlphaDriftText">
+<button class="flex items-center gap-1.5 text-left hover:text-on-surface transition-colors cursor-pointer group" id="shadowAlphaDriftBtn" type="button" title="View Alpha Drift & Trap details">
 <span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
-          Traps Caught: <strong class="text-tertiary font-semibold" id="shadowTrapsRate">59.9%</strong> • Alpha drift: <strong class="text-primary font-semibold" id="shadowDrift">+6.3%</strong>
-        </span>
+<span>Traps Caught: <strong class="text-tertiary font-semibold" id="shadowTrapsRate">39.2%</strong> • Alpha drift: <strong class="text-primary font-semibold" id="shadowDrift">+19.2%</strong></span>
+<span class="material-symbols-outlined text-[13px] text-tertiary/80 group-hover:translate-x-0.5 transition-transform">info</span>
+</button>
 <button class="text-primary hover:text-on-surface transition-colors font-medium inline-flex items-center gap-0.5 cursor-pointer" id="inspectShadowBtn">
-          Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</span>
 </button>
 </div>
 </div>
@@ -120,94 +121,100 @@
 <div class="flex items-center justify-between">
 <div class="flex flex-col">
 <span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Strategy Distribution</span>
-<span class="text-[11px] text-on-surface-variant">Volume allocation &amp; historical win rate</span>
+<span class="text-[11px] text-on-surface-variant">Volume allocation &amp; historical win rate • Tap slice to focus</span>
 </div>
 <span class="px-2 py-0.5 rounded text-[10px] font-mono text-secondary bg-secondary-container/30">
-        5 ENGINES ACTIVE
-      </span>
+5 ENGINES ACTIVE
+</span>
 </div>
 <!-- Donut SVG & Legend Layout -->
 <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-2">
 <!-- Circular Graphic -->
 <div class="sm:col-span-5 flex justify-center relative">
 <div class="relative w-36 h-36 flex items-center justify-center">
-<svg aria-label="Strategy distribution donut chart" class="w-full h-full -rotate-90" role="img" viewbox="0 0 120 120">
+<svg aria-label="Strategy distribution donut chart" class="w-full h-full -rotate-90 select-none overflow-visible" role="img" viewbox="0 0 120 120">
 <!-- Background Ring -->
 <circle class="text-surface-container-highest" cx="60" cy="60" fill="none" r="46" stroke="currentColor" stroke-width="13"></circle>
 <!-- 5m Scalp -->
-<circle id="donutSlice1" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#7dd3fc" stroke-dasharray="92.49 196.53" stroke-dashoffset="0" stroke-linecap="butt" stroke-width="13"></circle>
+<circle id="donutSlice1" class="transition-all duration-300 hover:opacity-100 cursor-pointer" cx="60" cy="60" fill="none" r="46" stroke="#7dd3fc" stroke-dasharray="92.49 196.53" stroke-dashoffset="0" stroke-linecap="butt" stroke-width="13"></circle>
 <!-- ICT Inst -->
-<circle id="donutSlice2" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#88b4cc" stroke-dasharray="80.93 208.09" stroke-dashoffset="-92.49" stroke-linecap="butt" stroke-width="13"></circle>
+<circle id="donutSlice2" class="transition-all duration-300 hover:opacity-100 cursor-pointer" cx="60" cy="60" fill="none" r="46" stroke="#88b4cc" stroke-dasharray="80.93 208.09" stroke-dashoffset="-92.49" stroke-linecap="butt" stroke-width="13"></circle>
 <!-- Swing -->
-<circle id="donutSlice3" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c8a0f0" stroke-dasharray="57.80 231.22" stroke-dashoffset="-173.42" stroke-linecap="butt" stroke-width="13"></circle>
+<circle id="donutSlice3" class="transition-all duration-300 hover:opacity-100 cursor-pointer" cx="60" cy="60" fill="none" r="46" stroke="#c8a0f0" stroke-dasharray="57.80 231.22" stroke-dashoffset="-173.42" stroke-linecap="butt" stroke-width="13"></circle>
 <!-- Order Flow -->
-<circle id="donutSlice4" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#c0d8e8" stroke-dasharray="34.68 254.34" stroke-dashoffset="-231.22" stroke-linecap="butt" stroke-width="13"></circle>
+<circle id="donutSlice4" class="transition-all duration-300 hover:opacity-100 cursor-pointer" cx="60" cy="60" fill="none" r="46" stroke="#c0d8e8" stroke-dasharray="34.68 254.34" stroke-dashoffset="-231.22" stroke-linecap="butt" stroke-width="13"></circle>
 <!-- Reversal -->
-<circle id="donutSlice5" class="transition-all duration-500 hover:opacity-80" cx="60" cy="60" fill="none" r="46" stroke="#4a6070" stroke-dasharray="23.12 265.90" stroke-dashoffset="-265.90" stroke-linecap="butt" stroke-width="13"></circle>
+<circle id="donutSlice5" class="transition-all duration-300 hover:opacity-100 cursor-pointer" cx="60" cy="60" fill="none" r="46" stroke="#4a6070" stroke-dasharray="23.12 265.90" stroke-dashoffset="-265.90" stroke-linecap="butt" stroke-width="13"></circle>
 </svg>
-<!-- Center Metric Counter -->
-<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-<span class="text-[9px] uppercase tracking-wider text-on-surface-variant font-medium">Primary</span>
+<!-- Center Metric Counter (Interactive Click Target) -->
+<div class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer select-none rounded-full transition-transform active:scale-95" id="donutCenterContainer" title="Tap to toggle strategy focus">
+<span class="text-[9px] uppercase tracking-wider text-on-surface-variant font-medium transition-colors" id="donutPrimaryLabel">Primary</span>
 <span class="text-base font-bold text-on-surface tracking-tight" id="donutPrimaryName">Scalp</span>
-<span class="text-[10px] font-mono text-primary font-semibold" id="donutPrimaryPct">32%</span>
+<span class="text-[10px] font-mono text-primary font-semibold" id="donutPrimaryPct">80%</span>
+<span class="text-[8px] font-mono text-on-surface-variant/80 hidden text-center px-1" id="donutPrimarySub">--</span>
 </div>
 </div>
 </div>
-<!-- Donut Legend & Sub-Metrics -->
+<!-- Donut Legend & Sub-Metrics (Interactive Rows) -->
 <div class="sm:col-span-7 flex flex-col gap-2">
 <!-- 5m Scalp -->
-<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="relative flex items-center justify-between text-xs py-1.5 px-2.5 rounded-md bg-surface-container-high/40 hover:bg-surface-container-high/80 transition-all cursor-pointer border border-transparent strat-legend-row overflow-hidden" id="stratRow1" data-strat-id="1">
+<div class="absolute inset-y-0 left-0 bg-primary/10 rounded-md -z-10 transition-all duration-500" id="stratBarVol1" style="width: 80%"></div>
 <div class="flex items-center gap-2 min-w-0">
 <span class="w-2.5 h-2.5 rounded-full bg-primary shrink-0"></span>
 <span class="font-medium text-on-surface truncate">5m Scalp Engine</span>
 </div>
 <div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
-<span class="text-on-surface-variant" id="stratVol1">32% vol</span>
-<span class="text-primary font-semibold" id="stratWin1">72.4% win</span>
+<span class="text-on-surface-variant font-semibold" id="stratVol1">79.8% vol</span>
+<span class="text-primary font-bold" id="stratWin1">34.8% win</span>
 </div>
 </div>
 <!-- ICT Institutional -->
-<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="relative flex items-center justify-between text-xs py-1.5 px-2.5 rounded-md bg-surface-container-high/40 hover:bg-surface-container-high/80 transition-all cursor-pointer border border-transparent strat-legend-row overflow-hidden" id="stratRow2" data-strat-id="2">
+<div class="absolute inset-y-0 left-0 bg-secondary/10 rounded-md -z-10 transition-all duration-500" id="stratBarVol2" style="width: 1%"></div>
 <div class="flex items-center gap-2 min-w-0">
 <span class="w-2.5 h-2.5 rounded-full bg-secondary shrink-0"></span>
 <span class="font-medium text-on-surface truncate">ICT Institutional</span>
 </div>
 <div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
-<span class="text-on-surface-variant" id="stratVol2">28% vol</span>
-<span class="text-primary font-semibold" id="stratWin2">69.1% win</span>
+<span class="text-on-surface-variant font-semibold" id="stratVol2">1.1% vol</span>
+<span class="text-secondary font-bold" id="stratWin2">0.0% win</span>
 </div>
 </div>
 <!-- Swing -->
-<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="relative flex items-center justify-between text-xs py-1.5 px-2.5 rounded-md bg-surface-container-high/40 hover:bg-surface-container-high/80 transition-all cursor-pointer border border-transparent strat-legend-row overflow-hidden" id="stratRow3" data-strat-id="3">
+<div class="absolute inset-y-0 left-0 bg-tertiary/10 rounded-md -z-10 transition-all duration-500" id="stratBarVol3" style="width: 3%"></div>
 <div class="flex items-center gap-2 min-w-0">
 <span class="w-2.5 h-2.5 rounded-full bg-tertiary shrink-0"></span>
 <span class="font-medium text-on-surface truncate">Swing Liquidity</span>
 </div>
 <div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
-<span class="text-on-surface-variant" id="stratVol3">20% vol</span>
-<span class="text-tertiary font-semibold" id="stratWin3">75.2% win</span>
+<span class="text-on-surface-variant font-semibold" id="stratVol3">2.7% vol</span>
+<span class="text-tertiary font-bold" id="stratWin3">0.0% win</span>
 </div>
 </div>
 <!-- Order Flow -->
-<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="relative flex items-center justify-between text-xs py-1.5 px-2.5 rounded-md bg-surface-container-high/40 hover:bg-surface-container-high/80 transition-all cursor-pointer border border-transparent strat-legend-row overflow-hidden" id="stratRow4" data-strat-id="4">
+<div class="absolute inset-y-0 left-0 bg-secondary-fixed/15 rounded-md -z-10 transition-all duration-500" id="stratBarVol4" style="width: 10%"></div>
 <div class="flex items-center gap-2 min-w-0">
 <span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed shrink-0"></span>
 <span class="font-medium text-on-surface truncate">Order Flow Depth</span>
 </div>
 <div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
-<span class="text-on-surface-variant" id="stratVol4">12% vol</span>
-<span class="text-on-surface font-semibold" id="stratWin4">64.3% win</span>
+<span class="text-on-surface-variant font-semibold" id="stratVol4">10.5% vol</span>
+<span class="text-on-surface font-bold" id="stratWin4">35.9% win</span>
 </div>
 </div>
 <!-- Reversal -->
-<div class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-container-high/40">
+<div class="relative flex items-center justify-between text-xs py-1.5 px-2.5 rounded-md bg-surface-container-high/40 hover:bg-surface-container-high/80 transition-all cursor-pointer border border-transparent strat-legend-row overflow-hidden" id="stratRow5" data-strat-id="5">
+<div class="absolute inset-y-0 left-0 bg-outline/10 rounded-md -z-10 transition-all duration-500" id="stratBarVol5" style="width: 6%"></div>
 <div class="flex items-center gap-2 min-w-0">
 <span class="w-2.5 h-2.5 rounded-full bg-outline shrink-0"></span>
 <span class="font-medium text-on-surface truncate">Mean Reversal</span>
 </div>
 <div class="flex items-center gap-3 shrink-0 font-mono text-[11px]">
-<span class="text-on-surface-variant" id="stratVol5">8% vol</span>
-<span class="text-on-surface-variant font-semibold" id="stratWin5">58.0% win</span>
+<span class="text-on-surface-variant font-semibold" id="stratVol5">5.9% vol</span>
+<span class="text-emerald-400 font-bold" id="stratWin5">68.2% win</span>
 </div>
 </div>
 </div>
@@ -451,19 +458,36 @@
       </button>
     </div>
     
-    <div class="py-2.5 grid grid-cols-3 gap-2 text-center border-b border-surface-container-highest/60">
+    <div class="py-2.5 grid grid-cols-4 gap-1.5 sm:gap-2 text-center border-b border-surface-container-highest/60">
       <div class="bg-surface-container-low p-2 rounded-lg">
-        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Accuracy</span>
-        <div class="text-sm font-bold font-mono text-tertiary" id="modalAcc">--</div>
+        <span class="text-[8px] sm:text-[9px] uppercase tracking-wider text-on-surface-variant">Accuracy</span>
+        <div class="text-xs sm:text-sm font-bold font-mono text-tertiary" id="modalAcc">--</div>
       </div>
       <div class="bg-surface-container-low p-2 rounded-lg">
-        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Traps Caught</span>
-        <div class="text-sm font-bold font-mono text-primary" id="modalTraps">--</div>
+        <span class="text-[8px] sm:text-[9px] uppercase tracking-wider text-on-surface-variant">Traps Caught</span>
+        <div class="text-xs sm:text-sm font-bold font-mono text-primary" id="modalTraps">--</div>
       </div>
       <div class="bg-surface-container-low p-2 rounded-lg">
-        <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Win Precision</span>
-        <div class="text-sm font-bold font-mono text-secondary" id="modalWins">--</div>
+        <span class="text-[8px] sm:text-[9px] uppercase tracking-wider text-on-surface-variant">Win Precision</span>
+        <div class="text-xs sm:text-sm font-bold font-mono text-secondary" id="modalWins">--</div>
       </div>
+      <div class="bg-surface-container-low p-2 rounded-lg">
+        <span class="text-[8px] sm:text-[9px] uppercase tracking-wider text-on-surface-variant">Alpha Drift</span>
+        <div class="text-xs sm:text-sm font-bold font-mono text-primary" id="modalDrift">--</div>
+      </div>
+    </div>
+
+    <!-- Alpha Drift & Traps explanation educational card -->
+    <div class="my-2 p-2.5 rounded-lg bg-surface-container-low/80 border border-outline-variant/40 text-[11px] text-on-surface-variant leading-relaxed">
+      <div class="flex items-center gap-1.5 font-bold text-on-surface mb-1">
+        <span class="material-symbols-outlined text-tertiary text-[15px]">insights</span>
+        <span>Understanding Alpha Drift &amp; Trap Detection</span>
+      </div>
+      <p class="text-[10px] text-on-surface-variant/90 leading-normal">
+        <strong class="text-on-surface">Alpha Drift</strong> measures whether the AI model's predictive edge is improving relative to historical baseline.
+        It compares <em>rolling 50-event accuracy</em> against <em>all-time accuracy</em>.
+        A positive drift indicates the model has adapted to current market volatility and is successfully vetoing retail trap breakouts before stop-losses are hit.
+      </p>
     </div>
 
     <div class="flex-1 overflow-y-auto space-y-2 py-3 pr-1" id="shadowLogEntries">
@@ -619,43 +643,17 @@
             { id: '5', keys: ['Trend Reversal', 'Trend Reversal Strategy', 'TREND_REVERSAL', 'reversal'], name: 'Reversal' }
           ];
 
-          let totalStratTrades = 0;
-          const stratData = stratList.map(st => {
+          currentStratData = stratList.map(st => {
             let found = null;
             for (const k of st.keys) {
               if (strats[k]) { found = strats[k]; break; }
             }
             const trds = found ? (found.total_trades || found.total || 0) : 0;
             const wr = found && found.win_rate !== undefined ? parseFloat(found.win_rate).toFixed(1) : '0.0';
-            totalStratTrades += trds;
             return { ...st, trades: trds, winRate: wr, found };
           });
 
-          const C = 289.0265; // 2 * PI * 46
-          let currentOffset = 0;
-          let topStrat = stratData[0];
-
-          stratData.forEach(st => {
-            if (st.trades > topStrat.trades) topStrat = st;
-            const volPct = totalStratTrades > 0 ? (st.trades / totalStratTrades) : 0.2;
-            const arcLen = volPct * C;
-            const slice = document.getElementById(`donutSlice${st.id}`);
-            if (slice) {
-              slice.setAttribute('stroke-dasharray', `${arcLen.toFixed(2)} ${(C - arcLen).toFixed(2)}`);
-              slice.setAttribute('stroke-dashoffset', `-${currentOffset.toFixed(2)}`);
-            }
-            currentOffset += arcLen;
-
-            const volEl = document.getElementById(`stratVol${st.id}`);
-            const winEl = document.getElementById(`stratWin${st.id}`);
-            if (volEl) volEl.textContent = `${(volPct * 100).toFixed(1)}% vol`;
-            if (winEl) winEl.textContent = `${st.winRate}% win`;
-          });
-
-          const primaryNameEl = document.getElementById('donutPrimaryName');
-          const primaryPctEl = document.getElementById('donutPrimaryPct');
-          if (primaryNameEl && topStrat) primaryNameEl.textContent = topStrat.name;
-          if (primaryPctEl && totalStratTrades > 0) primaryPctEl.textContent = `${((topStrat.trades / totalStratTrades) * 100).toFixed(0)}%`;
+          renderDonutChart();
         }
 
         // Performance by pair (Real SVG Bar Graph with flat zero-baseline for un-traded pairs)
@@ -732,7 +730,172 @@
     }
   }
 
-  // 2. Fetch AI Shadow Mode Prediction Stats
+  // Strategy Allocation Donut Controller
+  let currentStratData = [];
+  let focusedStratId = null;
+
+  function renderDonutChart() {
+    if (!currentStratData || currentStratData.length === 0) return;
+    const C = 289.0265; // 2 * PI * 46
+    let currentOffset = 0;
+    const totalStratTrades = currentStratData.reduce((acc, st) => acc + (st.trades || 0), 0);
+    let topStrat = currentStratData[0];
+    currentStratData.forEach(st => {
+      if (st.trades > topStrat.trades) topStrat = st;
+    });
+
+    currentStratData.forEach(st => {
+      const volPct = totalStratTrades > 0 ? (st.trades / totalStratTrades) : 0.2;
+      const arcLen = volPct * C;
+      const slice = document.getElementById(`donutSlice${st.id}`);
+      const row = document.getElementById(`stratRow${st.id}`);
+      const bar = document.getElementById(`stratBarVol${st.id}`);
+      const volEl = document.getElementById(`stratVol${st.id}`);
+      const winEl = document.getElementById(`stratWin${st.id}`);
+
+      if (bar) bar.style.width = `${Math.max(2, Math.round(volPct * 100))}%`;
+      if (volEl) volEl.textContent = `${(volPct * 100).toFixed(1)}% vol`;
+      if (winEl) winEl.textContent = `${st.winRate}% win`;
+
+      if (slice) {
+        slice.setAttribute('stroke-dasharray', `${arcLen.toFixed(2)} ${(C - arcLen).toFixed(2)}`);
+        slice.setAttribute('stroke-dashoffset', `-${currentOffset.toFixed(2)}`);
+        
+        if (focusedStratId === null) {
+          slice.style.opacity = '0.9';
+          slice.setAttribute('stroke-width', '13');
+          slice.style.filter = 'none';
+        } else if (focusedStratId === st.id) {
+          slice.style.opacity = '1.0';
+          slice.setAttribute('stroke-width', '17');
+          slice.style.filter = 'drop-shadow(0 0 6px currentColor)';
+        } else {
+          slice.style.opacity = '0.22';
+          slice.setAttribute('stroke-width', '11');
+          slice.style.filter = 'none';
+        }
+      }
+
+      if (row) {
+        if (focusedStratId === null) {
+          row.classList.remove('ring-1', 'ring-primary', 'bg-surface-container-high/90');
+          row.classList.add('bg-surface-container-high/40');
+          row.style.opacity = '1';
+        } else if (focusedStratId === st.id) {
+          row.classList.add('ring-1', 'ring-primary', 'bg-surface-container-high/90');
+          row.classList.remove('bg-surface-container-high/40');
+          row.style.opacity = '1';
+        } else {
+          row.classList.remove('ring-1', 'ring-primary', 'bg-surface-container-high/90');
+          row.classList.add('bg-surface-container-high/40');
+          row.style.opacity = '0.45';
+        }
+      }
+
+      currentOffset += arcLen;
+    });
+
+    // Center display update
+    const primaryLabelEl = document.getElementById('donutPrimaryLabel');
+    const primaryNameEl = document.getElementById('donutPrimaryName');
+    const primaryPctEl = document.getElementById('donutPrimaryPct');
+    const primarySubEl = document.getElementById('donutPrimarySub');
+
+    if (focusedStratId) {
+      const focused = currentStratData.find(s => s.id === focusedStratId);
+      if (focused) {
+        const volPct = totalStratTrades > 0 ? (focused.trades / totalStratTrades) : 0;
+        if (primaryLabelEl) {
+          primaryLabelEl.textContent = 'FOCUS';
+          primaryLabelEl.className = 'text-[9px] uppercase tracking-wider text-primary font-bold';
+        }
+        if (primaryNameEl) primaryNameEl.textContent = focused.name;
+        if (primaryPctEl) primaryPctEl.textContent = `${focused.winRate}% WR`;
+        if (primarySubEl) {
+          primarySubEl.textContent = `${(volPct * 100).toFixed(1)}% Vol • ${focused.trades} Trd`;
+          primarySubEl.classList.remove('hidden');
+        }
+      }
+    } else {
+      if (primaryLabelEl) {
+        primaryLabelEl.textContent = 'Primary';
+        primaryLabelEl.className = 'text-[9px] uppercase tracking-wider text-on-surface-variant font-medium';
+      }
+      if (primaryNameEl && topStrat) primaryNameEl.textContent = topStrat.name;
+      if (primaryPctEl && totalStratTrades > 0) primaryPctEl.textContent = `${((topStrat.trades / totalStratTrades) * 100).toFixed(0)}%`;
+      if (primarySubEl) primarySubEl.classList.add('hidden');
+    }
+  }
+
+  function focusStrategy(id) {
+    if (focusedStratId === id) {
+      focusedStratId = null;
+    } else {
+      focusedStratId = id;
+    }
+    renderDonutChart();
+  }
+
+  // Bind interactive clicks to donut slices & legend rows
+  for (let i = 1; i <= 5; i++) {
+    const sId = String(i);
+    const slice = document.getElementById(`donutSlice${sId}`);
+    const row = document.getElementById(`stratRow${sId}`);
+    if (slice) {
+      slice.addEventListener('click', (e) => {
+        e.stopPropagation();
+        focusStrategy(sId);
+      });
+    }
+    if (row) {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        focusStrategy(sId);
+      });
+    }
+  }
+
+  const donutCenter = document.getElementById('donutCenterContainer');
+  if (donutCenter) {
+    donutCenter.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (focusedStratId === null) {
+        focusStrategy('1');
+      } else {
+        const nextId = parseInt(focusedStratId, 10) + 1;
+        if (nextId > 5) focusedStratId = null;
+        else focusedStratId = String(nextId);
+        renderDonutChart();
+      }
+    });
+  }
+
+  // Modal Drawer Handlers
+  const inspectBtn = document.getElementById('inspectShadowBtn');
+  const shadowDriftBtn = document.getElementById('shadowAlphaDriftBtn');
+  const closeBtn = document.getElementById('closeShadowModalBtn');
+  const shadowModal = document.getElementById('shadowModal');
+
+  function openShadowModal() {
+    if (shadowModal) {
+      shadowModal.classList.remove('hidden');
+      fetchShadowStats();
+    }
+  }
+  function closeShadowModal() {
+    if (shadowModal) shadowModal.classList.add('hidden');
+  }
+
+  if (inspectBtn) inspectBtn.addEventListener('click', openShadowModal);
+  if (shadowDriftBtn) shadowDriftBtn.addEventListener('click', openShadowModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeShadowModal);
+  if (shadowModal) {
+    shadowModal.addEventListener('click', (e) => {
+      if (e.target === shadowModal) closeShadowModal();
+    });
+  }
+
+  // 2. Fetch AI Shadow Mode Prediction Stats with Real Alpha Drift
   async function fetchShadowStats() {
     try {
       const shadowRes = await fetch('/api/ml/shadow-stats');
@@ -763,6 +926,21 @@
           const winRate = parseFloat(shadow.win_prediction_rate_pct || 0).toFixed(1);
           const modalWinsEl = document.getElementById('modalWins');
           if (modalWinsEl) modalWinsEl.textContent = `${winRate}%`;
+
+          // Dynamic Alpha Drift Calculation & UI Rendering
+          const driftVal = shadow.alpha_drift_pct !== undefined ? shadow.alpha_drift_pct : (parseFloat(shadow.rolling_accuracy_pct || 0) - parseFloat(accVal));
+          const driftNum = parseFloat(driftVal || 0);
+          const driftSign = driftNum >= 0 ? `+${driftNum.toFixed(1)}%` : `${driftNum.toFixed(1)}%`;
+          const shadowDriftEl = document.getElementById('shadowDrift');
+          if (shadowDriftEl) {
+            shadowDriftEl.textContent = driftSign;
+            shadowDriftEl.className = driftNum >= 0 ? 'text-primary font-semibold' : 'text-rose-400 font-semibold';
+          }
+          const modalDriftEl = document.getElementById('modalDrift');
+          if (modalDriftEl) {
+            modalDriftEl.textContent = driftSign;
+            modalDriftEl.className = `text-xs sm:text-sm font-bold font-mono ${driftNum >= 0 ? 'text-primary' : 'text-rose-400'}`;
+          }
 
           // Render recent predictions log
           const logContainer = document.getElementById('shadowLogEntries');

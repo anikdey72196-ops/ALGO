@@ -147,30 +147,58 @@ class MT5Adapter(BrokerAdapter):
         return self.connect()
 
     def resolve_symbol(self, symbol: str) -> str:
-        """Find the broker's exact symbol name, matching prefixes/suffixes (e.g. XAUUSDm, XAUUSD.a, GOLD)."""
+        """Find the broker's exact symbol name, matching aliases, prefixes/suffixes (e.g. BTC, ETH, GOLD, XAUUSDm)."""
         if mt5 is None:
             return symbol
         self.ensure_connected()
         if symbol in self._symbol_cache:
             return self._symbol_cache[symbol]
 
-        # First check direct name
-        info = mt5.symbol_info(symbol)
-        if info is not None:
-            self._symbol_cache[symbol] = symbol
-            return symbol
+        target = symbol.upper()
+
+        # Check known common broker alias mappings first (e.g. BTCUSD -> BTC, ETHUSD -> ETH, XAUUSD -> GOLD)
+        alias_map = {
+            "BTCUSD": ["BTCUSD", "BTC", "BTCUSDm", "BTC.USD", "BTC/USD", "BITCOIN", "BTCUSDT"],
+            "ETHUSD": ["ETHUSD", "ETH", "ETHUSDm", "ETH.USD", "ETH/USD", "ETHEREUM", "ETHUSDT"],
+            "XAUUSD": ["XAUUSD", "GOLD", "XAUUSDm", "GOLDm", "XAUUSD.a", "XAUUSD.pro", "XAU"],
+            "EURUSD": ["EURUSD", "EURUSDm", "EURUSD.a", "EURUSD.pro"],
+            "GBPUSD": ["GBPUSD", "GBPUSDm", "GBPUSD.a", "GBPUSD.pro"],
+        }
+
+        candidates = alias_map.get(target, [target])
+        for cand in candidates:
+            info = mt5.symbol_info(cand)
+            if info is not None and mt5.symbol_select(cand, True):
+                if cand != symbol:
+                    logger.info(f"Resolved symbol '{symbol}' -> broker alias '{cand}'")
+                self._symbol_cache[symbol] = cand
+                return cand
 
         # Fetch all available broker symbols
         all_symbols = mt5.symbols_get()
         if not all_symbols:
             return symbol
 
-        target = symbol.upper()
-        # Exact match case-insensitive
-        for s in all_symbols:
-            if s.name.upper() == target:
-                self._symbol_cache[symbol] = s.name
-                return s.name
+        sym_names = {s.name.upper(): s.name for s in all_symbols}
+
+        # Check candidate aliases against full broker symbol catalog
+        for cand in candidates:
+            if cand.upper() in sym_names:
+                exact_name = sym_names[cand.upper()]
+                if mt5.symbol_select(exact_name, True):
+                    logger.info(f"Resolved symbol '{symbol}' -> broker catalog '{exact_name}'")
+                    self._symbol_cache[symbol] = exact_name
+                    return exact_name
+
+        # Base currency match if pair ends with USD (e.g. BTCUSD -> BTC)
+        if target.endswith("USD") and len(target) > 3:
+            base = target[:-3]
+            if base in sym_names:
+                exact_base = sym_names[base]
+                if mt5.symbol_select(exact_base, True):
+                    logger.info(f"Resolved symbol '{symbol}' -> broker base symbol '{exact_base}'")
+                    self._symbol_cache[symbol] = exact_base
+                    return exact_base
 
         # Substring / broker suffix match (e.g. XAUUSDm, XAUUSD.pro, GOLD)
         for s in all_symbols:

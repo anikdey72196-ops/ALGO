@@ -36,19 +36,39 @@ if __name__ == "__main__":
     script_dir = Path(__file__).parent.resolve()
     os.chdir(script_dir)
 
+    # 1. Ensure execution within virtual environment if available
+    venv_py = script_dir / "myenv" / "Scripts" / "python.exe"
+    if venv_py.exists():
+        curr_py = Path(sys.executable).resolve()
+        if curr_py != venv_py.resolve():
+            import subprocess
+            sys.exit(subprocess.call([str(venv_py), str(Path(__file__).resolve())] + sys.argv[1:]))
+
     print("======================================================")
     print("  ALGO COMMAND CENTER - WEB CONTROL STATION")
     print("  URL: http://127.0.0.1:8000")
     print("======================================================")
 
-    if "--restart" in sys.argv or "-r" in sys.argv:
+    force_restart = "--restart" in sys.argv or "-r" in sys.argv
+
+    if force_restart:
         if is_port_in_use(8000):
+            print("Restarting server on port 8000...")
             kill_process_on_port(8000)
     elif is_port_in_use(8000):
-        print("Port 8000 is already active.")
-        print("Opening http://127.0.0.1:8000 in your browser...")
-        webbrowser.open("http://127.0.0.1:8000")
-        sys.exit(0)
+        print("\n[ACTIVE] Port 8000 is ALREADY RUNNING and serving traffic in the background!")
+        print("          The trading engine and web dashboard are live at http://127.0.0.1:8000\n")
+        try:
+            choice = input("Press [R] to restart in this console, or [Enter] to keep running in background: ").strip().lower()
+            if choice in ('r', 'restart', 'yes', 'y'):
+                print("Stopping background instance and restarting here...")
+                kill_process_on_port(8000)
+            else:
+                print("Keeping existing background server active. Opening dashboard in browser...")
+                webbrowser.open("http://127.0.0.1:8000")
+                sys.exit(0)
+        except (KeyboardInterrupt, EOFError):
+            sys.exit(0)
 
     threading.Thread(target=open_browser, daemon=True).start()
 

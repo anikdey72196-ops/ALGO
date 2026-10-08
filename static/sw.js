@@ -1,7 +1,8 @@
 // Service Worker for Trading Bot Mobile Terminal PWA
-const CACHE_NAME = 'trading-bot-terminal-v1';
+const CACHE_NAME = 'trading-bot-terminal-v3';
 const PRECACHE_URLS = [
-  '/terminal',
+  
+  '/terminal/controls',
   '/static/manifest.json',
   '/static/icons/terminal-icon.svg',
   '/static/icons/icon-192.png',

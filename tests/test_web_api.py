@@ -216,7 +216,7 @@ def test_mobile_terminal_and_pwa_endpoints():
     res = client.get("/manifest.json")
     assert res.status_code == 200, f"Manifest status: {res.status_code}"
     manifest = res.json()
-    assert manifest.get("start_url") == "/terminal"
+    assert manifest.get("start_url") == "/terminal/controls"
     assert manifest.get("display") == "standalone"
     assert len(manifest.get("icons", [])) >= 2
 
@@ -225,13 +225,16 @@ def test_mobile_terminal_and_pwa_endpoints():
     assert res_sw.status_code == 200
     assert "addEventListener" in res_sw.text
 
-    # 3. Mobile Terminal Template
+    # 3. Mobile Terminal Template & Redirect
+    res_direct = client.get("/terminal/controls")
+    assert res_direct.status_code == 200
+    assert "Glacier Terminal" in res_direct.text or "Glacier" in res_direct.text
+    assert "Controls" in res_direct.text
+
     res_term = client.get("/terminal")
     assert res_term.status_code == 200
     assert "Glacier Terminal" in res_term.text or "Glacier" in res_term.text
-    assert "Terminal" in res_term.text
     assert "Controls" in res_term.text
-    assert "main" in res_term.text
 
     # 4. Network Info Endpoint
     res_net = client.get("/api/network-info")
@@ -239,7 +242,7 @@ def test_mobile_terminal_and_pwa_endpoints():
     net_data = res_net.json()
     assert "primary_ip" in net_data
     assert "terminal_url" in net_data
-    assert "/terminal" in net_data["terminal_url"]
+    assert "/terminal/controls" in net_data["terminal_url"]
 
     # 5. Static Icons
     res_icon = client.get("/static/icons/icon-192.png")

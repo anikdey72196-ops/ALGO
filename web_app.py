@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 # pyrefly: ignore [missing-import]
 from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -304,25 +304,35 @@ async def get_service_worker():
     raise HTTPException(status_code=404, detail="Service worker not found")
 
 
-@app.get("/terminal", response_class=HTMLResponse)
-async def serve_terminal(request: Request):
-    """Serve the dedicated Mobile Terminal PWA web app."""
-    tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
-    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
+@app.get("/terminal")
+async def serve_terminal():
+    """Redirect legacy /terminal route to /terminal/controls."""
+    return RedirectResponse(url="/terminal/controls", status_code=307)
 
 
 @app.get("/terminal/controls", response_class=HTMLResponse)
 async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
-    tpl = "terminal_controls.html" if (TEMPLATES_DIR / "terminal_controls.html").exists() else "terminal.html"
-    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
+    return templates.TemplateResponse(request=request, name="terminal_controls.html", context={"is_active": bot_instance.is_active})
 
 
 @app.get("/terminal/strategy", response_class=HTMLResponse)
 async def serve_terminal_strategy(request: Request):
     """Serve Glacier Terminal Strategy tab."""
     tpl = "terminal_strategy.html" if (TEMPLATES_DIR / "terminal_strategy.html").exists() else "terminal_controls.html"
-    return templates.TemplateResponse(request=request, name=tpl, context={"is_active": bot_instance.is_active})
+    enabled = list(bot_instance.config.enabled_strategies) if bot_instance else []
+    if getattr(bot_instance.config, "reversal_strategy_enabled", False) and "TREND_REVERSAL" not in enabled:
+        enabled.append("TREND_REVERSAL")
+    return templates.TemplateResponse(
+        request=request, 
+        name=tpl, 
+        context={
+            "request": request,
+            "is_active": bot_instance.is_active if bot_instance else False,
+            "enabled_strategies": enabled,
+            "active_count": len(enabled) if enabled else 5,
+        }
+    )
 
 
 @app.get("/terminal/analysis", response_class=HTMLResponse)
@@ -340,24 +350,34 @@ async def get_network_info():
     primary_ip = ips[0] if ips else "127.0.0.1"
     port = 8000
 
-    terminal_urls = [f"http://{ip}:{port}/terminal" for ip in ips]
+    terminal_urls = [f"http://{ip}:{port}/terminal/controls" for ip in ips]
     dashboard_urls = [f"http://{ip}:{port}/" for ip in ips]
 
     return {
         "primary_ip": primary_ip,
         "port": port,
         "available_ips": ips,
-        "terminal_url": terminal_urls[0] if terminal_urls else f"http://127.0.0.1:{port}/terminal",
+        "terminal_url": terminal_urls[0] if terminal_urls else f"http://127.0.0.1:{port}/terminal/controls",
         "terminal_urls": terminal_urls,
         "dashboard_urls": dashboard_urls,
     }
 
 
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
+    ips = get_all_lan_ips()
+    primary_ip = ips[0] if ips else "127.0.0.1"
+    terminal_url = f"http://{primary_ip}:8000/terminal/controls"
     return templates.TemplateResponse(
         request=request, 
         name="index.html",
+        context={
+            "request": request,
+            "primary_ip": primary_ip,
+            "terminal_url": terminal_url,
+            "available_ips": ips,
+        },
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
     )
 
@@ -1646,6 +1666,26 @@ async def get_ml_shadow_stats(threshold: float = 0.50):
         return {"status": "inactive", "message": "ML Trap Detector not initialized"}
     try:
         stats = bot_instance.trap_svc.shadow_prediction_stats(threshold=threshold)
+        if "alpha_drift_pct" not in stats and hasattr(bot_instance.trap_svc, "_conn"):
+            cur = bot_instance.trap_svc._conn.execute(
+                """
+                SELECT p_genuine, label
+                FROM ml_events
+                WHERE label IS NOT NULL AND p_genuine IS NOT NULL
+                ORDER BY ts DESC
+                LIMIT 50
+                """
+            )
+            rec_rows = cur.fetchall()
+            base_acc = float(stats.get("prediction_accuracy_pct", 0.0))
+            if rec_rows:
+                rec_corr = sum(1 for p, l in rec_rows if (float(p) >= threshold and int(l) == 1) or (float(p) < threshold and int(l) == 0))
+                rec_acc = round((rec_corr / len(rec_rows)) * 100.0, 1)
+                stats["rolling_accuracy_pct"] = rec_acc
+                stats["alpha_drift_pct"] = round(rec_acc - base_acc, 1)
+            else:
+                stats["rolling_accuracy_pct"] = base_acc
+                stats["alpha_drift_pct"] = 0.0
         return {"status": "success", **stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

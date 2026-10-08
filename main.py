@@ -1439,8 +1439,34 @@ class TradingBot:
             mt5.symbol_select(broker_symbol, True)
             rates = mt5.copy_rates_from_pos(broker_symbol, tf_map[timeframe], 0, count)
             if rates is None or len(rates) == 0:
+                # Immediate fallback check for common broker crypto/metal symbols
+                fallback_map = {
+                    "BTCUSD": ["BTC", "BTCUSDm", "BTC.USD"],
+                    "ETHUSD": ["ETH", "ETHUSDm", "ETH.USD"],
+                    "XAUUSD": ["GOLD", "XAUUSDm"],
+                }
+                candidates = fallback_map.get(symbol.upper(), [])
+                for alt in candidates:
+                    if alt != broker_symbol and mt5.symbol_select(alt, True):
+                        alt_rates = mt5.copy_rates_from_pos(alt, tf_map[timeframe], 0, count)
+                        if alt_rates is not None and len(alt_rates) > 0:
+                            broker_symbol = alt
+                            rates = alt_rates
+                            if hasattr(self.broker, '_symbol_cache'):
+                                self.broker._symbol_cache[symbol] = alt
+                            break
+
+            if rates is None or len(rates) == 0:
                 err = mt5.last_error()
-                logger.warning(f"MT5 returned no rates for {broker_symbol} ({timeframe}). Error: {err}")
+                # Rate-limit repetitive warning to once every 120s per symbol & timeframe
+                warn_key = f"{broker_symbol}_{timeframe}"
+                import time as _t
+                now_ts = _t.time()
+                if not hasattr(self, "_last_mt5_rate_warn"):
+                    self._last_mt5_rate_warn = {}
+                if now_ts - self._last_mt5_rate_warn.get(warn_key, 0) > 120:
+                    self._last_mt5_rate_warn[warn_key] = now_ts
+                    logger.warning(f"MT5 returned no rates for {broker_symbol} ({timeframe}). Error: {err}")
                 return None
 
             df = pd.DataFrame(rates)

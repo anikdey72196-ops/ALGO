@@ -736,29 +736,105 @@
         });
       }
 
+      // Enhanced dynamic risk calculation with visual grading
       function updateCardRisk(card, lot, sl, tickVal) {
         const estRiskLabel = card.querySelector('.est-risk');
         if (estRiskLabel) {
-          const dollar = (lot * sl * tickVal).toFixed(2);
-          estRiskLabel.textContent = `-$${dollar} est.`;
+          const dollar = parseFloat((lot * sl * tickVal).toFixed(2));
+          estRiskLabel.textContent = `-$${dollar.toFixed(2)} est.`;
+          if (dollar <= 25.0) {
+            estRiskLabel.className = 'text-[10px] font-mono font-bold est-risk px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs';
+          } else if (dollar <= 65.0) {
+            estRiskLabel.className = 'text-[10px] font-mono font-bold est-risk px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 transition-colors shadow-2xs';
+          } else {
+            estRiskLabel.className = 'text-[10px] font-mono font-bold est-risk px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200 transition-colors shadow-2xs';
+          }
         }
       }
 
-      function updateDirtyPill(card, isDirty) {
+      function updateDirtyPill(card, state) {
         const dirtyPill = card.querySelector('.pair-dirty-pill');
-        if (dirtyPill) {
-          if (isDirty) dirtyPill.classList.remove('hidden');
-          else dirtyPill.classList.add('hidden');
+        if (!dirtyPill) return;
+        if (state === 'saving') {
+          dirtyPill.textContent = 'SAVING...';
+          dirtyPill.className = 'pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse inline-block';
+          dirtyPill.classList.remove('hidden');
+        } else if (state === 'synced') {
+          dirtyPill.textContent = '✓ SYNCED';
+          dirtyPill.className = 'pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block transition-opacity duration-300';
+          dirtyPill.classList.remove('hidden');
+          setTimeout(() => {
+            if (dirtyPill.textContent === '✓ SYNCED') {
+              dirtyPill.classList.add('hidden');
+            }
+          }, 2000);
+        } else if (state === 'edited' || state === true) {
+          dirtyPill.textContent = 'EDITED';
+          dirtyPill.className = 'pair-dirty-pill text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-block';
+          dirtyPill.classList.remove('hidden');
+        } else {
+          dirtyPill.classList.add('hidden');
         }
+      }
+
+      // Debounced pair auto-save map
+      const pairSaveTimers = {};
+
+      function schedulePairAutoSave(symbol, card) {
+        if (!symbol || !pairsLocal[symbol]) return;
+        updateDirtyPill(card, 'saving');
+        
+        if (pairSaveTimers[symbol]) {
+          clearTimeout(pairSaveTimers[symbol]);
+        }
+
+        pairSaveTimers[symbol] = setTimeout(async () => {
+          try {
+            const currentPair = pairsLocal[symbol];
+            const res = await fetch('/api/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update_pair_settings',
+                pair: symbol,
+                lot: currentPair.lot,
+                sl: currentPair.sl
+              })
+            });
+
+            if (res.ok) {
+              currentPair.isDirty = false;
+              updateDirtyPill(card, 'synced');
+            } else {
+              const err = await res.json().catch(() => ({}));
+              console.warn('Auto-save error:', err);
+              updateDirtyPill(card, 'edited');
+            }
+          } catch (e) {
+            console.warn('Auto-save network error:', e);
+            updateDirtyPill(card, 'edited');
+          }
+        }, 500);
       }
 
       function syncChipsActive(chips, currentVal, attrName) {
         chips.forEach(c => {
           const cVal = parseFloat(c.getAttribute(attrName));
           if (Math.abs(cVal - currentVal) < 0.001) {
-            c.className = 'py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs';
+            c.className = 'lot-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs transition-all scale-[1.02]';
           } else {
-            c.className = 'py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors';
+            c.className = 'lot-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors';
+          }
+        });
+      }
+
+      function syncSlChipsActive(chips, currentVal, attrName) {
+        chips.forEach(c => {
+          const cVal = parseFloat(c.getAttribute(attrName));
+          if (Math.abs(cVal - currentVal) < 0.001) {
+            c.className = 'sl-chip active py-1 text-[11px] font-mono font-bold rounded border border-brand-600 bg-brand-600 text-white shadow-xs transition-all scale-[1.02]';
+          } else {
+            c.className = 'sl-chip py-1 text-[11px] font-mono font-medium rounded border border-slate-200 bg-white text-slate-700 hover:border-brand-500 transition-colors';
           }
         });
       }
@@ -798,7 +874,7 @@
               pairsLocal[symbol].isDirty = true;
               syncChipsActive(lotChips, val, 'data-val');
               updateCardRisk(card, val, pairsLocal[symbol].sl, tickVal);
-              updateDirtyPill(card, true);
+              schedulePairAutoSave(symbol, card);
             }
           });
         });
@@ -812,9 +888,9 @@
               slInput.value = Math.round(pips);
               pairsLocal[symbol].sl = pips;
               pairsLocal[symbol].isDirty = true;
-              syncChipsActive(slChips, pips, 'data-pips');
+              syncSlChipsActive(slChips, pips, 'data-pips');
               updateCardRisk(card, pairsLocal[symbol].lot, pips, tickVal);
-              updateDirtyPill(card, true);
+              schedulePairAutoSave(symbol, card);
             }
           });
         });
@@ -830,7 +906,7 @@
             pairsLocal[symbol].isDirty = true;
             syncChipsActive(lotChips, next, 'data-val');
             updateCardRisk(card, next, pairsLocal[symbol].sl, tickVal);
-            updateDirtyPill(card, true);
+            schedulePairAutoSave(symbol, card);
           });
         }
         if (plusLotBtn && lotInput) {
@@ -843,7 +919,7 @@
             pairsLocal[symbol].isDirty = true;
             syncChipsActive(lotChips, next, 'data-val');
             updateCardRisk(card, next, pairsLocal[symbol].sl, tickVal);
-            updateDirtyPill(card, true);
+            schedulePairAutoSave(symbol, card);
           });
         }
 
@@ -857,9 +933,9 @@
             slInput.value = next;
             pairsLocal[symbol].sl = next;
             pairsLocal[symbol].isDirty = true;
-            syncChipsActive(slChips, next, 'data-pips');
+            syncSlChipsActive(slChips, next, 'data-pips');
             updateCardRisk(card, pairsLocal[symbol].lot, next, tickVal);
-            updateDirtyPill(card, true);
+            schedulePairAutoSave(symbol, card);
           });
         }
         if (plusSlBtn && slInput) {
@@ -871,9 +947,9 @@
             slInput.value = next;
             pairsLocal[symbol].sl = next;
             pairsLocal[symbol].isDirty = true;
-            syncChipsActive(slChips, next, 'data-pips');
+            syncSlChipsActive(slChips, next, 'data-pips');
             updateCardRisk(card, pairsLocal[symbol].lot, next, tickVal);
-            updateDirtyPill(card, true);
+            schedulePairAutoSave(symbol, card);
           });
         }
 
@@ -887,7 +963,7 @@
               pairsLocal[symbol].isDirty = true;
               syncChipsActive(lotChips, parsed, 'data-val');
               updateCardRisk(card, parsed, pairsLocal[symbol].sl, tickVal);
-              updateDirtyPill(card, true);
+              schedulePairAutoSave(symbol, card);
             }
           };
           lotInput.addEventListener('input', onLotType);
@@ -901,9 +977,9 @@
               parsed = Math.max(1, Math.min(1000, Math.round(parsed)));
               pairsLocal[symbol].sl = parsed;
               pairsLocal[symbol].isDirty = true;
-              syncChipsActive(slChips, parsed, 'data-pips');
+              syncSlChipsActive(slChips, parsed, 'data-pips');
               updateCardRisk(card, pairsLocal[symbol].lot, parsed, tickVal);
-              updateDirtyPill(card, true);
+              schedulePairAutoSave(symbol, card);
             }
           };
           slInput.addEventListener('input', onSlType);
@@ -912,11 +988,11 @@
 
         // Pair Route Toggle
         if (routeSwitch) {
-          routeSwitch.addEventListener('change', (e) => {
+          routeSwitch.addEventListener('change', async (e) => {
             const isChecked = e.target.checked;
             pairsLocal[symbol].enabled = isChecked;
             pairsLocal[symbol].isDirty = true;
-            updateDirtyPill(card, true);
+            updateDirtyPill(card, 'saving');
 
             const toggleBg = e.target.nextElementSibling;
             const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
@@ -928,6 +1004,25 @@
               card.style.opacity = '0.55';
               if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
               if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+            }
+
+            try {
+              const res = await fetch('/api/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'toggle_pair',
+                  pair: symbol.toLowerCase(),
+                  active: isChecked
+                })
+              });
+              if (res.ok) {
+                updateDirtyPill(card, 'synced');
+              } else {
+                updateDirtyPill(card, 'edited');
+              }
+            } catch (err) {
+              updateDirtyPill(card, 'edited');
             }
           });
         }

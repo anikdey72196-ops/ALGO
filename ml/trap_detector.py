@@ -871,12 +871,33 @@ class EventStore:
                 "strategy": r[8],
             })
 
+        # Calculate Rolling 50-event prediction accuracy and Alpha Drift
+        cur_recent_eval = self._conn.execute(
+            """
+            SELECT p_genuine, label
+            FROM ml_events
+            WHERE label IS NOT NULL AND p_genuine IS NOT NULL
+            ORDER BY ts DESC
+            LIMIT 50
+            """
+        )
+        rec_rows = cur_recent_eval.fetchall()
+        if rec_rows and evaluated > 0:
+            rec_corr = sum(1 for p, l in rec_rows if (float(p) >= threshold and int(l) == 1) or (float(p) < threshold and int(l) == 0))
+            rec_acc = round((rec_corr / len(rec_rows)) * 100.0, 1)
+            alpha_drift = round(rec_acc - accuracy, 1)
+        else:
+            rec_acc = accuracy
+            alpha_drift = 0.0
+
         return {
             "total_events": int(total_events or 0),
             "predicted_events": int(predicted_events or 0),
             "evaluated_events": evaluated,
             "correct_predictions": correct,
             "prediction_accuracy_pct": accuracy,
+            "rolling_accuracy_pct": rec_acc,
+            "alpha_drift_pct": alpha_drift,
             "traps_caught": t_caught,
             "total_traps": t_total,
             "trap_detection_rate_pct": trap_recall,
