@@ -98,6 +98,12 @@ def _translate_sqlite_to_mysql(sql: str) -> str:
             prefix = sql[:conflict_match.start()].strip()
             sql = f"{prefix} ON DUPLICATE KEY UPDATE {update_clause_mysql}"
 
+    # 4. Handle MySQL DDL differences (TEXT column defaults and primary keys, AUTOINCREMENT)
+    if "CREATE TABLE" in sql.upper():
+        sql = re.sub(r'\bAUTOINCREMENT\b', 'AUTO_INCREMENT', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'\bTEXT\s+DEFAULT\b', 'VARCHAR(255) DEFAULT', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'\bTEXT\s+PRIMARY\s+KEY\b', 'VARCHAR(255) PRIMARY KEY', sql, flags=re.IGNORECASE)
+
     return sql
 
 
@@ -110,6 +116,21 @@ class MySQLCursorWrapper:
         mysql_sql = _translate_sqlite_to_mysql(sql)
         if mysql_sql == "SELECT 1" and sql.strip().upper().startswith("PRAGMA "):
             return self
+        if "CREATE INDEX IF NOT EXISTS" in sql.upper():
+            idx_match = re.search(r"CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+ON\s+(\w+)", sql, flags=re.IGNORECASE)
+            if idx_match:
+                idx_name = idx_match.group(1)
+                tbl_name = idx_match.group(2)
+                try:
+                    self._cur.execute(
+                        "SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s LIMIT 1",
+                        (tbl_name, idx_name)
+                    )
+                    if self._cur.fetchone():
+                        return self  # Index already exists
+                    mysql_sql = re.sub(r"\bIF\s+NOT\s+EXISTS\b", "", mysql_sql, flags=re.IGNORECASE)
+                except Exception:
+                    pass
         if params is not None:
             if isinstance(params, (list, tuple)):
                 self._cur.execute(mysql_sql, tuple(params))

@@ -946,13 +946,30 @@ async def handle_dashboard_update(payload: dict):
         pair_id = payload.get("pair")
         active = payload.get("active", True)
         sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
-        sym = sym_map.get(pair_id, str(pair_id).upper())
+        sym = sym_map.get(str(pair_id).lower(), str(pair_id).upper())
         current = list(bot_instance.config.selected_symbols)
         if active and sym not in current:
             current.append(sym)
         elif not active and sym in current:
             current.remove(sym)
         bot_instance.config.selected_symbols = current
+
+        # Synchronize pair_configs
+        from core.config import PairSettings
+        if not hasattr(bot_instance.config, "pair_configs"):
+            bot_instance.config.pair_configs = {}
+        if sym not in bot_instance.config.pair_configs:
+            bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+        bot_instance.config.pair_configs[sym].enabled = active
+
+        # Synchronize primary pair references
+        if getattr(bot_instance.config, "pair1", None) and bot_instance.config.pair1.symbol == sym:
+            bot_instance.config.pair1.enabled = active
+        elif getattr(bot_instance.config, "pair2", None) and bot_instance.config.pair2.symbol == sym:
+            bot_instance.config.pair2.enabled = active
+        elif getattr(bot_instance.config, "pair3", None) and bot_instance.config.pair3.symbol == sym:
+            bot_instance.config.pair3.enabled = active
+
         bot_instance.save_settings()
         invalidate_state_cache()
         asyncio.create_task(broadcast_bot_state())

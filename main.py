@@ -246,9 +246,23 @@ class TradingBot:
                     self.strategy.set_enabled_strategies(self.config.enabled_strategies)
 
                 if "selected_symbols" in saved and isinstance(saved["selected_symbols"], list):
-                    self.config.selected_symbols = saved["selected_symbols"]
+                    raw_symbols = saved["selected_symbols"]
+                    filtered_symbols = []
+                    for s in raw_symbols:
+                        sym_u = str(s).strip().upper()
+                        if not sym_u or sym_u == "NONE":
+                            continue
+                        if hasattr(self.config, "pair_configs") and sym_u in self.config.pair_configs:
+                            if not getattr(self.config.pair_configs[sym_u], "enabled", True):
+                                continue
+                        if sym_u not in filtered_symbols:
+                            filtered_symbols.append(sym_u)
+                    self.config.selected_symbols = filtered_symbols
                 else:
-                    self.config.selected_symbols = [self.config.pair1.symbol, self.config.pair2.symbol, self.config.pair3.symbol]
+                    self.config.selected_symbols = [
+                        s for s in [self.config.pair1.symbol, self.config.pair2.symbol, self.config.pair3.symbol]
+                        if s and s != "NONE"
+                    ]
 
                 if "strategy_type" in saved and isinstance(saved["strategy_type"], str):
                     self.config.strategy_type = saved["strategy_type"]
@@ -345,7 +359,10 @@ class TradingBot:
                     for sym, p_cfg in getattr(self.config, "pair_configs", {}).items()
                 },
                 "enabled_strategies": self.config.enabled_strategies,
-                "selected_symbols": self.config.selected_symbols,
+                "selected_symbols": [
+                    s for s in self.config.selected_symbols
+                    if not (hasattr(self.config, "pair_configs") and s in self.config.pair_configs and not getattr(self.config.pair_configs[s], "enabled", True))
+                ],
                 "strategy_type": self.config.strategy_type,
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
@@ -678,7 +695,15 @@ class TradingBot:
             if p3_s and p3_s != "NONE" and p3_s not in target_symbols:
                 target_symbols.append(p3_s)
 
-        # Exclude pair if explicitly disabled in pair1 / pair2 / pair3 configuration
+        # Include enabled symbols from pair_configs
+        if hasattr(self.config, 'pair_configs') and isinstance(self.config.pair_configs, dict):
+            for s_name, p_cfg in self.config.pair_configs.items():
+                if getattr(p_cfg, 'enabled', True):
+                    s_clean = str(s_name).strip().upper()
+                    if s_clean and s_clean != "NONE" and s_clean not in target_symbols:
+                        target_symbols.append(s_clean)
+
+        # Exclude pair if explicitly disabled in pair1 / pair2 / pair3 or pair_configs
         enabled_pair_symbols = set()
         for p_name in ('pair1', 'pair2', 'pair3'):
             p_cfg = getattr(self.config, p_name, None)
@@ -687,6 +712,13 @@ class TradingBot:
                 if s_name and s_name != "NONE":
                     enabled_pair_symbols.add(s_name)
 
+        if hasattr(self.config, 'pair_configs') and isinstance(self.config.pair_configs, dict):
+            for s_name, p_cfg in self.config.pair_configs.items():
+                if getattr(p_cfg, 'enabled', True):
+                    s_clean = str(s_name).strip().upper()
+                    if s_clean and s_clean != "NONE":
+                        enabled_pair_symbols.add(s_clean)
+
         for p_name in ('pair1', 'pair2', 'pair3'):
             p_cfg = getattr(self.config, p_name, None)
             if p_cfg and not p_cfg.enabled and p_cfg.symbol:
@@ -694,14 +726,27 @@ class TradingBot:
                 if p_s in target_symbols and p_s not in enabled_pair_symbols:
                     target_symbols.remove(p_s)
 
+        # Remove explicitly disabled pair_configs
+        if hasattr(self.config, 'pair_configs') and isinstance(self.config.pair_configs, dict):
+            for s_name, p_cfg in self.config.pair_configs.items():
+                if not getattr(p_cfg, 'enabled', True):
+                    p_s = str(s_name).strip().upper()
+                    if p_s in target_symbols:
+                        target_symbols.remove(p_s)
+
         active_pairs = []
-        for i, sym in enumerate(target_symbols, start=1):
+        for sym in target_symbols:
+            sym_clean = sym.strip().upper()
+            # Double check: skip if explicitly disabled in pair_configs
+            if hasattr(self.config, 'pair_configs') and sym_clean in self.config.pair_configs:
+                if not getattr(self.config.pair_configs[sym_clean], 'enabled', True):
+                    continue
+
             pair_lot = self.config.fixed_lot_size
             pair_sl = self.config.fixed_sl_pips
+            pair_spread = None
 
             # Custom override from pair1 / pair2 / pair3 or pair_configs if symbol matches
-            sym_clean = sym.strip().upper()
-            pair_spread = None
             if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym_clean:
                 if self.config.pair1.fixed_lot_size is not None:
                     pair_lot = self.config.pair1.fixed_lot_size
@@ -733,8 +778,8 @@ class TradingBot:
                     pair_spread = p_item.avg_spread_points
 
             active_pairs.append({
-                "pair_num": i,
-                "symbol": sym,
+                "pair_num": len(active_pairs) + 1,
+                "symbol": sym_clean,
                 "fixed_lot_size": pair_lot,
                 "fixed_sl_pips": pair_sl,
                 "avg_spread_points": pair_spread,
