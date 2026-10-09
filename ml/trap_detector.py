@@ -568,21 +568,22 @@ class EventStore:
             self._init_db()
 
     def _init_db(self) -> None:
-        self._conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.execute("PRAGMA busy_timeout=30000")
-        self._conn.execute("PRAGMA wal_autocheckpoint=1000")
-        self._conn.executescript(_DDL)
+        from core.database import get_db_connection
+        self._conn = get_db_connection(self.db_path)
+        if isinstance(self._conn, sqlite3.Connection):
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA busy_timeout=30000")
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
+            self._conn.executescript(_DDL)
 
-        # Auto-migration: ensure 'strategy' column and index exist in pre-existing tables
-        cur = self._conn.execute("PRAGMA table_info(ml_events)")
-        cols = [row[1] for row in cur.fetchall()]
-        if "strategy" not in cols:
-            self._conn.execute("ALTER TABLE ml_events ADD COLUMN strategy TEXT NOT NULL DEFAULT 'SMC'")
-        self._conn.execute("CREATE INDEX IF NOT EXISTS ix_ml_events_strategy ON ml_events(strategy)")
-
-        self._conn.commit()
+            # Auto-migration: ensure 'strategy' column and index exist in pre-existing tables
+            cur = self._conn.execute("PRAGMA table_info(ml_events)")
+            cols = [row[1] for row in cur.fetchall()]
+            if "strategy" not in cols:
+                self._conn.execute("ALTER TABLE ml_events ADD COLUMN strategy TEXT NOT NULL DEFAULT 'SMC'")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS ix_ml_events_strategy ON ml_events(strategy)")
+            self._conn.commit()
 
     def _handle_db_error(self, e: Exception) -> bool:
         """

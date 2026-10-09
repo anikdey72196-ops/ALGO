@@ -192,10 +192,8 @@ class ExecutionMetricsCollector:
     def _ensure_schema(self) -> None:
         """Create tables if not already present."""
         try:
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA busy_timeout=30000")
+            from core.database import get_db_connection
+            conn = get_db_connection(self.db_path)
             with conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS execution_orders (
@@ -451,12 +449,10 @@ class ExecutionMetricsCollector:
                 self._persist_batch(batch)
 
     def _persist_batch(self, batch: List[Any]) -> None:
-        """Write records to SQLite with WAL mode resilience."""
+        """Write records to database (MySQL or SQLite)."""
         try:
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA busy_timeout=30000")
+            from core.database import get_db_connection
+            conn = get_db_connection(self.db_path)
             with conn:
                 for item in batch:
                     if isinstance(item, ExecutionOrderRecord):

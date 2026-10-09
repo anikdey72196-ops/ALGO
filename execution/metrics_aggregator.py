@@ -21,13 +21,9 @@ class MetricsAggregator:
     def __init__(self, db_path: str = "trading_state.db"):
         self.db_path = db_path
 
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA busy_timeout=30000")
-        return conn
+    def _get_connection(self):
+        from core.database import get_db_connection
+        return get_db_connection(self.db_path)
 
     def get_summary(self, window_hours: int = 24) -> Dict[str, Any]:
         """Compute top-level summary KPIs for the requested time window."""

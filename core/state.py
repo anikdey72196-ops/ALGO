@@ -26,6 +26,8 @@ class TradeRecord:
     magic_number: int = 123456
     closed_at: datetime | None = None
     duration_seconds: float = 0.0
+    broker_name: str = "XMGlobal-MT5 6"
+    session: str = "LONDON_OPEN"
 
 
 @dataclass
@@ -73,16 +75,40 @@ class StateManager:
         self.csv_path = csv_path
         self.sessions_csv_path = sessions_csv_path
         self._lock = threading.RLock()
-        self.conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA synchronous = NORMAL")
-        self.conn.execute("PRAGMA busy_timeout = 30000")
-        self._init_schema()
+        self.conn = None
+        from core.database import get_db_connection
+        self.conn = get_db_connection(db_path)
+        if isinstance(self.conn, sqlite3.Connection):
+            self.conn.row_factory = sqlite3.Row
+            try:
+                self.conn.execute("PRAGMA journal_mode=WAL")
+                self.conn.execute("PRAGMA synchronous = NORMAL")
+                self.conn.execute("PRAGMA busy_timeout = 30000")
+            except Exception:
+                pass
+            self._init_schema()
+        else:
+            self._init_mysql_schema()
+
         self._ensure_daily_row(datetime.now(timezone.utc).date())
         self.cleanup_interrupted_sessions()
         self._sync_trades_csv()
         self._sync_sessions_csv()
+
+    def _init_mysql_schema(self) -> None:
+        """Ensure MySQL tables exist and clean up any orphaned test trade records."""
+        from scripts.migrate_sqlite_to_mysql import TABLE_SCHEMAS
+        with self._lock, self.conn:
+            for table_name, schema_sql in TABLE_SCHEMAS.items():
+                try:
+                    self.conn.execute(schema_sql)
+                except Exception as e:
+                    logger.debug(f"MySQL schema ensure for {table_name}: {e}")
+            try:
+                self.conn.execute("UPDATE trade_log SET status = 'CLOSED_TEST' WHERE status = 'OPEN' AND id >= 9000 AND id <= 9999")
+            except Exception:
+                pass
+        logger.info("Database schema initialized using MySQL backend.")
     
     def _init_schema(self) -> None:
         """Create tables: daily_state, trade_log, bot_sessions with migrations."""
@@ -317,14 +343,17 @@ class StateManager:
         date_str = trade.timestamp.date().isoformat()
         self._ensure_daily_row(trade.timestamp.date())
         
+        broker_name = getattr(trade, 'broker_name', None) or os.getenv("MT5_SERVER", "XMGlobal-MT5 6") or "XMGlobal-MT5 6"
+        session_name = getattr(trade, 'session', None) or "LONDON_OPEN"
+
         with self._lock, self.conn:
             if trade.id is not None:
                 cursor = self.conn.execute('''
                     INSERT INTO trade_log (
                         id, timestamp, symbol, direction, entry_price, 
                         stop_loss, take_profit, lot_size, realized_pnl, status,
-                        strategy_name, magic_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        strategy_name, magic_number, broker_name, session
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         status = excluded.status,
                         stop_loss = excluded.stop_loss,
@@ -345,6 +374,8 @@ class StateManager:
                     trade.status,
                     trade.strategy_name,
                     trade.magic_number,
+                    broker_name,
+                    session_name,
                 ))
                 trade_id = trade.id
             else:
@@ -352,8 +383,8 @@ class StateManager:
                     INSERT INTO trade_log (
                         timestamp, symbol, direction, entry_price, 
                         stop_loss, take_profit, lot_size, realized_pnl, status,
-                        strategy_name, magic_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        strategy_name, magic_number, broker_name, session
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     trade.timestamp.isoformat(),
                     trade.symbol,
@@ -366,6 +397,8 @@ class StateManager:
                     trade.status,
                     trade.strategy_name,
                     trade.magic_number,
+                    broker_name,
+                    session_name,
                 ))
                 trade_id = cursor.lastrowid
                 trade.id = trade_id

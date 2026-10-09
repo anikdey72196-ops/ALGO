@@ -1334,6 +1334,8 @@ class TradingBot:
                         status="OPEN",
                         strategy_name=best_signal.strategy_name,
                         magic_number=best_signal.magic_number,
+                        broker_name=os.getenv("MT5_SERVER", "XMGlobal-MT5 6") or "XMGlobal-MT5 6",
+                        session=getattr(best_signal, "session_killzone", "OFF_HOURS") or "LONDON_OPEN",
                     )
                     self.state.record_trade(trade_record)
 
