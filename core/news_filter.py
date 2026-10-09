@@ -140,9 +140,22 @@ class NewsFilter:
         Check if current spread exceeds max_spread_multiple × avg_spread.
         Returns SpreadFilterResult with blocked=True if excessive.
         """
+        if avg_spread <= 0.0:
+            logger.warning(f"SpreadFilter received non-positive avg_spread={avg_spread}. Skipping spread check.")
+            return SpreadFilterResult(
+                blocked=False,
+                current_spread=current_spread,
+                avg_spread=avg_spread,
+            )
+
         threshold = max_spread_multiple * avg_spread
         if current_spread > threshold:
-            reason = f"Current spread {current_spread} exceeds maximum allowed ({threshold:.4f}) based on avg {avg_spread:.4f}."
+            fmt = ".5f" if avg_spread < 0.05 else ".2f"
+            reason = (
+                f"Current spread {current_spread:{fmt}} exceeds maximum allowed "
+                f"({threshold:{fmt}}) based on avg {avg_spread:{fmt}} "
+                f"(max multiple: {max_spread_multiple:.1f}x)."
+            )
             logger.info(f"SpreadFilter blocked: {reason}")
             return SpreadFilterResult(
                 blocked=True,

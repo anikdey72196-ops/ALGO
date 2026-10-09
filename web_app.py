@@ -1197,6 +1197,8 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.pair1.symbol = p1_sym
         bot_instance.config.pair1.fixed_lot_size = payload.pair1.fixed_lot_size
         bot_instance.config.pair1.fixed_sl_pips = payload.pair1.fixed_sl_pips
+        if getattr(payload.pair1, "avg_spread_points", None) is not None:
+            bot_instance.config.pair1.avg_spread_points = payload.pair1.avg_spread_points
         bot_instance.config.pair1.enabled = payload.pair1.enabled
 
     if payload.pair2 is not None:
@@ -1225,6 +1227,8 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.pair2.symbol = p2_sym
         bot_instance.config.pair2.fixed_lot_size = payload.pair2.fixed_lot_size
         bot_instance.config.pair2.fixed_sl_pips = payload.pair2.fixed_sl_pips
+        if getattr(payload.pair2, "avg_spread_points", None) is not None:
+            bot_instance.config.pair2.avg_spread_points = payload.pair2.avg_spread_points
         bot_instance.config.pair2.enabled = payload.pair2.enabled
 
     if payload.pair3 is not None:
@@ -1253,6 +1257,8 @@ async def update_configuration(payload: BotConfigUpdate):
         bot_instance.config.pair3.symbol = p3_sym
         bot_instance.config.pair3.fixed_lot_size = payload.pair3.fixed_lot_size
         bot_instance.config.pair3.fixed_sl_pips = payload.pair3.fixed_sl_pips
+        if getattr(payload.pair3, "avg_spread_points", None) is not None:
+            bot_instance.config.pair3.avg_spread_points = payload.pair3.avg_spread_points
         bot_instance.config.pair3.enabled = payload.pair3.enabled
 
     # Handle multi-pair independent configurations (pair_configs)
@@ -1278,6 +1284,8 @@ async def update_configuration(payload: BotConfigUpdate):
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["sl"]), 1)
                 elif "fixed_sl_pips" in v and v["fixed_sl_pips"] is not None:
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["fixed_sl_pips"]), 1)
+                if "avg_spread_points" in v and v["avg_spread_points"] is not None:
+                    bot_instance.config.pair_configs[sym].avg_spread_points = round(float(v["avg_spread_points"]), 1)
                 if "enabled" in v:
                     bot_instance.config.pair_configs[sym].enabled = bool(v["enabled"])
 
@@ -1287,16 +1295,22 @@ async def update_configuration(payload: BotConfigUpdate):
                         bot_instance.config.pair1.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
                         bot_instance.config.pair1.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+                    if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+                        bot_instance.config.pair1.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
                 elif sym == bot_instance.config.pair2.symbol:
                     if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
                         bot_instance.config.pair2.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
                         bot_instance.config.pair2.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+                    if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+                        bot_instance.config.pair2.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
                 elif sym == bot_instance.config.pair3.symbol:
                     if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
                         bot_instance.config.pair3.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
                         bot_instance.config.pair3.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+                    if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+                        bot_instance.config.pair3.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
 
     # Handle enabled strategies update
     if payload.enabled_strategies is not None:
@@ -1931,4 +1945,116 @@ async def export_execution_metrics_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=execution_metrics.csv"}
     )
+
+
+# ─────────────────────────────────────────────────────────────
+#  Enterprise Distributed Cloud ML & Data Sync API
+# ─────────────────────────────────────────────────────────────
+
+from core.cloud_sync import CloudSyncEngine, CloudSyncClient
+
+sync_engine = CloudSyncEngine()
+
+
+def verify_sync_auth(request: Request) -> bool:
+    """Verify Bearer token against SYNC_AUTH_TOKEN if configured."""
+    expected = os.getenv("SYNC_AUTH_TOKEN", "").strip()
+    if not expected:
+        return True  # Open if no token configured
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth.split("Bearer ", 1)[1].strip()
+        if token == expected:
+            return True
+    return False
+
+
+@app.get("/api/sync/status")
+async def get_cloud_sync_status(request: Request):
+    """Return local event counts and model manifest summary."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return sync_engine.get_sync_status()
+
+
+@app.post("/api/sync/events/export")
+async def export_sync_events(request: Request, since_ts: Optional[str] = None, limit: int = 10000):
+    """Export ML events and trade logs since timestamp for sync merge."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return sync_engine.export_events(since_ts=since_ts, limit=limit)
+
+
+@app.post("/api/sync/events/import")
+async def import_sync_events(request: Request, payload: Dict[str, Any] = Body(...)):
+    """Merge remote ML events and trade logs atomically with deduplication."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    stats = sync_engine.import_events(payload)
+    return {"status": "success", "imported": stats}
+
+
+@app.get("/api/sync/models/manifest")
+async def get_sync_models_manifest(request: Request):
+    """Return manifest of all compiled ML models with SHA256 hashes."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"status": "success", "models": sync_engine.get_models_manifest()}
+
+
+@app.get("/api/sync/models/download/{filename}")
+async def download_sync_model(filename: str, request: Request):
+    """Download compiled model artifact binary."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    file_path = sync_engine.artifacts_dir / Path(filename).name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return FileResponse(path=file_path, filename=file_path.name, media_type="application/octet-stream")
+
+
+@app.post("/api/sync/models/upload/{filename}")
+async def upload_sync_model(filename: str, request: Request):
+    """Upload and atomically replace compiled model artifact."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    content = await request.body()
+    expected_sha = request.headers.get("X-Sha256")
+    ok, msg = sync_engine.save_model_artifact(filename, content, expected_sha)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "success", "message": msg}
+
+
+@app.post("/api/sync/trigger_retrain")
+async def trigger_cloud_retrain(request: Request):
+    """Trigger background model retraining on the combined real + demo dataset."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    def run_retrain():
+        try:
+            logger.info("Executing cloud model retraining on combined dataset...")
+            from ml.temporal_analyzer import TemporalEdgeAnalyzer
+            analyzer = TemporalEdgeAnalyzer()
+            analyzer.train_and_update()
+            logger.info("Cloud model retraining finished successfully.")
+        except Exception as e:
+            logger.error(f"Cloud model retraining error: {e}")
+
+    threading.Thread(target=run_retrain, daemon=True).start()
+    return {"status": "success", "message": "Model retraining task initiated in background on combined dataset"}
+
+
+@app.post("/api/sync/run_client_sync")
+async def run_client_sync(target_url: Optional[str] = None):
+    """Execute client sync from this machine to target cloud URL."""
+    cloud_url = target_url or os.getenv("CLOUD_SYNC_URL", "")
+    if not cloud_url:
+        raise HTTPException(status_code=400, detail="CLOUD_SYNC_URL not configured.")
+    token = os.getenv("SYNC_AUTH_TOKEN", "")
+    client = CloudSyncClient(remote_url=cloud_url, auth_token=token, local_engine=sync_engine)
+    res = client.full_two_way_sync()
+    return res
+
 

@@ -152,7 +152,8 @@ def run_backtest() -> None:
 
             # Set mock price from last bar
             last_close = ltf_window['close'].iloc[-1]
-            spread_price = instrument.avg_spread_points * (instrument.pip_size / 10)
+            point_size = 10 ** -instrument.digits
+            spread_price = instrument.avg_spread_points * point_size
             broker.set_price(
                 symbol,
                 bid=last_close - spread_price / 2,
@@ -174,7 +175,7 @@ def run_backtest() -> None:
             # ── Spread check ──
             spread_result = NewsFilter.check_spread(
                 current_spread=current_spread,
-                avg_spread=instrument.avg_spread_points * (instrument.pip_size / 10),
+                avg_spread=instrument.avg_spread_points * point_size,
                 max_spread_multiple=config.risk.max_spread_multiple,
             )
             if spread_result.blocked:

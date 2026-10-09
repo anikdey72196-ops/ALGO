@@ -207,6 +207,7 @@ class TradingBot:
                     self.config.pair1.symbol = p1.get("symbol", self.config.pair1.symbol)
                     self.config.pair1.fixed_lot_size = p1.get("fixed_lot_size")
                     self.config.pair1.fixed_sl_pips = p1.get("fixed_sl_pips")
+                    self.config.pair1.avg_spread_points = p1.get("avg_spread_points")
                     self.config.pair1.enabled = p1.get("enabled", True)
                 
                 if "pair2" in saved and isinstance(saved["pair2"], dict):
@@ -214,6 +215,7 @@ class TradingBot:
                     self.config.pair2.symbol = p2.get("symbol", self.config.pair2.symbol)
                     self.config.pair2.fixed_lot_size = p2.get("fixed_lot_size")
                     self.config.pair2.fixed_sl_pips = p2.get("fixed_sl_pips")
+                    self.config.pair2.avg_spread_points = p2.get("avg_spread_points")
                     self.config.pair2.enabled = p2.get("enabled", True)
 
                 if "pair3" in saved and isinstance(saved["pair3"], dict):
@@ -221,6 +223,7 @@ class TradingBot:
                     self.config.pair3.symbol = p3.get("symbol", self.config.pair3.symbol)
                     self.config.pair3.fixed_lot_size = p3.get("fixed_lot_size")
                     self.config.pair3.fixed_sl_pips = p3.get("fixed_sl_pips")
+                    self.config.pair3.avg_spread_points = p3.get("avg_spread_points")
                     self.config.pair3.enabled = p3.get("enabled", True)
 
                 # Multi-pair independent settings (pair_configs)
@@ -233,6 +236,7 @@ class TradingBot:
                                 symbol=s_v.get("symbol", sym_u),
                                 fixed_lot_size=s_v.get("fixed_lot_size"),
                                 fixed_sl_pips=s_v.get("fixed_sl_pips"),
+                                avg_spread_points=s_v.get("avg_spread_points"),
                                 enabled=s_v.get("enabled", True),
                             )
 
@@ -313,18 +317,21 @@ class TradingBot:
                     "symbol": self.config.pair1.symbol,
                     "fixed_lot_size": self.config.pair1.fixed_lot_size,
                     "fixed_sl_pips": self.config.pair1.fixed_sl_pips,
+                    "avg_spread_points": getattr(self.config.pair1, "avg_spread_points", None),
                     "enabled": self.config.pair1.enabled,
                 },
                 "pair2": {
                     "symbol": self.config.pair2.symbol,
                     "fixed_lot_size": self.config.pair2.fixed_lot_size,
                     "fixed_sl_pips": self.config.pair2.fixed_sl_pips,
+                    "avg_spread_points": getattr(self.config.pair2, "avg_spread_points", None),
                     "enabled": self.config.pair2.enabled,
                 },
                 "pair3": {
                     "symbol": self.config.pair3.symbol,
                     "fixed_lot_size": self.config.pair3.fixed_lot_size,
                     "fixed_sl_pips": self.config.pair3.fixed_sl_pips,
+                    "avg_spread_points": getattr(self.config.pair3, "avg_spread_points", None),
                     "enabled": self.config.pair3.enabled,
                 },
                 "pair_configs": {
@@ -332,6 +339,7 @@ class TradingBot:
                         "symbol": p_cfg.symbol,
                         "fixed_lot_size": p_cfg.fixed_lot_size,
                         "fixed_sl_pips": p_cfg.fixed_sl_pips,
+                        "avg_spread_points": getattr(p_cfg, "avg_spread_points", None),
                         "enabled": p_cfg.enabled,
                     }
                     for sym, p_cfg in getattr(self.config, "pair_configs", {}).items()
@@ -693,33 +701,43 @@ class TradingBot:
 
             # Custom override from pair1 / pair2 / pair3 or pair_configs if symbol matches
             sym_clean = sym.strip().upper()
+            pair_spread = None
             if getattr(self.config, 'pair1', None) and self.config.pair1.enabled and self.config.pair1.symbol.strip().upper() == sym_clean:
                 if self.config.pair1.fixed_lot_size is not None:
                     pair_lot = self.config.pair1.fixed_lot_size
                 if self.config.pair1.fixed_sl_pips is not None:
                     pair_sl = self.config.pair1.fixed_sl_pips
+                if getattr(self.config.pair1, 'avg_spread_points', None) is not None:
+                    pair_spread = self.config.pair1.avg_spread_points
             elif getattr(self.config, 'pair2', None) and self.config.pair2.enabled and self.config.pair2.symbol.strip().upper() == sym_clean:
                 if self.config.pair2.fixed_lot_size is not None:
                     pair_lot = self.config.pair2.fixed_lot_size
                 if self.config.pair2.fixed_sl_pips is not None:
                     pair_sl = self.config.pair2.fixed_sl_pips
+                if getattr(self.config.pair2, 'avg_spread_points', None) is not None:
+                    pair_spread = self.config.pair2.avg_spread_points
             elif getattr(self.config, 'pair3', None) and self.config.pair3.enabled and self.config.pair3.symbol.strip().upper() == sym_clean:
                 if self.config.pair3.fixed_lot_size is not None:
                     pair_lot = self.config.pair3.fixed_lot_size
                 if self.config.pair3.fixed_sl_pips is not None:
                     pair_sl = self.config.pair3.fixed_sl_pips
+                if getattr(self.config.pair3, 'avg_spread_points', None) is not None:
+                    pair_spread = self.config.pair3.avg_spread_points
             elif hasattr(self.config, 'pair_configs') and sym_clean in self.config.pair_configs:
                 p_item = self.config.pair_configs[sym_clean]
                 if p_item.fixed_lot_size is not None:
                     pair_lot = p_item.fixed_lot_size
                 if p_item.fixed_sl_pips is not None:
                     pair_sl = p_item.fixed_sl_pips
+                if getattr(p_item, 'avg_spread_points', None) is not None:
+                    pair_spread = p_item.avg_spread_points
 
             active_pairs.append({
                 "pair_num": i,
                 "symbol": sym,
                 "fixed_lot_size": pair_lot,
                 "fixed_sl_pips": pair_sl,
+                "avg_spread_points": pair_spread,
             })
 
         strats_str = ", ".join(self.config.enabled_strategies)
@@ -792,9 +810,14 @@ class TradingBot:
 
             # ── Step 2a: Spread check (Static Multiple + Rolling Percentile Guard) ──
             point_size = 10 ** -instrument.digits
+            effective_avg_spread_pts = (
+                pair_info.get("avg_spread_points")
+                if pair_info.get("avg_spread_points") is not None
+                else instrument.avg_spread_points
+            )
             spread_result = NewsFilter.check_spread(
                 current_spread=current_spread,
-                avg_spread=instrument.avg_spread_points * point_size,
+                avg_spread=effective_avg_spread_pts * point_size,
                 max_spread_multiple=self.config.risk.max_spread_multiple,
             )
             if spread_result.blocked:

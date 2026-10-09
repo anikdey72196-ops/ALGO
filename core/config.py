@@ -104,6 +104,7 @@ class PairSettings(BaseModel):
     symbol: str = Field(default="XAUUSD", description="Instrument symbol (e.g. XAUUSD, EURUSD)")
     fixed_lot_size: float | None = Field(default=None, gt=0.0, description="Fixed lot size override. None uses risk % dynamic sizing.")
     fixed_sl_pips: float | None = Field(default=None, gt=0.0, description="Fixed Stop Loss in pips override. None uses dynamic structural SL.")
+    avg_spread_points: float | None = Field(default=None, ge=0.0, description="Optional override for average spread in points for this pair.")
     enabled: bool = Field(default=True, description="Whether this pair is active for analysis and execution.")
 
 
@@ -254,9 +255,9 @@ class InstrumentConfig(BaseModel):
         description="Size of one pip (e.g. 0.0001 for major FX, 0.01 for JPY pairs).",
     )
     avg_spread_points: float = Field(
-        default=1.5,
+        default=20.0,
         ge=0,
-        description="Rolling 30-day average spread in points.",
+        description="Rolling average spread in points (e.g. 20.0 points = 2.0 pips for 5-digit FX).",
     )
     digits: int = Field(
         default=5,
@@ -514,7 +515,7 @@ class TradingConfig(BaseModel):
                 symbol="XAUUSD",
                 point_value=1.0,      # 100 oz × $0.01 point = $1.00 per lot per point
                 pip_size=0.01,        # Gold pip = $0.01
-                avg_spread_points=25.0,  # ~$0.25 typical spread
+                avg_spread_points=35.0,  # ~$0.35 typical spread on standard broker (e.g. XM)
                 digits=2,
                 min_lot=0.01,
                 max_lot=100.0,
@@ -524,7 +525,7 @@ class TradingConfig(BaseModel):
                 symbol="EURUSD",
                 point_value=1.0,      # 100,000 EUR × 0.00001 point = $1.00 per lot per point ($10/pip)
                 pip_size=0.0001,
-                avg_spread_points=1.2,
+                avg_spread_points=20.0,  # 2.0 pips (20 points) typical spread on standard broker (e.g. XM)
                 digits=5,
                 min_lot=0.01,
                 max_lot=100.0,
@@ -534,7 +535,7 @@ class TradingConfig(BaseModel):
                 symbol="GBPUSD",
                 point_value=1.0,      # 100,000 GBP × 0.00001 point = $1.00 per lot per point ($10/pip)
                 pip_size=0.0001,
-                avg_spread_points=1.5,
+                avg_spread_points=24.0,  # 2.4 pips (24 points) typical spread on standard broker (e.g. XM)
                 digits=5,
                 min_lot=0.01,
                 max_lot=100.0,
@@ -544,7 +545,7 @@ class TradingConfig(BaseModel):
                 symbol="BTCUSD",
                 point_value=1.0,
                 pip_size=0.01,
-                avg_spread_points=50.0,
+                avg_spread_points=2500.0,  # ~$25.00 typical spread
                 digits=2,
                 min_lot=0.01,
                 max_lot=50.0,
@@ -554,7 +555,7 @@ class TradingConfig(BaseModel):
                 symbol="ETHUSD",
                 point_value=1.0,
                 pip_size=0.01,
-                avg_spread_points=30.0,
+                avg_spread_points=250.0,  # ~$2.50 typical spread
                 digits=2,
                 min_lot=0.01,
                 max_lot=100.0,
