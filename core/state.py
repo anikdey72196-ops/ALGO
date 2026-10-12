@@ -134,7 +134,9 @@ class StateManager:
                     realized_pnl REAL DEFAULT 0.0,
                     status TEXT DEFAULT 'OPEN',
                     strategy_name TEXT DEFAULT 'SMC',
-                    magic_number INTEGER DEFAULT 123456
+                    magic_number INTEGER DEFAULT 123456,
+                    broker_name TEXT DEFAULT 'XMGlobal-MT5 6',
+                    session TEXT DEFAULT 'LONDON_OPEN'
                 )
             ''')
             self.conn.execute('''
@@ -190,6 +192,14 @@ class StateManager:
                 pass
             try:
                 self.conn.execute("ALTER TABLE trade_log ADD COLUMN duration_seconds REAL DEFAULT 0.0")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN broker_name TEXT DEFAULT 'XMGlobal-MT5 6'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self.conn.execute("ALTER TABLE trade_log ADD COLUMN session TEXT DEFAULT 'LONDON_OPEN'")
             except sqlite3.OperationalError:
                 pass
 
