@@ -15,6 +15,7 @@ import sqlite3
 import hashlib
 import tempfile
 import threading
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -82,7 +83,12 @@ class CloudSyncEngine:
         """
         Atomically write a model artifact after verifying integrity and safe, non-executing checks.
         """
-        filename = Path(filename).name  # Prevent directory traversal
+        original_filename = filename
+        filename = Path(filename).name
+        if filename != original_filename:
+            return False, f"Invalid artifact filename: {original_filename}"
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", filename):
+            return False, f"Invalid artifact filename: {filename}"
         if not (filename.endswith(".joblib") or filename.endswith(".json")):
             return False, f"Invalid artifact filename: {filename}"
 
