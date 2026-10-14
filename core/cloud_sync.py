@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-import joblib
 from loguru import logger
 
 
@@ -155,6 +154,13 @@ class CloudSyncEngine:
         ok, target_file, err_msg = self.resolve_safe_artifact_path(filename)
         if not ok or target_file is None:
             return False, err_msg
+
+        # Basic payload guards
+        if not content:
+            return False, f"Empty artifact payload for {filename}"
+        max_artifact_size = 100 * 1024 * 1024  # 100 MB
+        if len(content) > max_artifact_size:
+            return False, f"Artifact too large for {filename}: {len(content):,} bytes"
 
         # 1. SHA256 Checksum validation
         calc_hash = hashlib.sha256(content).hexdigest()
