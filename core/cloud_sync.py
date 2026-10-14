@@ -18,6 +18,7 @@ import sqlite3
 import hashlib
 import tempfile
 import threading
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
