@@ -90,20 +90,25 @@ class CloudSyncEngine:
         if not filename or not isinstance(filename, str):
             return False, None, "Invalid artifact filename"
 
-        # Disallow path separators, traversal markers, or null bytes
-        if "/" in filename or "\\" in filename or ".." in filename or "\0" in filename:
+        candidate = filename.strip()
+        if not candidate:
+            return False, None, "Invalid artifact filename"
+
+        # Must be a plain filename only (no directory components)
+        if Path(candidate).name != candidate:
             return False, None, "Invalid path characters detected in filename"
 
         # Strict regex for artifact filename: only safe chars ending with .joblib or .json
-        if not re.fullmatch(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.(joblib|json)$", filename):
-            return False, None, f"Invalid artifact filename format: {filename}"
+        if not re.fullmatch(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.(joblib|json)$", candidate):
+            return False, None, f"Invalid artifact filename format: {candidate}"
 
         base_dir = self.artifacts_dir.resolve()
-        safe_name = os.path.basename(filename)
-        target_path = (base_dir / safe_name).resolve()
+        target_path = base_dir.joinpath(candidate).resolve(strict=False)
 
         try:
-            if not target_path.is_relative_to(base_dir) or target_path.parent != base_dir:
+            # Enforce containment and no nested directories
+            target_path.relative_to(base_dir)
+            if target_path.parent != base_dir:
                 return False, None, "Path traversal attempt detected"
         except (ValueError, RuntimeError):
             return False, None, "Path resolution error"
