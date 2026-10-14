@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 import io
+import re
+import uuid
 import json
 import zlib
 import gzip
@@ -80,29 +82,92 @@ class CloudSyncEngine:
             }
         return manifest
 
+    def resolve_safe_artifact_path(self, filename: str) -> Tuple[bool, Optional[Path], str]:
+        """
+        Validate and resolve an artifact path ensuring a strict whitelist of characters,
+        valid extensions (.joblib or .json), and strict containment within artifacts_dir.
+        """
+        if not filename or not isinstance(filename, str):
+            return False, None, "Invalid artifact filename"
+
+        # Disallow path separators, traversal markers, or null bytes
+        if "/" in filename or "\\" in filename or ".." in filename or "\0" in filename:
+            return False, None, "Invalid path characters detected in filename"
+
+        # Strict regex for artifact filename: only safe chars ending with .joblib or .json
+        if not re.fullmatch(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.(joblib|json)$", filename):
+            return False, None, f"Invalid artifact filename format: {filename}"
+
+        base_dir = self.artifacts_dir.resolve()
+        safe_name = os.path.basename(filename)
+        target_path = (base_dir / safe_name).resolve()
+
+        try:
+            if not target_path.is_relative_to(base_dir) or target_path.parent != base_dir:
+                return False, None, "Path traversal attempt detected"
+        except (ValueError, RuntimeError):
+            return False, None, "Path resolution error"
+
+        return True, target_path, "OK"
+
+    def _verify_artifact_integrity(self, filename: str, content: bytes) -> Tuple[bool, str]:
+        """
+        Safely verify the integrity of the uploaded model or JSON artifact without
+        untrusted pickle/joblib deserialization.
+        """
+        if not content:
+            return False, f"Model integrity verification failed for {filename}: empty content"
+
+        if filename.endswith(".json"):
+            try:
+                data = json.loads(content.decode("utf-8"))
+                if not isinstance(data, (dict, list)):
+                    return False, f"JSON integrity verification failed for {filename}: root must be object or array"
+            except Exception:
+                return False, f"JSON integrity verification failed for {filename}: invalid JSON syntax"
+
+        elif filename.endswith(".joblib"):
+            if len(content) < 4:
+                return False, f"Joblib integrity verification failed for {filename}: file too short"
+
+            # Check valid magic headers for pickle (protocols 2-5) or standard compression wrappers:
+            # Pickle protocol: \x80 followed by protocol \x02, \x03, \x04, \x05
+            # Gzip: \x1f\x8b
+            # Zlib: \x78\x01, \x78\x9c, \x78\xda
+            # LZ4: \x04\x22\x4d\x18
+            # XZ: \xfd7zXZ\x00
+            has_pickle_magic = content.startswith(b"\x80") and len(content) > 1 and content[1] in (2, 3, 4, 5)
+            has_gzip_magic = content.startswith(b"\x1f\x8b")
+            has_zlib_magic = content.startswith((b"\x78\x01", b"\x78\x9c", b"\x78\xda"))
+            has_lz4_magic = content.startswith(b"\x04\x22\x4d\x18")
+            has_xz_magic = content.startswith(b"\xfd7zXZ\x00")
+
+            if not (has_pickle_magic or has_gzip_magic or has_zlib_magic or has_lz4_magic or has_xz_magic):
+                return False, f"Joblib integrity verification failed for {filename}: invalid magic bytes"
+
+        return True, "OK"
+
     def save_model_artifact(self, filename: str, content: bytes, expected_sha256: str | None = None) -> Tuple[bool, str]:
         """
-        Atomically write a model artifact after verifying integrity and valid joblib deserialization.
+        Atomically write a model artifact after verifying integrity and safe path resolution.
+        Does NOT deserialize untrusted pickle data.
         """
-        filename = Path(filename).name  # Prevent directory traversal
-        if not (filename.endswith(".joblib") or filename.endswith(".json")):
-            return False, f"Invalid artifact filename: {filename}"
+        ok, target_file, err_msg = self.resolve_safe_artifact_path(filename)
+        if not ok or target_file is None:
+            return False, err_msg
 
         # 1. SHA256 Checksum validation
         calc_hash = hashlib.sha256(content).hexdigest()
         if expected_sha256 and calc_hash.lower() != expected_sha256.lower():
             return False, f"Checksum mismatch for {filename}: expected {expected_sha256}, got {calc_hash}"
 
-        # 2. Integrity load verification for joblib models (prevent corrupted models from breaking bot)
-        if filename.endswith(".joblib"):
-            try:
-                bio = io.BytesIO(content)
-                _ = joblib.load(bio)
-            except Exception as e:
-                return False, f"Joblib integrity verification failed for {filename}: {e}"
+        # 2. Integrity verification without unsafe deserialization
+        integrity_ok, integrity_msg = self._verify_artifact_integrity(filename, content)
+        if not integrity_ok:
+            return False, integrity_msg
 
-        target_file = self.artifacts_dir / filename
-        temp_file = self.artifacts_dir / f"{filename}.sync_{os.getpid()}.tmp"
+        base_dir = self.artifacts_dir.resolve()
+        temp_file = base_dir / f".sync_{uuid.uuid4().hex}.tmp"
 
         with self._lock:
             try:
@@ -110,12 +175,13 @@ class CloudSyncEngine:
                     f.write(content)
                 # Atomic replace on OS level
                 temp_file.replace(target_file)
-                logger.info(f"Model artifact '{filename}' updated successfully ({len(content):,} bytes, SHA: {calc_hash[:8]}).")
-                return True, f"Updated {filename}"
+                logger.info(f"Model artifact '{target_file.name}' updated successfully ({len(content):,} bytes, SHA: {calc_hash[:8]}).")
+                return True, f"Updated {target_file.name}"
             except Exception as e:
+                logger.error(f"Failed to write model file '{filename}': {e}", exc_info=True)
                 if temp_file.exists():
                     temp_file.unlink(missing_ok=True)
-                return False, f"Failed to write model file: {e}"
+                return False, "Failed to write model file to disk"
 
     # ─────────────────────────────────────────────────────────────
     # Database Events Export & Deduplicated Import
@@ -322,9 +388,10 @@ class CloudSyncClient:
             r = self.session.get(url, timeout=self.timeout)
             if r.status_code == 200:
                 return True, r.json()
-            return False, {"error": f"HTTP {r.status_code}: {r.text}"}
+            return False, {"error": f"HTTP error {r.status_code}"}
         except Exception as e:
-            return False, {"error": str(e)}
+            logger.error(f"Failed to check remote health: {e}", exc_info=True)
+            return False, {"error": "Failed to connect to remote sync server"}
 
     def push_events_to_cloud(self, since_ts: str | None = None) -> Dict[str, Any]:
         """Export local events and send to remote cloud server."""
@@ -336,10 +403,10 @@ class CloudSyncClient:
                 res = r.json()
                 logger.info(f"Pushed {payload['counts']} to cloud. Cloud import result: {res}")
                 return {"status": "success", "pushed": payload["counts"], "remote_result": res}
-            return {"status": "error", "error": f"HTTP {r.status_code}: {r.text}"}
+            return {"status": "error", "error": f"Cloud import failed with HTTP {r.status_code}"}
         except Exception as e:
-            logger.error(f"Failed to push events to cloud: {e}")
-            return {"status": "error", "error": str(e)}
+            logger.error(f"Failed to push events to cloud: {e}", exc_info=True)
+            return {"status": "error", "error": "Failed to push events to cloud"}
 
     def pull_events_from_cloud(self, since_ts: str | None = None) -> Dict[str, Any]:
         """Fetch remote events from cloud and merge into local database."""
@@ -352,10 +419,10 @@ class CloudSyncClient:
                 import_res = self.engine.import_events(data)
                 logger.info(f"Pulled {data['counts']} from cloud. Local import result: {import_res}")
                 return {"status": "success", "pulled": data["counts"], "imported": import_res}
-            return {"status": "error", "error": f"HTTP {r.status_code}: {r.text}"}
+            return {"status": "error", "error": f"Cloud export failed with HTTP {r.status_code}"}
         except Exception as e:
-            logger.error(f"Failed to pull events from cloud: {e}")
-            return {"status": "error", "error": str(e)}
+            logger.error(f"Failed to pull events from cloud: {e}", exc_info=True)
+            return {"status": "error", "error": "Failed to pull events from cloud"}
 
     def sync_models_from_cloud(self) -> Dict[str, Any]:
         """
@@ -406,17 +473,18 @@ class CloudSyncClient:
                 "errors": errors,
             }
         except Exception as e:
-            logger.error(f"Failed to sync models from cloud: {e}")
-            return {"status": "error", "error": str(e)}
+            logger.error(f"Failed to sync models from cloud: {e}", exc_info=True)
+            return {"status": "error", "error": "Failed to sync models from cloud"}
 
     def trigger_remote_retrain(self) -> Dict[str, Any]:
         """Request remote cloud instance to retrain ML models using combined dataset."""
         url = f"{self.remote_url}/api/sync/trigger_retrain"
         try:
             r = self.session.post(url, timeout=self.timeout)
-            return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+            return r.json() if r.status_code == 200 else {"error": f"Remote retrain trigger failed with HTTP {r.status_code}"}
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Failed to trigger remote retrain: {e}", exc_info=True)
+            return {"error": "Failed to trigger remote retrain"}
 
     def full_two_way_sync(self) -> Dict[str, Any]:
         """

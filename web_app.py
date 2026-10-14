@@ -2024,8 +2024,8 @@ async def download_sync_model(filename: str, request: Request):
     """Download compiled model artifact binary."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    file_path = sync_engine.artifacts_dir / Path(filename).name
-    if not file_path.exists():
+    ok, file_path, _ = sync_engine.resolve_safe_artifact_path(filename)
+    if not ok or file_path is None or not file_path.exists():
         raise HTTPException(status_code=404, detail="Artifact not found")
     return FileResponse(path=file_path, filename=file_path.name, media_type="application/octet-stream")
 
@@ -2070,8 +2070,12 @@ async def run_client_sync(target_url: Optional[str] = None):
     if not cloud_url:
         raise HTTPException(status_code=400, detail="CLOUD_SYNC_URL not configured.")
     token = os.getenv("SYNC_AUTH_TOKEN", "")
-    client = CloudSyncClient(remote_url=cloud_url, auth_token=token, local_engine=sync_engine)
-    res = client.full_two_way_sync()
-    return res
+    try:
+        client = CloudSyncClient(remote_url=cloud_url, auth_token=token, local_engine=sync_engine)
+        res = client.full_two_way_sync()
+        return res
+    except Exception as e:
+        logger.error(f"Client synchronization failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Client synchronization failed. See server logs.")
 
 

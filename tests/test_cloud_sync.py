@@ -202,28 +202,39 @@ def test_models_manifest_and_atomic_replace(temp_sync_env):
     ok, msg = engine.save_model_artifact("trap_detector_SMC.joblib", valid_bytes)
     assert ok
 
+    # Test path traversal attempts (should be rejected)
+    ok_trav1, _ = engine.save_model_artifact("../evil.joblib", valid_bytes)
+    assert not ok_trav1
+    ok_trav2, _ = engine.save_model_artifact("subdir/evil.joblib", valid_bytes)
+    assert not ok_trav2
+    ok_trav3, _ = engine.save_model_artifact("evil.exe", valid_bytes)
+    assert not ok_trav3
+
     # Verify loaded
     loaded = joblib.load(artifacts_dir / "trap_detector_SMC.joblib")
     assert loaded.get("valid") is True
 
 
-def test_api_sync_endpoints():
+def test_api_sync_endpoints(monkeypatch):
+    token = os.getenv("SYNC_AUTH_TOKEN", "test_sync_token")
+    monkeypatch.setenv("SYNC_AUTH_TOKEN", token)
+    headers = {"Authorization": f"Bearer {token}"}
     client = TestClient(app)
 
     # 1. Status
-    res = client.get("/api/sync/status")
+    res = client.get("/api/sync/status", headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert "counts" in data
     assert "models_count" in data
 
     # 2. Manifest
-    res = client.get("/api/sync/models/manifest")
+    res = client.get("/api/sync/models/manifest", headers=headers)
     assert res.status_code == 200
     assert "models" in res.json()
 
     # 3. Export
-    res = client.post("/api/sync/events/export?limit=5")
+    res = client.post("/api/sync/events/export?limit=5", headers=headers)
     assert res.status_code == 200
     exp = res.json()
     assert "ml_events" in exp
