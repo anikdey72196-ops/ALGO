@@ -8,7 +8,6 @@ and local nodes (e.g. XM Real execution).
 from __future__ import annotations
 
 import os
-import io
 import json
 import zlib
 import gzip
@@ -21,7 +20,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-import joblib
 from loguru import logger
 
 
@@ -82,24 +80,31 @@ class CloudSyncEngine:
 
     def save_model_artifact(self, filename: str, content: bytes, expected_sha256: str | None = None) -> Tuple[bool, str]:
         """
-        Atomically write a model artifact after verifying integrity and valid joblib deserialization.
+        Atomically write a model artifact after verifying integrity and safe, non-executing checks.
         """
         filename = Path(filename).name  # Prevent directory traversal
         if not (filename.endswith(".joblib") or filename.endswith(".json")):
             return False, f"Invalid artifact filename: {filename}"
+
+        # Basic payload guards
+        if not content:
+            return False, f"Empty artifact payload for {filename}"
+        max_artifact_size = 100 * 1024 * 1024  # 100 MB
+        if len(content) > max_artifact_size:
+            return False, f"Artifact too large for {filename}: {len(content):,} bytes"
 
         # 1. SHA256 Checksum validation
         calc_hash = hashlib.sha256(content).hexdigest()
         if expected_sha256 and calc_hash.lower() != expected_sha256.lower():
             return False, f"Checksum mismatch for {filename}: expected {expected_sha256}, got {calc_hash}"
 
-        # 2. Integrity load verification for joblib models (prevent corrupted models from breaking bot)
+        # 2. Non-deserializing format sanity checks for joblib/pickle payloads.
+        # IMPORTANT: Do not call joblib.load/pickle.loads on untrusted bytes.
         if filename.endswith(".joblib"):
-            try:
-                bio = io.BytesIO(content)
-                _ = joblib.load(bio)
-            except Exception as e:
-                return False, f"Joblib integrity verification failed for {filename}: {e}"
+            # Common pickle protocol prefix (0x80 <protocol>) used by joblib payloads.
+            # This is a coarse validation only and intentionally avoids object construction.
+            if len(content) < 2 or content[0] != 0x80:
+                return False, f"Invalid joblib artifact format for {filename}"
 
         target_file = self.artifacts_dir / filename
         temp_file = self.artifacts_dir / f"{filename}.sync_{os.getpid()}.tmp"
