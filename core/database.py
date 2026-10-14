@@ -265,7 +265,7 @@ def get_db_connection(db_path: str = "trading_state.db"):
     Factory that returns either a MySQL connection wrapper or an SQLite connection,
     based on the DB_BACKEND environment variable.
     """
-    backend = os.getenv("DB_BACKEND", "sqlite").strip().lower()
+    backend = "sqlite" if (db_path == ":memory:" or (db_path != "trading_state.db" and db_path.endswith(".db"))) else os.getenv("DB_BACKEND", "sqlite").strip().lower()
 
     if backend == "mysql":
         host = os.getenv("DB_HOST", "localhost")

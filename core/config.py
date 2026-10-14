@@ -109,7 +109,59 @@ class PairSettings(BaseModel):
 
 
 class ICTConfig(BaseModel):
-    """Parameters for Inner Circle Trader (ICT) methodology."""
+    """Parameters for Institutional ICT Time & Price Theory and AOX Model."""
+    # ── Timezone & Anchor Time Windows (Strictly New York Time - EST/EDT) ──
+    timezone_name: str = Field(default="America/New_York", description="Anchor timezone for all ICT time calculations (EST/EDT).")
+    enforce_ny_time: bool = Field(default=True, description="Strictly anchor all time calculations to New York local time.")
+    
+    # Key Reference Openings
+    mor_start_minute: int = Field(default=1, ge=0, le=59, description="MOR high/low start minute (00:01 EST).")
+    mor_end_minute: int = Field(default=29, ge=0, le=59, description="MOR high/low end minute (00:29 EST).")
+    ny_pre_market_time: str = Field(default="08:30", description="NY Pre-Market Open (08:30 EST).")
+    nyse_open_time: str = Field(default="09:30", description="NYSE Official Open (09:30 EST).")
+    nyse_close_time: str = Field(default="16:00", description="NYSE Close (16:00 EST).")
+    enforce_macro_windows: bool = Field(default=False, description="Whether to require active Macro or PO3 manipulation window for setups.")
+    
+    # Standard Deviation (SD) Projections
+    sd_silver_bullet_min: float = Field(default=-1.5, description="Silver Bullet SD zone lower bound (-1.5 SD).")
+    sd_silver_bullet_max: float = Field(default=-1.0, description="Silver Bullet SD zone upper bound (-1.0 SD).")
+    sd_minor_retracement_min: float = Field(default=-2.5, description="Minor Retracement SD zone lower bound (-2.5 SD).")
+    sd_minor_retracement_max: float = Field(default=-2.0, description="Minor Retracement SD zone upper bound (-2.0 SD).")
+    sd_major_reversal_min: float = Field(default=-4.5, description="Major Reversal SD zone lower bound (-4.5 SD).")
+    sd_major_reversal_max: float = Field(default=-4.0, description="Major Reversal SD zone upper bound (-4.0 SD).")
+    
+    # AOX Custom Fibonacci Settings
+    aox_sniper_fib_min: float = Field(default=-0.21, description="AOX Sniper Entry Zone upper boundary (-0.21).")
+    aox_sniper_fib_mid: float = Field(default=-0.255, description="AOX Sniper Entry Zone midpoint (-0.255).")
+    aox_sniper_fib_max: float = Field(default=-0.29, description="AOX Sniper Entry Zone lower boundary (-0.29).")
+    aox_tp1_fib_min: float = Field(default=1.47, description="AOX Partial Take-Profit 1 start level (1.47).")
+    aox_tp1_fib_max: float = Field(default=1.55, description="AOX Partial Take-Profit 1 end level (1.55).")
+    aox_tp2_fib_min: float = Field(default=2.56, description="AOX Final Take-Profit 2 start level (2.56).")
+    aox_tp2_fib_mid: float = Field(default=2.60, description="AOX Final Take-Profit 2 midpoint (2.60).")
+    aox_tp2_fib_max: float = Field(default=2.64, description="AOX Final Take-Profit 2 target (2.64).")
+    
+    # 25-25-50 Layered Risk Model
+    layer1_risk_pct: float = Field(default=0.25, description="Layer 1 initial POI tap risk fraction (25%).")
+    layer2_risk_pct: float = Field(default=0.25, description="Layer 2 drawdown/spike into MT/-0.29 risk fraction (25%).")
+    layer3_risk_pct: float = Field(default=0.50, description="Layer 3 confirmation close / turtle soup risk fraction (50%).")
+    
+    # Trade Management Rules
+    be_rr_trigger: float = Field(default=1.0, description="Move SL to Break-Even at 1:1 R:R.")
+    be_gold_pips_trigger: float = Field(default=80.0, description="Move SL to Break-Even after 80-90 pips on Gold/XAUUSD.")
+    daily_quota_pips: float = Field(default=90.0, description="Strict daily trade quota: stop trading for day if BE/quota hit after 90+ pips.")
+    
+    # SMT Correlated Pairs Mapping
+    correlated_pairs: dict[str, str] = Field(
+        default_factory=lambda: {
+            "XAUUSD": "XAGUSD",
+            "EURUSD": "GBPUSD",
+            "US30": "NAS100",
+            "BTCUSD": "ETHUSD",
+        },
+        description="Correlated asset mapping for SMT divergence checks.",
+    )
+    
+    # Legacy & Compatibility Fields
     london_kz_start_utc: int = Field(default=7, ge=0, le=23, description="London Kill Zone Start (07:00 UTC)")
     london_kz_end_utc: int = Field(default=10, ge=0, le=23, description="London Kill Zone End (10:00 UTC)")
     ny_am_kz_start_utc: int = Field(default=12, ge=0, le=23, description="New York AM Kill Zone Start (12:00 UTC)")

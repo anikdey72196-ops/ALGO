@@ -55,8 +55,17 @@ class PositionManager:
         self._last_partial_time: dict[int, float] = {}
         self._partial_stages_taken: dict[int, int] = {}
         self._reversal_shielded: set[int] = set()
+        self._ict_daily_quota_hit: bool = False
         self._worker = threading.Thread(target=self._run_loop, daemon=True, name="PositionMgr")
         self._worker.start()
+
+    def is_ict_daily_quota_hit(self) -> bool:
+        """Returns True if the ICT daily trade quota (90+ pips on Gold or BE reached) was triggered today."""
+        return self._ict_daily_quota_hit
+
+    def reset_ict_daily_quota(self) -> None:
+        """Reset the ICT daily trade quota flag (called on day rollover)."""
+        self._ict_daily_quota_hit = False
 
     def protect_against_reversal(self, trade, reversal_analysis) -> bool:
         """Shields an active position when an opposing CHoCH is confirmed in the market."""
@@ -115,15 +124,41 @@ class PositionManager:
                 if risk_dist <= 0:
                     continue
 
-                # ── 1. Breakeven at Cost-to-Cost (+0.3R for Reversal Trades, +1R for Sideways SMC) ──
+                # ── 1. Breakeven at Cost-to-Cost (+0.3R for Reversal Trades, +1R / 80-90 pips for ICT, +1R for Sideways SMC) ──
                 r_gain = (current_price - entry) / risk_dist if trade.direction == Direction.BUY else (entry - current_price) / risk_dist
                 is_reversal_trade = (
                     "REVERSAL" in str(trade.strategy_name).upper()
                     or getattr(trade, "magic_number", 0) == 128456
                 )
-                if trade.id not in self._be_applied:
+                is_ict_trade = (
+                    "ICT" in str(trade.strategy_name).upper()
+                    or (126456 <= getattr(trade, "magic_number", 0) <= 126458)
+                )
+                pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
+                gain_dist = (current_price - entry) if trade.direction == Direction.BUY else (entry - current_price)
+                pips_gain = gain_dist / pip_sz
+
+                if is_ict_trade:
+                    # ICT Rule: Move to BE at 1:1 RR or after ~80-90 pips on Gold
+                    if trade.id not in self._be_applied:
+                        ict_be_pips = 80.0 if "XAU" in trade.symbol else 25.0
+                        if r_gain >= 1.0 or pips_gain >= ict_be_pips:
+                            new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
+                            self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
+                            self._be_applied.add(trade.id)
+                            logger.info(
+                                f"🛡️ [ICT BREAKEVEN] Position #{trade.id} ({trade.symbol}) Stop Loss moved to BE @ {new_sl:.5f} "
+                                f"(+{r_gain:.2f}R / {pips_gain:.1f} pips reached)"
+                            )
+                    # Quota trigger decoupled so extending profits (>90 pips) lock daily quota even after BE applied
+                    if (trade.id in self._be_applied or r_gain >= 1.0) and pips_gain >= 90.0:
+                        self._ict_daily_quota_hit = True
+                        logger.info(
+                            f"🎯 [ICT DAILY QUOTA HIT] Trade #{trade.id} reached {pips_gain:.1f} pips (>=90 pips). "
+                            f"Daily ICT quota enforced."
+                        )
+                elif trade.id not in self._be_applied:
                     if is_reversal_trade and r_gain >= 0.3:
-                        pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
                         new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
                         self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
                         self._be_applied.add(trade.id)
@@ -141,7 +176,6 @@ class PositionManager:
                                 logger.debug(f"Could not evaluate regime for BE on {trade.symbol}: {e}")
 
                         if is_sideways:
-                            pip_sz = 0.1 if ("XAU" in trade.symbol or "BTC" in trade.symbol) else 0.0001
                             new_sl = entry + (pip_sz if trade.direction == Direction.BUY else -pip_sz)
                             self._modify_mt5_sl_tp(trade.id, trade.symbol, new_sl, trade.take_profit)
                             self._be_applied.add(trade.id)
@@ -168,13 +202,33 @@ class PositionManager:
                 last_time = self._last_partial_time.get(trade.id, 0.0)
                 stages_taken = self._partial_stages_taken.get(trade.id, 0)
 
-                # ── 2. Primary 50% Target Profit Booking & Cost-to-Cost SL ──
-                # User Rule: Book 50% profit ONLY at 50% of the target distance, move SL to cost-to-cost,
-                # and hold remaining 50% position all the way to full TP (or exit at cost-to-cost on reversal).
+                # ── 2. Primary 50% Target Profit Booking & Cost-to-Cost SL (or ICT Layered Management) ──
                 target_tp = float(getattr(trade, "take_profit", 0.0) or 0.0)
                 target_dist = abs(target_tp - entry) if target_tp > 0 else 0.0
                 current_gain = (current_price - entry) if trade.direction == Direction.BUY else (entry - current_price)
                 pct_to_target = (current_gain / target_dist) if target_dist > 0 else 0.0
+
+                if is_ict_trade:
+                    # ICT Layered Model:
+                    # Layer 1 (magic 126456) & Layer 3 (magic 126458): Close at 1:1 to 1:2 RR (or Fib 1.47-1.55 / 50% target)
+                    # Layer 2 (magic 126457): Middle runner, rides risk-free to TP2 (2.56-2.64 Fib / SD target)
+                    magic_num = getattr(trade, "magic_number", 0)
+                    if magic_num in (126456, 126458) and trade.id not in self._partial_tp_applied and remaining_lot > 0.001:
+                        if r_gain >= 1.0 or pct_to_target >= 0.50:
+                            closed_ok = self._close_mt5_position(trade.id, trade.symbol, remaining_lot, trade.direction)
+                            if closed_ok:
+                                self._remaining_lots[trade.id] = 0.0
+                                self._partial_tp_applied.add(trade.id)
+                                logger.info(
+                                    f"🎯 [ICT LAYER {1 if magic_num == 126456 else 3} TP1 BOOKED] Position #{trade.id} "
+                                    f"closed 100% ({remaining_lot} lots) at TP1 (+{r_gain:.2f}R, {pips_gain:.1f} pips)."
+                                )
+                                if pips_gain >= 90.0:
+                                    self._ict_daily_quota_hit = True
+                    elif magic_num == 126457:
+                        # Layer 2 is the middle/top runner, holds to full TP2 / SD target
+                        if pips_gain >= 90.0 and trade.id in self._be_applied:
+                            self._ict_daily_quota_hit = True
 
                 target_50_enabled = getattr(rules, "target_50_pct_tp_enabled", True) if rules else True
                 target_50_trigger = getattr(rules, "target_50_pct_trigger", 0.50) if rules else 0.50

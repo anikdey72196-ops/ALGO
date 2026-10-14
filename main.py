@@ -553,6 +553,8 @@ class TradingBot:
         elif today_ordinal > self._last_utc_day:
             logger.info(f"New UTC day detected: {today.isoformat()}. Resetting daily state.")
             self.state.reset_daily_state()
+            if hasattr(self, "position_manager") and self.position_manager:
+                self.position_manager.reset_ict_daily_quota()
             self._last_utc_day = today_ordinal
 
     def _sync_open_positions(self) -> None:
@@ -902,6 +904,10 @@ class TradingBot:
                 s for s in self.config.enabled_strategies
                 if normalize_strategy_key(s) not in active_strats_on_symbol
             ]
+            if "ICT" in eval_strats and hasattr(self, "position_manager") and self.position_manager:
+                if self.position_manager.is_ict_daily_quota_hit():
+                    eval_strats = [s for s in eval_strats if s != "ICT"]
+                    self.log(f"  🛑 [ICT DAILY QUOTA HIT] Daily trade quota (90+ pips reached) active for {symbol}. Skipping new ICT entries.")
             if not eval_strats:
                 self.log(
                     f"  ⏸️ All enabled strategies ({list(active_strats_on_symbol)}) already have active trades for {symbol}. "
@@ -1027,6 +1033,16 @@ class TradingBot:
             else:
                 self.trend_reversal_status.pop(symbol, None)
 
+            correlated_df = None
+            if "ICT" in eval_strats:
+                corr_symbol = None
+                if hasattr(self.config, "ict") and hasattr(self.config.ict, "correlated_pairs"):
+                    corr_symbol = self.config.ict.correlated_pairs.get(symbol)
+                if corr_symbol:
+                    correlated_df = self._get_ohlcv(corr_symbol, ltf_tf)
+                    if correlated_df is not None:
+                        logger.debug(f"  🔗 [SMT CORRELATION] Fetched {len(correlated_df)} bars for correlated asset {corr_symbol} (for {symbol})")
+
             signals = self.strategy.evaluate_all(
                 symbol=symbol,
                 htf_data=htf_data,
@@ -1037,6 +1053,7 @@ class TradingBot:
                 enabled_strategies=eval_strats,
                 htf_analysis=htf_analysis,
                 dfs_by_tf=multitf_dict,
+                correlated_data=correlated_df,
             )
 
             # ── Reversal Filter: Prevent Entering Trades Against Active High-Probability Reversal Zone or Early Sweep ──
@@ -1293,8 +1310,9 @@ class TradingBot:
 
                 self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
 
-                # ── Step 2c-3: Risk authorization (Pair-specific sizing, Market Regime & Temporal scaling) ──
-                combined_risk_multiplier = regime_analysis.risk_multiplier * temporal_risk_mult
+                # ── Step 2c-3: Risk authorization (Pair-specific sizing, Market Regime, Temporal & Layered scaling) ──
+                sig_risk_frac = getattr(best_signal, "risk_fraction", 1.0) or 1.0
+                combined_risk_multiplier = regime_analysis.risk_multiplier * temporal_risk_mult * sig_risk_frac
                 equity = self.broker.get_account_equity()
                 auth = self.risk_engine.authorize_trade(
                     best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier, current_time=now_utc
@@ -1305,25 +1323,29 @@ class TradingBot:
                     self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4003, rejection_reason=f"Risk Rejected: {auth.rejection_reason}")
                     continue
 
+                eq_val = f"${auth.account_equity:.2f}" if isinstance(auth.account_equity, (int, float)) else f"${auth.account_equity}"
+                risk_val = f"${auth.risk_amount:.2f}" if isinstance(auth.risk_amount, (int, float)) else f"${auth.risk_amount}"
+                mult_val = f"{regime_analysis.risk_multiplier:.2f}" if isinstance(regime_analysis.risk_multiplier, (int, float)) else f"{regime_analysis.risk_multiplier}"
                 self.log(
-                    f"  💰 AUTHORIZED: {auth.lot_size} lots (Risk Mult: {regime_analysis.risk_multiplier:.2f}) "
-                    f"| Risk: ${auth.risk_amount:.2f} "
-                    f"| Equity: ${auth.account_equity:.2f}"
+                    f"  💰 AUTHORIZED: {auth.lot_size} lots (Risk Mult: {mult_val}, Layer Frac: {sig_risk_frac:.2f}) "
+                    f"| Risk: {risk_val} "
+                    f"| Equity: {eq_val}"
                 )
 
-                # Enforce strict R:R bounds [min 1:1.5, max 1:3.0] prior to submission
-                min_rr_limit = getattr(self.config.risk, 'min_rr_ratio', 1.5)
-                max_rr_limit = getattr(self.config.risk, 'max_rr_ratio', 3.0)
-                clamped_tp, eff_rr = clamp_tp_to_rr(
-                    best_signal.entry_price,
-                    best_signal.stop_loss,
-                    best_signal.take_profit,
-                    best_signal.direction,
-                    min_rr=min_rr_limit,
-                    max_rr=max_rr_limit,
-                )
-                best_signal.take_profit = clamped_tp
-                best_signal.rr_ratio = eff_rr
+                # Enforce strict R:R bounds [min 1:1.5, max 1:3.0] prior to submission (skip for ICT AOX models)
+                if getattr(best_signal, "strategy_id", "") != "ICT" and "ICT" not in str(best_signal.strategy_name).upper():
+                    min_rr_limit = getattr(self.config.risk, 'min_rr_ratio', 1.5)
+                    max_rr_limit = getattr(self.config.risk, 'max_rr_ratio', 3.0)
+                    clamped_tp, eff_rr = clamp_tp_to_rr(
+                        best_signal.entry_price,
+                        best_signal.stop_loss,
+                        best_signal.take_profit,
+                        best_signal.direction,
+                        min_rr=min_rr_limit,
+                        max_rr=max_rr_limit,
+                    )
+                    best_signal.take_profit = clamped_tp
+                    best_signal.rr_ratio = eff_rr
 
                 # Mark order submission in EQM
                 self.eqm.mark_submission(

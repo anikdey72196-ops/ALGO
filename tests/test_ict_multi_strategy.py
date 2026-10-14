@@ -186,7 +186,7 @@ class TestMultiStrategyEngine(unittest.TestCase):
         self.assertIsInstance(signals, list)
         for sig in signals:
             self.assertIn(sig.strategy_name, ["SMC_SWING", "SMC_SCALP_5M", "ICT"])
-            self.assertIn(sig.magic_number, [124456, 125456, 126456])
+            self.assertIn(sig.magic_number, [124456, 125456, 126456, 126457, 126458])
 
 
 class TestPairSettingsAndRisk(unittest.TestCase):
