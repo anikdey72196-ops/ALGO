@@ -850,6 +850,25 @@ class TradingConfig(BaseModel):
         le=0.95,
         description="Threshold of predicted P(Loss) to categorize window as TOXIC_AVOID and trigger defensive veto/scale.",
     )
+    # Automated Weekend ML Retraining Settings
+    weekend_retrain_enabled: bool = Field(
+        default=True,
+        description="Automatically retrain all ML models on weekends when financial markets are closed.",
+    )
+    weekend_retrain_day: str = Field(
+        default="sat",
+        description="Day of week for automated weekend retraining ('sat' for Saturday, 'sun' for Sunday).",
+    )
+    weekend_retrain_hour_utc: int = Field(
+        default=2,
+        ge=0,
+        le=23,
+        description="UTC hour to trigger weekend retraining (default: 2 = 02:00 UTC / 07:30 AM IST).",
+    )
+    weekend_retrain_sync_cloud: bool = Field(
+        default=True,
+        description="Sync combined data and push model weights with remote cloud instance during weekend retraining.",
+    )
     gemini_api_key: str | None = Field(
         default=None,
         description="Google Gemini API key. If None, checks GEMINI_API_KEY environment variable.",

@@ -308,6 +308,12 @@ class TradingBot:
                     self.config.ml_shadow_mode = bool(saved["ml_shadow_mode"])
                     if hasattr(self, "trap_svc") and self.trap_svc:
                         self.trap_svc.cfg.shadow_mode = self.config.ml_shadow_mode
+                if "weekend_retrain_enabled" in saved:
+                    self.config.weekend_retrain_enabled = bool(saved["weekend_retrain_enabled"])
+                if "weekend_retrain_day" in saved:
+                    self.config.weekend_retrain_day = str(saved["weekend_retrain_day"])
+                if "weekend_retrain_hour_utc" in saved:
+                    self.config.weekend_retrain_hour_utc = int(saved["weekend_retrain_hour_utc"])
 
                 logger.info(
                     f"Loaded persisted settings from {settings_path}: "
@@ -378,6 +384,9 @@ class TradingBot:
                 "ml_shadow_mode": getattr(self.config, "ml_shadow_mode", True),
                 "temporal_ml_enabled": getattr(self.config, "temporal_ml_enabled", True),
                 "reversal_strategy_enabled": getattr(self.config, "reversal_strategy_enabled", False),
+                "weekend_retrain_enabled": getattr(self.config, "weekend_retrain_enabled", True),
+                "weekend_retrain_day": getattr(self.config, "weekend_retrain_day", "sat"),
+                "weekend_retrain_hour_utc": getattr(self.config, "weekend_retrain_hour_utc", 2),
                 "is_active": self.is_active,
             }
             with open("bot_settings.json", "w", encoding="utf-8") as f:
@@ -1853,6 +1862,29 @@ async def run_scheduled(config: TradingConfig | None = None) -> None:
             )
         )
     )
+
+    # Schedule Automated Weekend ML Retraining (Market Closed Window)
+    if getattr(bot.config, "weekend_retrain_enabled", True):
+        from apscheduler.triggers.cron import CronTrigger
+        from ml.weekend_retrainer import run_weekend_retraining_job
+
+        retrain_day = getattr(bot.config, "weekend_retrain_day", "sat").lower()
+        retrain_hour = getattr(bot.config, "weekend_retrain_hour_utc", 2)
+
+        async def weekend_retrain_wrapper():
+            logger.info("Executing scheduled automated weekend ML batch retraining job...")
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, run_weekend_retraining_job, bot)
+
+        scheduler.add_job(
+            weekend_retrain_wrapper,
+            trigger=CronTrigger(day_of_week=retrain_day, hour=retrain_hour, minute=0, timezone="UTC"),
+            id="weekend_ml_batch_retrain",
+            name="Weekend ML Batch Retraining",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info(f"Automated Weekend ML Retraining active: Scheduled for {retrain_day.upper()} at {retrain_hour:02d}:00 UTC.")
 
     scheduler.start()
     logger.info("Scheduler started. Press Ctrl+C to stop.")

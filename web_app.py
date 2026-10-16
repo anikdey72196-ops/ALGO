@@ -76,6 +76,7 @@ class BotConfigUpdate(BaseModel):
     temporal_ml_enabled: Optional[bool] = None
     reversal_strategy_enabled: Optional[bool] = None
     directional_loss_cooldown_enabled: Optional[bool] = None
+    weekend_retrain_enabled: Optional[bool] = None
 
 
 class BotStateResponse(BaseModel):
@@ -176,6 +177,30 @@ async def lifespan(app: FastAPI):
         max_instances=1,
         misfire_grace_time=30,
     )
+
+    # Schedule Automated Weekend ML Retraining (Market Closed Window)
+    if getattr(config, "weekend_retrain_enabled", True):
+        from apscheduler.triggers.cron import CronTrigger
+        from ml.weekend_retrainer import run_weekend_retraining_job
+
+        retrain_day = getattr(config, "weekend_retrain_day", "sat").lower()
+        retrain_hour = getattr(config, "weekend_retrain_hour_utc", 2)
+
+        async def weekend_retrain_wrapper():
+            logger.info("Executing scheduled automated weekend ML batch retraining job...")
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, run_weekend_retraining_job, bot_instance)
+
+        scheduler_instance.add_job(
+            weekend_retrain_wrapper,
+            trigger=CronTrigger(day_of_week=retrain_day, hour=retrain_hour, minute=0, timezone="UTC"),
+            id="weekend_ml_batch_retrain",
+            name="Weekend ML Batch Retraining",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info(f"Automated Weekend ML Retraining active: Scheduled for {retrain_day.upper()} at {retrain_hour:02d}:00 UTC (Market Closed).")
+
     scheduler_instance.start()
     logger.info(f"Background tick scheduler active (fast 60s scan interval). Bot starts DEACTIVATED.")
 
@@ -1499,6 +1524,9 @@ async def update_configuration(payload: BotConfigUpdate):
     if payload.reversal_strategy_enabled is not None:
         bot_instance.config.reversal_strategy_enabled = payload.reversal_strategy_enabled
 
+    if payload.weekend_retrain_enabled is not None:
+        bot_instance.config.weekend_retrain_enabled = payload.weekend_retrain_enabled
+
     # Persist updated configuration to bot_settings.json
     bot_instance.save_settings()
     invalidate_state_cache()
@@ -1654,6 +1682,40 @@ async def retrain_temporal_ml_model():
     summary = bot_instance.temporal_svc.train_and_update()
     bot_instance.log("🧠 [TEMPORAL ML] Model retrained on latest trade records and event logs.")
     return {"status": "success", "message": "Temporal ML model retrained successfully", "summary": summary}
+
+
+# =============================================================================
+#  Automated Weekend ML Batch Retraining Endpoints
+# =============================================================================
+
+@app.get("/api/ml/weekend_retrain/status")
+async def get_weekend_retrain_status():
+    """Return status, telemetry, and next scheduled trigger of weekend batch retraining."""
+    from ml.weekend_retrainer import weekend_retrain_service
+    info = weekend_retrain_service.get_last_run_info()
+    next_run = None
+    if scheduler_instance:
+        job = scheduler_instance.get_job("weekend_ml_batch_retrain")
+        if job and job.next_run_time:
+            next_run = job.next_run_time.isoformat()
+    info["next_scheduled_run"] = next_run
+    info["is_running"] = weekend_retrain_service.is_running
+    return info
+
+
+@app.post("/api/ml/weekend_retrain")
+async def trigger_weekend_retrain(background: bool = True):
+    """Trigger manual on-demand execution of the full weekend ML batch retraining pipeline."""
+    from ml.weekend_retrainer import weekend_retrain_service, run_weekend_retraining_job
+    if weekend_retrain_service.is_running:
+        return {"status": "in_progress", "message": "Weekend batch retraining is already in progress."}
+
+    if background:
+        threading.Thread(target=run_weekend_retraining_job, args=(bot_instance,), daemon=True).start()
+        return {"status": "success", "message": "Weekend batch retraining pipeline initiated in background."}
+    else:
+        res = run_weekend_retraining_job(bot_instance)
+        return res
 
 
 # =============================================================================
