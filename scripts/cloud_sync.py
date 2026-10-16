@@ -15,6 +15,13 @@ import sys
 import argparse
 from pathlib import Path
 
+# Set UTF-8 encoding for Windows stdout
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -123,7 +130,10 @@ def main():
     if args.retrain:
         print("\n[+] ⚙️ Requesting Remote Cloud Instance to Retrain on Combined Data...")
         res = client.trigger_remote_retrain()
-        print(f"  ✓ Remote response: {res}")
+        if res.get("status") == "success":
+            print(f"  ✓ {res.get('message', 'Retrain completed successfully.')}")
+        else:
+            print(f"  ✗ Remote retrain failed: {res.get('error', res)}")
 
     print("\n" + "=" * 65)
     print("✨ SYNCHRONIZATION COMPLETED SUCCESSFULLY! ✨")

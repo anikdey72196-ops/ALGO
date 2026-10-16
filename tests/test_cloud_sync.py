@@ -239,3 +239,13 @@ def test_api_sync_endpoints(monkeypatch):
     exp = res.json()
     assert "ml_events" in exp
     assert "trade_log" in exp
+
+    # 4. Trigger Retrain Endpoint
+    res = client.post("/api/sync/trigger_retrain", headers=headers)
+    assert res.status_code == 200
+    retrain_data = res.json()
+    assert retrain_data.get("status") == "success"
+
+    # 5. Unauthorized Check
+    res_unauth = client.post("/api/sync/trigger_retrain")
+    assert res_unauth.status_code == 401

@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import socket
 import asyncio
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
@@ -2052,12 +2053,43 @@ async def trigger_cloud_retrain(request: Request):
     def run_retrain():
         try:
             logger.info("Executing cloud model retraining on combined dataset...")
-            from ml.temporal_analyzer import TemporalEdgeAnalyzer
-            analyzer = TemporalEdgeAnalyzer()
-            analyzer.train_and_update()
+            # 1. Temporal Edge Service Retraining
+            from ml.temporal_analyzer import TemporalEdgeService
+            if bot_instance and hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+                bot_instance.temporal_svc.train_and_update()
+            else:
+                TemporalEdgeService().train_and_update()
+            logger.info("Temporal Edge model retrained successfully.")
+
+            # 2. Strategy-Isolated Trap Detectors Retraining
+            try:
+                from ml.trap_detector import TrapDetectorService, TrapDetectorConfig
+                trap_cfg = TrapDetectorConfig(db_path=sync_engine.db_path)
+                trap_svc = TrapDetectorService(trap_cfg)
+                trap_svc.retrain_if_ready()
+                logger.info("Strategy-isolated trap detector models retrained successfully.")
+            except Exception as e:
+                logger.warning(f"Trap detector retrain skipped or error: {e}")
+
+            # 3. Smart Partial TP Retraining
+            try:
+                from ml.smart_partial_tp import SmartPartialTPService
+                from core.state import BotState
+                ptp_svc = SmartPartialTPService.get_instance() if SmartPartialTPService else None
+                if ptp_svc:
+                    b_state = BotState(db_path=str(sync_engine.db_path))
+                    trade_records = b_state.get_all_trades(limit=5000)
+                    if len(trade_records) >= 10:
+                        ptp_svc.model.train_from_trade_records(trade_records)
+                        logger.info(f"Smart Partial TP retrained on {len(trade_records)} trade records.")
+                    else:
+                        ptp_svc.model._train_synthetic_baseline()
+            except Exception as e:
+                logger.warning(f"Smart Partial TP retrain skipped or error: {e}")
+
             logger.info("Cloud model retraining finished successfully.")
         except Exception as e:
-            logger.error(f"Cloud model retraining error: {e}")
+            logger.error(f"Cloud model retraining error: {e}", exc_info=True)
 
     threading.Thread(target=run_retrain, daemon=True).start()
     return {"status": "success", "message": "Model retraining task initiated in background on combined dataset"}

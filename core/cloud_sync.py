@@ -488,7 +488,24 @@ class CloudSyncClient:
         url = f"{self.remote_url}/api/sync/trigger_retrain"
         try:
             r = self.session.post(url, timeout=self.timeout)
-            return r.json() if r.status_code == 200 else {"error": f"Remote retrain trigger failed with HTTP {r.status_code}"}
+            if r.status_code == 200:
+                return r.json()
+
+            logger.warning(
+                f"Remote /api/sync/trigger_retrain returned HTTP {r.status_code}. "
+                "Attempting fallback to /api/ml/temporal/retrain..."
+            )
+            fallback_url = f"{self.remote_url}/api/ml/temporal/retrain"
+            fb_r = self.session.post(fallback_url, timeout=self.timeout)
+            if fb_r.status_code == 200:
+                logger.info("Remote retraining succeeded via fallback temporal endpoint.")
+                return {
+                    "status": "success",
+                    "message": "Model retraining initiated on remote cloud instance",
+                    "details": fb_r.json(),
+                }
+
+            return {"error": f"Remote retrain trigger failed with HTTP {r.status_code}"}
         except Exception as e:
             logger.error(f"Failed to trigger remote retrain: {e}", exc_info=True)
             return {"error": "Failed to trigger remote retrain"}
