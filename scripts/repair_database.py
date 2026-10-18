@@ -300,14 +300,8 @@ def sync_from_csv_fallbacks(db_path: Path) -> None:
 
         if missing_rows:
             log(f"Reconciling: Found {len(missing_rows)} trades in CSV not in DB. Restoring...")
-            for m in missing_rows:
-                cur.execute("""
-                    INSERT OR IGNORE INTO trade_log (
-                        id, timestamp, closed_at, symbol, direction, entry_price,
-                        stop_loss, take_profit, lot_size, realized_pnl, status,
-                        duration_seconds, strategy_name, magic_number
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+            batch = [
+                (
                     int(m["id"]),
                     m.get("timestamp"),
                     m.get("closed_at") or None,
@@ -322,7 +316,16 @@ def sync_from_csv_fallbacks(db_path: Path) -> None:
                     float(m.get("duration_seconds") or 0.0),
                     m.get("strategy_name", "SMC"),
                     int(m.get("magic_number") or 123456),
-                ))
+                )
+                for m in missing_rows
+            ]
+            cur.executemany("""
+                INSERT OR IGNORE INTO trade_log (
+                    id, timestamp, closed_at, symbol, direction, entry_price,
+                    stop_loss, take_profit, lot_size, realized_pnl, status,
+                    duration_seconds, strategy_name, magic_number
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, batch)
             conn.commit()
             log(f"Successfully restored {len(missing_rows)} trades from CSV.")
         else:
