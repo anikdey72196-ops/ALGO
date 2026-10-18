@@ -249,3 +249,95 @@ def test_api_sync_endpoints(monkeypatch):
     # 5. Unauthorized Check
     res_unauth = client.post("/api/sync/trigger_retrain")
     assert res_unauth.status_code == 401
+
+
+def test_engine_import_partial_tp_events_batch(temp_sync_env):
+    """Verify batch insertion and deduplication of partial_tp_events."""
+    engine, db_path, _ = temp_sync_env
+
+    # 1. Insert initial batch of 3 events
+    initial_events = [
+        {
+            "trade_id": 100,
+            "symbol": "XAUUSD",
+            "strategy_name": "SMC",
+            "direction": "BUY",
+            "timestamp": "2026-10-18T10:00:00Z",
+            "current_price": 2650.0,
+            "r_multiple": 1.5,
+            "p_reversal": 0.25,
+            "p_full_tp": 0.75,
+            "predicted_max_r": 3.0,
+            "action": "PARTIAL_CLOSE",
+            "close_pct": 50.0,
+            "closed_lot": 0.05,
+            "remaining_lot": 0.05,
+            "nearest_resistance": "2660.0",
+            "structure_confluence_count": 2,
+            "features_json": "{}",
+            "realized_max_r": 2.0,
+            "outcome_label": "WIN",
+            "is_shadow": 0,
+        },
+        {
+            "trade_id": 101,
+            "symbol": "EURUSD",
+            "strategy_name": "ICT",
+            "direction": "SELL",
+            "timestamp": "2026-10-18T10:05:00Z",
+            "current_price": 1.0850,
+            "r_multiple": 2.0,
+            "p_reversal": 0.40,
+            "p_full_tp": 0.60,
+            "predicted_max_r": 2.5,
+            "action": "PARTIAL_CLOSE",
+            "close_pct": 50.0,
+            "closed_lot": 0.10,
+            "remaining_lot": 0.10,
+            "nearest_resistance": "1.0830",
+            "structure_confluence_count": 1,
+            "features_json": "{}",
+            "realized_max_r": 2.2,
+            "outcome_label": "WIN",
+            "is_shadow": 0,
+        },
+    ]
+
+    stats1 = engine.import_events({"partial_tp_events": initial_events})
+    assert stats1["partial_tp_inserted"] == 2
+
+    # 2. Second batch: 1 duplicate (trade_id 100) + 1 new (trade_id 102)
+    second_batch = [
+        initial_events[0],  # Duplicate: same trade_id, timestamp, action
+        {
+            "trade_id": 102,
+            "symbol": "GBPUSD",
+            "strategy_name": "ORDER_FLOW",
+            "direction": "BUY",
+            "timestamp": "2026-10-18T10:15:00Z",
+            "current_price": 1.3050,
+            "r_multiple": 1.8,
+            "p_reversal": 0.30,
+            "p_full_tp": 0.70,
+            "predicted_max_r": 2.8,
+            "action": "PARTIAL_CLOSE",
+            "close_pct": 50.0,
+            "closed_lot": 0.08,
+            "remaining_lot": 0.08,
+            "nearest_resistance": "1.3100",
+            "structure_confluence_count": 3,
+            "features_json": "{}",
+            "realized_max_r": 2.5,
+            "outcome_label": "WIN",
+            "is_shadow": 0,
+        },
+    ]
+
+    stats2 = engine.import_events({"partial_tp_events": second_batch})
+    assert stats2["partial_tp_inserted"] == 1  # Only trade_id 102 inserted
+
+    # Verify total count in table
+    conn = engine.get_db_connection()
+    total = conn.execute("SELECT count(*) FROM partial_tp_events").fetchone()[0]
+    conn.close()
+    assert total == 3

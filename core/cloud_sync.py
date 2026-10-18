@@ -332,13 +332,17 @@ class CloudSyncEngine:
                             WHERE trade_id = ? AND timestamp = ? AND action = ?
                         )
                     """
-                    ptp_count = 0
-                    for p in partial_tp_events:
-                        vals = [p.get(c) for c in ptp_cols]
-                        check_vals = [p.get("trade_id"), p.get("timestamp"), p.get("action")]
-                        cur = conn.execute(insert_ptp_sql, vals + check_vals)
-                        if cur.rowcount > 0:
-                            ptp_count += 1
+                    ptp_all_cols = ptp_cols + ["trade_id", "timestamp", "action"]
+                    ptp_batch = [
+                        [p.get(c) for c in ptp_all_cols]
+                        for p in partial_tp_events
+                    ]
+                    before_changes = getattr(conn, "total_changes", None)
+                    cur = conn.executemany(insert_ptp_sql, ptp_batch)
+                    if before_changes is not None and hasattr(conn, "total_changes"):
+                        ptp_count = conn.total_changes - before_changes
+                    else:
+                        ptp_count = cur.rowcount if cur.rowcount > 0 else 0
                     stats["partial_tp_inserted"] = ptp_count
 
             logger.info(f"Sync import completed: {stats}")
