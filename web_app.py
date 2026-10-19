@@ -2087,10 +2087,22 @@ async def download_sync_model(filename: str, request: Request):
     """Download compiled model artifact binary."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Explicit input validation at endpoint boundary (defense-in-depth).
+    if (
+        not filename
+        or "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or "\0" in filename
+        or not (filename.endswith(".joblib") or filename.endswith(".json"))
+    ):
+        raise HTTPException(status_code=400, detail="Invalid artifact filename")
+
     ok, file_path, _ = sync_engine.resolve_safe_artifact_path(filename)
     if not ok or file_path is None or not file_path.exists():
         raise HTTPException(status_code=404, detail="Artifact not found")
-    return FileResponse(path=file_path, filename=file_path.name, media_type="application/octet-stream")
+    return FileResponse(path=str(file_path), filename=file_path.name, media_type="application/octet-stream")
 
 
 @app.post("/api/sync/models/upload/{filename}")
