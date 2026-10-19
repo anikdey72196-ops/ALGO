@@ -583,50 +583,67 @@ class TradingBot:
                 if p.get("ticket") or p.get("order_id")
             }
 
-            for trade in open_trades:
-                # If still open with broker, skip
-                if trade.id in live_order_ids:
-                    continue
+            closed_trades = [trade for trade in open_trades if trade.id is not None and trade.id not in live_order_ids]
+            if not closed_trades:
+                return
 
-                # Query broker for closed deal result
-                if hasattr(self.broker, "get_deal_pnl_for_order") and trade.id is not None:
-                    deal_res = self.broker.get_deal_pnl_for_order(trade.id)
-                    if deal_res:
-                        pnl, status = deal_res
-                        self.state.update_trade_pnl(trade.id, pnl, status)
-                        if hasattr(self, "position_manager") and self.position_manager:
-                            self.position_manager.on_trade_closed(trade, pnl, status)
-                        self.log(
-                            f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
-                            f"Realized PnL: ${pnl:+.2f}"
-                        )
-                        # Record exit fill in Execution Quality Metrics
-                        try:
-                            inst = get_instrument(self.config, trade.symbol)
-                            pip_sz = 10 ** -inst.digits
-                        except Exception:
-                            pip_sz = 0.0001
-                        exit_target = trade.take_profit if status == "CLOSED_TP" else trade.stop_loss
-                        self.eqm.record_exit_fill(
-                            trade_id=trade.id,
-                            exit_type=status,
-                            intended_price=exit_target or trade.entry_price,
-                            actual_price=exit_target or trade.entry_price,
-                            volume=trade.lot_size,
-                            pip_size=pip_sz,
-                        )
-                    else:
-                        self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
-                        if hasattr(self, "position_manager") and self.position_manager:
-                            self.position_manager.on_trade_closed(trade, 0.0, "CLOSED")
-                        self.log(
-                            f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
-                            level="INFO"
-                        )
+            # Batch query deal results from broker
+            closed_order_ids = [t.id for t in closed_trades]
+            deal_results = {}
+            if hasattr(self.broker, "get_deals_pnl_for_orders"):
+                deal_results = self.broker.get_deals_pnl_for_orders(closed_order_ids)
+            elif hasattr(self.broker, "get_deal_pnl_for_order"):
+                for oid in closed_order_ids:
+                    dres = self.broker.get_deal_pnl_for_order(oid)
+                    if dres:
+                        deal_results[oid] = dres
+
+            db_updates = []
+            trade_events = []
+
+            for trade in closed_trades:
+                deal_res = deal_results.get(trade.id)
+                if deal_res:
+                    pnl, status = deal_res
+                    db_updates.append((trade.id, pnl, status))
+                    trade_events.append((trade, pnl, status, True))
                 else:
-                    self.state.update_trade_pnl(trade.id, 0.0, "CLOSED")
-                    if hasattr(self, "position_manager") and self.position_manager:
-                        self.position_manager.on_trade_closed(trade, 0.0, "CLOSED")
+                    db_updates.append((trade.id, 0.0, "CLOSED"))
+                    trade_events.append((trade, 0.0, "CLOSED", False))
+
+            # Batch update in database (single transaction and single CSV sync)
+            if hasattr(self.state, "batch_update_trade_pnls"):
+                self.state.batch_update_trade_pnls(db_updates)
+            else:
+                for tid, pnl, status in db_updates:
+                    self.state.update_trade_pnl(tid, pnl, status)
+
+            # Trigger callbacks and metrics
+            for trade, pnl, status, found in trade_events:
+                if hasattr(self, "position_manager") and self.position_manager:
+                    self.position_manager.on_trade_closed(trade, pnl, status)
+
+                if found:
+                    self.log(
+                        f"🔔 Position #{trade.id} ({trade.symbol}) CLOSED in broker: {status} | "
+                        f"Realized PnL: ${pnl:+.2f}"
+                    )
+                    # Record exit fill in Execution Quality Metrics
+                    try:
+                        inst = get_instrument(self.config, trade.symbol)
+                        pip_sz = 10 ** -inst.digits
+                    except Exception:
+                        pip_sz = 0.0001
+                    exit_target = trade.take_profit if status == "CLOSED_TP" else trade.stop_loss
+                    self.eqm.record_exit_fill(
+                        trade_id=trade.id,
+                        exit_type=status,
+                        intended_price=exit_target or trade.entry_price,
+                        actual_price=exit_target or trade.entry_price,
+                        volume=trade.lot_size,
+                        pip_size=pip_sz,
+                    )
+                else:
                     self.log(
                         f"🔔 Position #{trade.id} ({trade.symbol}) no longer active in broker. Marked CLOSED in state.",
                         level="INFO"
