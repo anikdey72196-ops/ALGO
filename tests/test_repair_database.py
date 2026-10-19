@@ -9,9 +9,93 @@ import tempfile
 from pathlib import Path
 import pytest
 
-from scripts.repair_database import sync_from_csv_fallbacks
+from scripts.repair_database import sync_from_csv_fallbacks, is_safe_table_name, get_table_counts, salvage_table_data
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+
+def test_is_safe_table_name():
+    """Verify table identifier validator strictly allows safe names and blocks injection payloads."""
+    safe_names = ["trade_log", "daily_state", "bot_sessions", "Table1", "t", "a_b_c"]
+    for name in safe_names:
+        assert is_safe_table_name(name) is True, f"Expected {name} to be safe"
+
+    unsafe_names = [
+        "trade_log; DROP TABLE test; --",
+        "trade_log' OR '1'='1",
+        'trade_log" OR "1"="1',
+        "table name with space",
+        "table-with-hyphen",
+        "table.name",
+        "table/*comment*/",
+        "",
+        "a" * 65,  # Exceeds max length
+        None,
+        123,
+    ]
+    for name in unsafe_names:
+        assert is_safe_table_name(name) is False, f"Expected {name} to be rejected"
+
+
+def test_get_table_counts_sql_injection_defense():
+    """Verify get_table_counts safely handles tables with injection payloads in sqlite_master."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test_injection.db"
+        conn = sqlite3.connect(str(db_path))
+
+        # Create a legitimate table
+        conn.execute("CREATE TABLE valid_table (id INT);")
+        conn.execute("INSERT INTO valid_table VALUES (1), (2), (3);")
+
+        # Create a table with a malicious name containing SQL injection syntax
+        malicious_name = 'valid_table; CREATE TABLE injected_table (x INT); --'
+        conn.execute(f'CREATE TABLE "{malicious_name}" (id INT);')
+        conn.commit()
+        conn.close()
+
+        # Run get_table_counts
+        counts = get_table_counts(db_path)
+
+        assert counts.get("valid_table") == 3
+        assert counts.get(malicious_name) is None
+
+        # Verify that the injected statement was NOT executed
+        conn = sqlite3.connect(str(db_path))
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+        conn.close()
+
+        assert "injected_table" not in tables
+
+
+def test_salvage_table_data_security():
+    """Verify salvage_table_data blocks tables with unsafe identifiers and sanitizes columns."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = Path(tmpdir) / "src.db"
+        dst_path = Path(tmpdir) / "dst.db"
+
+        src_conn = sqlite3.connect(str(src_path))
+        dst_conn = sqlite3.connect(str(dst_path))
+
+        # 1. Unsafe table name should be rejected immediately
+        salvaged, errors = salvage_table_data(src_conn, dst_conn, "test; DROP TABLE something; --")
+        assert salvaged == 0
+        assert errors == 1
+
+        # 2. Legitimate table should be salvaged properly
+        src_conn.execute("CREATE TABLE safe_table (id INT, val TEXT);")
+        dst_conn.execute("CREATE TABLE safe_table (id INT, val TEXT);")
+        src_conn.execute("INSERT INTO safe_table VALUES (1, 'apple'), (2, 'banana');")
+        src_conn.commit()
+
+        salvaged, errors = salvage_table_data(src_conn, dst_conn, "safe_table")
+        assert salvaged == 2
+        assert errors == 0
+
+        res = dst_conn.execute("SELECT id, val FROM safe_table ORDER BY id;").fetchall()
+        assert res == [(1, 'apple'), (2, 'banana')]
+
+        src_conn.close()
+        dst_conn.close()
 
 
 def test_sync_from_csv_fallbacks_batch(monkeypatch):

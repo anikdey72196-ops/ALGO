@@ -20,6 +20,7 @@ Usage:
 
 import argparse
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -90,6 +91,16 @@ def check_integrity(db_path: Path) -> Tuple[bool, List[str]]:
         return False, [f"Could not connect to database: {e}"]
 
 
+def is_safe_table_name(table_name: str) -> bool:
+    """
+    Validate that a table identifier contains only alphanumeric characters and underscores,
+    preventing SQL injection via sqlite_master table name manipulation.
+    """
+    if not isinstance(table_name, str):
+        return False
+    return bool(re.fullmatch(r"^[a-zA-Z0-9_]{1,64}$", table_name))
+
+
 def get_table_counts(db_path: Path) -> Dict[str, Optional[int]]:
     """Retrieves row counts for all tables, reporting None if a table cannot be read."""
     counts = {}
@@ -102,8 +113,12 @@ def get_table_counts(db_path: Path) -> Dict[str, Optional[int]]:
             ).fetchall()
         ]
         for t in tables:
+            if not is_safe_table_name(t):
+                log(f"Warning: Skipping table with unsafe identifier: {t}")
+                counts[t] = None
+                continue
             try:
-                c = cur.execute(f"SELECT COUNT(*) FROM {t};").fetchone()[0]
+                c = cur.execute(f'SELECT COUNT(*) FROM "{t}";').fetchone()[0]
                 counts[t] = c
             except sqlite3.DatabaseError as e:
                 log(f"Table '{t}' count error: {e}")
@@ -144,12 +159,16 @@ def salvage_table_data(src_conn: sqlite3.Connection, dst_conn: sqlite3.Connectio
     If a bulk read fails, falls back to rowid-by-rowid extraction to maximize recovered data.
     Returns (salvaged_count, error_count).
     """
+    if not is_safe_table_name(table_name):
+        log(f"Warning: Refusing to salvage table with unsafe identifier: {table_name}")
+        return 0, 1
+
     src_cur = src_conn.cursor()
     dst_cur = dst_conn.cursor()
 
-    # Get column names
-    col_info = src_cur.execute(f"PRAGMA table_info({table_name});").fetchall()
-    col_names = [c[1] for c in col_info]
+    # Get column names and validate them
+    col_info = src_cur.execute(f'PRAGMA table_info("{table_name}");').fetchall()
+    col_names = [c[1] for c in col_info if is_safe_table_name(c[1])]
     cols_joined = ", ".join([f'"{c}"' for c in col_names])
     placeholders = ", ".join(["?"] * len(col_names))
     insert_sql = f'INSERT OR REPLACE INTO "{table_name}" ({cols_joined}) VALUES ({placeholders})'
@@ -219,7 +238,7 @@ def recover_to_fresh_db(src_db_path: Path, recovered_db_path: Path) -> Tuple[boo
         ).fetchall()
 
         for tname, sql in tables_ddl:
-            if not sql:
+            if not is_safe_table_name(tname) or not sql:
                 continue
             dst_conn.execute(sql)
             log(f"Created table schema: {tname}")
