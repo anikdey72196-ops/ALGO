@@ -341,3 +341,31 @@ def test_engine_import_partial_tp_events_batch(temp_sync_env):
     total = conn.execute("SELECT count(*) FROM partial_tp_events").fetchone()[0]
     conn.close()
     assert total == 3
+
+
+def test_api_sync_models_path_traversal_rejected(monkeypatch):
+    """Verify download and upload endpoints reject path traversal attacks (CWE-22)."""
+    token = os.getenv("SYNC_AUTH_TOKEN", "test_sync_token")
+    monkeypatch.setenv("SYNC_AUTH_TOKEN", token)
+    headers = {"Authorization": f"Bearer {token}"}
+    client = TestClient(app)
+
+    # 1. Traversal attempts in download
+    bad_filenames = [
+        "../../etc/passwd",
+        "..\\..\\trading_state.db",
+        "subdir/model.joblib",
+        "model.joblib/../../evil.joblib",
+        "/absolute/path/model.joblib",
+    ]
+
+    for bad in bad_filenames:
+        res = client.get(f"/api/sync/models/download/{bad}", headers=headers)
+        # Should be rejected with 400 or 404, never 200 or 500
+        assert res.status_code in (400, 404), f"Path traversal for {bad} should fail, got {res.status_code}"
+
+    # 2. Traversal attempts in upload
+    for bad in bad_filenames:
+        res = client.post(f"/api/sync/models/upload/{bad}", headers=headers, content=b"payload")
+        assert res.status_code in (400, 404), f"Upload path traversal for {bad} should fail, got {res.status_code}"
+

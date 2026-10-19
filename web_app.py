@@ -2141,9 +2141,17 @@ async def get_sync_models_manifest(request: Request):
 
 @app.get("/api/sync/models/download/{filename}")
 async def download_sync_model(filename: str, request: Request):
-    """Download compiled model artifact binary."""
+    """Download compiled model artifact binary with path validation (CWE-22)."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+    base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
+
+    norm_path = os.path.realpath(os.path.join(base_dir, filename))
+    if not norm_path.startswith(base_prefix):
+        raise HTTPException(status_code=400, detail="Invalid artifact path")
+
     ok, file_path, _ = sync_engine.resolve_safe_artifact_path(filename)
     if not ok or file_path is None or not file_path.exists():
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -2152,9 +2160,17 @@ async def download_sync_model(filename: str, request: Request):
 
 @app.post("/api/sync/models/upload/{filename}")
 async def upload_sync_model(filename: str, request: Request):
-    """Upload and atomically replace compiled model artifact."""
+    """Upload and atomically replace compiled model artifact with path validation (CWE-22)."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+    base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
+
+    norm_path = os.path.realpath(os.path.join(base_dir, filename))
+    if not norm_path.startswith(base_prefix):
+        raise HTTPException(status_code=400, detail="Invalid artifact path")
+
     content = await request.body()
     expected_sha = request.headers.get("X-Sha256")
     ok, msg = sync_engine.save_model_artifact(filename, content, expected_sha)
