@@ -97,6 +97,23 @@ class BrokerAdapter(ABC):
         """Close all open positions. Returns the count of closed positions."""
         return 0
 
+    def get_deal_pnl_for_order(self, order_id: int) -> tuple[float, str] | None:
+        """Check deal history for an order. Subclasses may implement."""
+        return None
+
+    def get_deals_pnl_for_orders(self, order_ids: list[int]) -> dict[int, tuple[float, str]]:
+        """
+        Batch query deal history for multiple orders.
+        Default implementation falls back to get_deal_pnl_for_order per ID.
+        Subclasses can override with high-performance batch operations.
+        """
+        results = {}
+        for oid in order_ids:
+            res = self.get_deal_pnl_for_order(oid)
+            if res is not None:
+                results[oid] = res
+        return results
+
 
 class MT5Adapter(BrokerAdapter):
     r"""
@@ -431,6 +448,30 @@ class MT5Adapter(BrokerAdapter):
             return []
         return [p._asdict() for p in positions]
 
+    @staticmethod
+    def _parse_deals_for_pnl(pos_deals: list) -> tuple[float, str] | None:
+        """Parse deals list for realized PnL and exit status."""
+        if not pos_deals:
+            return None
+        closing_deals = [d for d in pos_deals if getattr(d, 'entry', None) in (1, 2)]  # DEAL_ENTRY_OUT or DEAL_ENTRY_INOUT
+        if closing_deals:
+            cd = closing_deals[-1]
+            total_profit = sum(getattr(d, 'profit', 0.0) + getattr(d, 'commission', 0.0) + getattr(d, 'swap', 0.0) for d in pos_deals)
+            comment = (getattr(cd, 'comment', None) or "").lower()
+            reason = getattr(cd, 'reason', None)
+
+            # Check comment first, then MT5 reason code: 5=DEAL_REASON_TP, 4=DEAL_REASON_SL, 6=DEAL_REASON_SO
+            if "tp" in comment or reason == 5:
+                status = "CLOSED_TP"
+            elif "sl" in comment or reason in (4, 6):
+                status = "CLOSED_SL"
+            elif total_profit > 0:
+                status = "CLOSED_TP"
+            else:
+                status = "CLOSED_MANUAL"
+            return total_profit, status
+        return None
+
     def get_deal_pnl_for_order(self, order_id: int) -> tuple[float, str] | None:
         """
         Check MT5 deal history to see if an order/position has closed.
@@ -451,33 +492,54 @@ class MT5Adapter(BrokerAdapter):
             from_ts = now_ts - (7 * 86400)
             deals = mt5.history_deals_get(from_ts, now_ts)
             if deals:
-                deals = [d for d in deals if d.position_id == order_id or d.order == order_id]
+                deals = [d for d in deals if getattr(d, 'position_id', None) == order_id or getattr(d, 'order', None) == order_id]
 
         if not deals:
             return None
 
-        pos_deals = [d for d in deals if d.position_id == order_id or d.order == order_id]
-        if not pos_deals:
-            return None
+        pos_deals = [d for d in deals if getattr(d, 'position_id', None) == order_id or getattr(d, 'order', None) == order_id]
+        return self._parse_deals_for_pnl(pos_deals)
 
-        closing_deals = [d for d in pos_deals if d.entry in (1, 2)]  # DEAL_ENTRY_OUT or DEAL_ENTRY_INOUT
-        if closing_deals:
-            cd = closing_deals[-1]
-            total_profit = sum(d.profit + d.commission + d.swap for d in pos_deals)
-            comment = (cd.comment or "").lower()
-            reason = getattr(cd, 'reason', None)
-            
-            # Check comment first, then MT5 reason code: 5=DEAL_REASON_TP, 4=DEAL_REASON_SL, 6=DEAL_REASON_SO
-            if "tp" in comment or reason == 5:
-                status = "CLOSED_TP"
-            elif "sl" in comment or reason in (4, 6):
-                status = "CLOSED_SL"
-            elif total_profit > 0:
-                status = "CLOSED_TP"
-            else:
-                status = "CLOSED_MANUAL"
-            return total_profit, status
-        return None
+    def get_deals_pnl_for_orders(self, order_ids: list[int]) -> dict[int, tuple[float, str]]:
+        """
+        Batch query MT5 deal history for multiple orders in a single API call over recent window.
+        Falls back to direct lookup for any orders not found in recent history.
+        """
+        if mt5 is None or not order_ids:
+            return {}
+        self.ensure_connected()
+
+        results: dict[int, tuple[float, str]] = {}
+        target_ids = set(order_ids)
+
+        now_ts = int(_time.time())
+        from_ts = now_ts - (7 * 86400)
+        deals = mt5.history_deals_get(from_ts, now_ts)
+
+        if deals:
+            from collections import defaultdict
+            deals_by_id = defaultdict(list)
+            for d in deals:
+                pid = getattr(d, 'position_id', None)
+                if pid and pid in target_ids:
+                    deals_by_id[pid].append(d)
+                ord_id = getattr(d, 'order', None)
+                if ord_id and ord_id in target_ids and ord_id != pid:
+                    deals_by_id[ord_id].append(d)
+
+            for oid, pdeals in deals_by_id.items():
+                parsed = self._parse_deals_for_pnl(pdeals)
+                if parsed:
+                    results[oid] = parsed
+
+        # Fallback to direct lookup for any remaining order_ids not resolved in batch window
+        remaining = [oid for oid in order_ids if oid not in results]
+        for oid in remaining:
+            res = self.get_deal_pnl_for_order(oid)
+            if res:
+                results[oid] = res
+
+        return results
 
     def close_position(self, ticket: int, symbol: str | None = None, volume: float | None = None, direction: str | None = None) -> bool:
         """
@@ -573,6 +635,7 @@ class MockBrokerAdapter(BrokerAdapter):
         self.pip_size = pip_size
         self._positions: dict[int, dict] = {}
         self._prices: dict[str, PriceQuote] = {}
+        self._deal_history: dict[int, tuple[float, str]] = {}
         self._next_order_id = 1
         self._connected = True
         
@@ -662,8 +725,18 @@ class MockBrokerAdapter(BrokerAdapter):
 
         pnl = diff * pos['lot_size'] * contract_size
         self._equity += pnl
+        status = "CLOSED_TP" if pnl > 0 else "CLOSED_SL"
+        self._deal_history[order_id] = (pnl, status)
         logger.info(f"Mock position closed: Order ID {order_id} @ {close_price:.5f}, Realized PnL: {pnl:.2f}")
         return pnl
+
+    def get_deal_pnl_for_order(self, order_id: int) -> tuple[float, str] | None:
+        """Query mock deal history for closed order PnL."""
+        return self._deal_history.get(order_id)
+
+    def get_deals_pnl_for_orders(self, order_ids: list[int]) -> dict[int, tuple[float, str]]:
+        """Batch query mock deal history for closed orders."""
+        return {oid: self._deal_history[oid] for oid in order_ids if oid in self._deal_history}
         
     def get_current_price(self, symbol: str) -> PriceQuote | None:
         return self._prices.get(symbol)

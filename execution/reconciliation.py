@@ -49,28 +49,41 @@ class ReconciliationEngine:
             }
 
             # 1. Check for local open positions that have closed with broker
-            for t in local_open:
-                if t.id is not None and t.id not in broker_tickets:
-                    # Query deal history for realized PnL if supported
-                    if hasattr(self.broker, "get_deal_pnl_for_order"):
-                        deal_res = self.broker.get_deal_pnl_for_order(t.id)
-                        if deal_res:
-                            pnl, status = deal_res
-                            self.state.update_trade_pnl(t.id, pnl, status)
-                            if self.position_manager:
-                                self.position_manager.on_trade_closed(t, pnl, status)
-                            report["closed_synced"] += 1
-                            logger.info(f"[RECONCILE] Synced closed trade #{t.id} ({t.symbol}): {status} PnL=${pnl:+.2f}")
-                        else:
-                            self.state.update_trade_pnl(t.id, 0.0, "CLOSED")
-                            if self.position_manager:
-                                self.position_manager.on_trade_closed(t, 0.0, "CLOSED")
-                            report["closed_synced"] += 1
+            closed_candidates = [t for t in local_open if t.id is not None and t.id not in broker_tickets]
+            if closed_candidates:
+                candidate_ids = [t.id for t in closed_candidates]
+                deal_results = {}
+                if hasattr(self.broker, "get_deals_pnl_for_orders"):
+                    deal_results = self.broker.get_deals_pnl_for_orders(candidate_ids)
+                elif hasattr(self.broker, "get_deal_pnl_for_order"):
+                    for oid in candidate_ids:
+                        dres = self.broker.get_deal_pnl_for_order(oid)
+                        if dres:
+                            deal_results[oid] = dres
+
+                db_updates = []
+                reconcile_events = []
+                for t in closed_candidates:
+                    if t.id in deal_results:
+                        pnl, status = deal_results[t.id]
+                        db_updates.append((t.id, pnl, status))
+                        reconcile_events.append((t, pnl, status, True))
                     else:
-                        self.state.update_trade_pnl(t.id, 0.0, "CLOSED")
-                        if self.position_manager:
-                            self.position_manager.on_trade_closed(t, 0.0, "CLOSED")
-                        report["closed_synced"] += 1
+                        db_updates.append((t.id, 0.0, "CLOSED"))
+                        reconcile_events.append((t, 0.0, "CLOSED", False))
+
+                if hasattr(self.state, "batch_update_trade_pnls"):
+                    self.state.batch_update_trade_pnls(db_updates)
+                else:
+                    for tid, pnl, status in db_updates:
+                        self.state.update_trade_pnl(tid, pnl, status)
+
+                for t, pnl, status, found in reconcile_events:
+                    if self.position_manager:
+                        self.position_manager.on_trade_closed(t, pnl, status)
+                    report["closed_synced"] += 1
+                    if found:
+                        logger.info(f"[RECONCILE] Synced closed trade #{t.id} ({t.symbol}): {status} PnL=${pnl:+.2f}")
 
             # 2. Check for orphan broker positions not in local state
             local_ids = {t.id for t in local_open if t.id is not None}

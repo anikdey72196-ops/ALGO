@@ -98,12 +98,17 @@ class CloudSyncEngine:
         if not re.fullmatch(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.(joblib|json)$", filename):
             return False, None, f"Invalid artifact filename format: {filename}"
 
-        base_dir = self.artifacts_dir.resolve()
-        safe_name = os.path.basename(filename)
-        target_path = (base_dir / safe_name).resolve()
+        base_dir = os.path.realpath(str(self.artifacts_dir))
+        base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
 
+        # Normalize and resolve target path against safe base directory
+        target_path_str = os.path.realpath(os.path.join(base_dir, filename))
+        if not target_path_str.startswith(base_prefix):
+            return False, None, "Path traversal attempt detected"
+
+        target_path = Path(target_path_str)
         try:
-            if not target_path.is_relative_to(base_dir) or target_path.parent != base_dir:
+            if not target_path.is_relative_to(Path(base_dir)) or target_path.parent != Path(base_dir):
                 return False, None, "Path traversal attempt detected"
         except (ValueError, RuntimeError):
             return False, None, "Path resolution error"
@@ -332,13 +337,17 @@ class CloudSyncEngine:
                             WHERE trade_id = ? AND timestamp = ? AND action = ?
                         )
                     """
-                    ptp_count = 0
-                    for p in partial_tp_events:
-                        vals = [p.get(c) for c in ptp_cols]
-                        check_vals = [p.get("trade_id"), p.get("timestamp"), p.get("action")]
-                        cur = conn.execute(insert_ptp_sql, vals + check_vals)
-                        if cur.rowcount > 0:
-                            ptp_count += 1
+                    ptp_all_cols = ptp_cols + ["trade_id", "timestamp", "action"]
+                    ptp_batch = [
+                        [p.get(c) for c in ptp_all_cols]
+                        for p in partial_tp_events
+                    ]
+                    before_changes = getattr(conn, "total_changes", None)
+                    cur = conn.executemany(insert_ptp_sql, ptp_batch)
+                    if before_changes is not None and hasattr(conn, "total_changes"):
+                        ptp_count = conn.total_changes - before_changes
+                    else:
+                        ptp_count = cur.rowcount if cur.rowcount > 0 else 0
                     stats["partial_tp_inserted"] = ptp_count
 
             logger.info(f"Sync import completed: {stats}")

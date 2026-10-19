@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 # pyrefly: ignore [missing-import]
 from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
@@ -255,26 +256,6 @@ async def lifespan(app: FastAPI):
 
 
 
-app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Templates and static directories
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-TEMPLATES_DIR.mkdir(exist_ok=True)
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-STATIC_DIR = Path(__file__).parent / "static"
-STATIC_DIR.mkdir(exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
 def get_all_lan_ips() -> list[str]:
     """Discover all non-loopback IPv4 addresses (Wi-Fi, Ethernet, Tailscale)."""
     ips = set()
@@ -295,6 +276,82 @@ def get_all_lan_ips() -> list[str]:
         pass
 
     return sorted(list(ips)) if ips else ["127.0.0.1"]
+
+
+def get_allowed_origins() -> list[str]:
+    """
+    Construct a restricted list of trusted origins for CORS.
+    Includes loopback addresses, detected local LAN IPs on the dashboard port,
+    and any origins explicitly configured via ALLOWED_ORIGINS or CORS_ORIGINS environment variables.
+    Wildcards ('*') are strictly disallowed to prevent cross-origin exploitation (CWE-942).
+    """
+    port = os.getenv("PORT", "8000").strip() or "8000"
+    origins = {
+        "http://localhost",
+        f"http://localhost:{port}",
+        "http://127.0.0.1",
+        f"http://127.0.0.1:{port}",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+
+    try:
+        for ip in get_all_lan_ips():
+            origins.add(f"http://{ip}")
+            origins.add(f"http://{ip}:{port}")
+            if port != "8000":
+                origins.add(f"http://{ip}:8000")
+    except Exception as e:
+        logger.debug(f"Could not discover LAN IPs for CORS: {e}")
+
+    # Support cloud sync URL origin if configured
+    cloud_sync = os.getenv("CLOUD_SYNC_URL", "").strip()
+    if cloud_sync:
+        try:
+            parsed = urlparse(cloud_sync)
+            if parsed.scheme and parsed.netloc:
+                origins.add(f"{parsed.scheme}://{parsed.netloc}")
+        except Exception:
+            pass
+
+    # Allow custom trusted origins via environment variable (comma-separated)
+    custom_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+    if custom_origins:
+        for origin in custom_origins.split(","):
+            cleaned = origin.strip().rstrip("/")
+            if cleaned == "*":
+                logger.warning("Wildcard '*' in ALLOWED_ORIGINS is forbidden when credentials are enabled. Skipping wildcard.")
+                continue
+            if cleaned:
+                origins.add(cleaned)
+
+    return sorted(list(origins))
+
+
+app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
+
+# Secure CORS Middleware Configuration:
+# Restrict origins to trusted loopback addresses, local LAN IPs on the dashboard port,
+# and any custom origins explicitly specified via ALLOWED_ORIGINS or CORS_ORIGINS env variables.
+# Wildcards ('*') are disallowed with credentials to prevent CWE-942 cross-origin attacks.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["*"],
+)
+
+# Templates and static directories
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR.mkdir(exist_ok=True)
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 def invalidate_state_cache() -> None:
@@ -2084,9 +2141,17 @@ async def get_sync_models_manifest(request: Request):
 
 @app.get("/api/sync/models/download/{filename}")
 async def download_sync_model(filename: str, request: Request):
-    """Download compiled model artifact binary."""
+    """Download compiled model artifact binary with path validation (CWE-22)."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+    base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
+
+    norm_path = os.path.realpath(os.path.join(base_dir, filename))
+    if not norm_path.startswith(base_prefix):
+        raise HTTPException(status_code=400, detail="Invalid artifact path")
+
     ok, file_path, _ = sync_engine.resolve_safe_artifact_path(filename)
     if not ok or file_path is None or not file_path.exists():
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -2095,9 +2160,17 @@ async def download_sync_model(filename: str, request: Request):
 
 @app.post("/api/sync/models/upload/{filename}")
 async def upload_sync_model(filename: str, request: Request):
-    """Upload and atomically replace compiled model artifact."""
+    """Upload and atomically replace compiled model artifact with path validation (CWE-22)."""
     if not verify_sync_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+    base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
+
+    norm_path = os.path.realpath(os.path.join(base_dir, filename))
+    if not norm_path.startswith(base_prefix):
+        raise HTTPException(status_code=400, detail="Invalid artifact path")
+
     content = await request.body()
     expected_sha = request.headers.get("X-Sha256")
     ok, msg = sync_engine.save_model_artifact(filename, content, expected_sha)

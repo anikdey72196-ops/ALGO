@@ -426,62 +426,81 @@ class StateManager:
         return trade_id
 
     
-    def update_trade_pnl(self, trade_id: int, pnl: float, status: str) -> None:
-        """Update a trade's realized PnL and status, recording close timestamp and duration."""
+    def batch_update_trade_pnls(self, updates: list[tuple[int, float, str]]) -> None:
+        """
+        Batch update multiple trades' realized PnL and status in a single database transaction,
+        syncing trades CSV once at the end.
+        Each update is a tuple of (trade_id, pnl, status).
+        """
+        if not updates:
+            return
+
+        now_dt = datetime.now(timezone.utc)
+        close_date = now_dt.date()
+        close_date_str = close_date.isoformat()
+
+        updated_logs = []
+
         with self._lock, self.conn:
-            # Get existing pnl to calculate diff for daily_state update
-            cursor = self.conn.execute('SELECT timestamp, realized_pnl FROM trade_log WHERE id = ?', (trade_id,))
-            row = cursor.fetchone()
-            if not row:
-                logger.warning(f"Trade {trade_id} not found for PnL update.")
-                return
-            
-            old_pnl = float(row['realized_pnl'] or 0.0)
-            trade_timestamp = datetime.fromisoformat(row['timestamp'])
-            trade_date_str = trade_timestamp.date().isoformat()
-            
-            now_dt = datetime.now(timezone.utc)
-            close_date = now_dt.date()
-            close_date_str = close_date.isoformat()
             self._ensure_daily_row(close_date)
 
-            if trade_timestamp.tzinfo is None:
-                trade_dt = trade_timestamp.replace(tzinfo=timezone.utc)
-            else:
-                trade_dt = trade_timestamp
-            duration_sec = max(0.0, (now_dt - trade_dt).total_seconds())
+            for trade_id, pnl, status in updates:
+                cursor = self.conn.execute('SELECT timestamp, realized_pnl FROM trade_log WHERE id = ?', (trade_id,))
+                row = cursor.fetchone()
+                if not row:
+                    logger.warning(f"Trade {trade_id} not found for PnL update.")
+                    continue
 
-            self.conn.execute('''
-                UPDATE trade_log
-                SET realized_pnl = ?, status = ?, closed_at = ?, duration_seconds = ?
-                WHERE id = ?
-            ''', (pnl, status, now_dt.isoformat(), duration_sec, trade_id))
-            
-            # Credit realized PnL to the actual close date (today)
-            if trade_date_str == close_date_str:
-                pnl_diff = pnl - old_pnl
-                if pnl_diff != 0:
+                old_pnl = float(row['realized_pnl'] or 0.0)
+                try:
+                    trade_timestamp = datetime.fromisoformat(row['timestamp'])
+                except Exception:
+                    trade_timestamp = now_dt
+                trade_date_str = trade_timestamp.date().isoformat()
+
+                if trade_timestamp.tzinfo is None:
+                    trade_dt = trade_timestamp.replace(tzinfo=timezone.utc)
+                else:
+                    trade_dt = trade_timestamp
+                duration_sec = max(0.0, (now_dt - trade_dt).total_seconds())
+
+                self.conn.execute('''
+                    UPDATE trade_log
+                    SET realized_pnl = ?, status = ?, closed_at = ?, duration_seconds = ?
+                    WHERE id = ?
+                ''', (pnl, status, now_dt.isoformat(), duration_sec, trade_id))
+
+                if trade_date_str == close_date_str:
+                    pnl_diff = pnl - old_pnl
+                    if pnl_diff != 0:
+                        self.conn.execute('''
+                            UPDATE daily_state
+                            SET realized_pnl = realized_pnl + ?
+                            WHERE date = ?
+                        ''', (pnl_diff, close_date_str))
+                else:
+                    if old_pnl != 0:
+                        self.conn.execute('''
+                            UPDATE daily_state
+                            SET realized_pnl = realized_pnl - ?
+                            WHERE date = ?
+                        ''', (old_pnl, trade_date_str))
                     self.conn.execute('''
                         UPDATE daily_state
                         SET realized_pnl = realized_pnl + ?
                         WHERE date = ?
-                    ''', (pnl_diff, close_date_str))
-            else:
-                # Multi-day trade: remove old open-date pnl if any, and record realized pnl on close date
-                if old_pnl != 0:
-                    self.conn.execute('''
-                        UPDATE daily_state
-                        SET realized_pnl = realized_pnl - ?
-                        WHERE date = ?
-                    ''', (old_pnl, trade_date_str))
-                self.conn.execute('''
-                    UPDATE daily_state
-                    SET realized_pnl = realized_pnl + ?
-                    WHERE date = ?
-                ''', (pnl, close_date_str))
-                
-        logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}, duration={format_duration(duration_sec)}")
+                    ''', (pnl, close_date_str))
+
+                updated_logs.append((trade_id, pnl, status, duration_sec))
+
+        for trade_id, pnl, status, duration_sec in updated_logs:
+            logger.info(f"Updated trade {trade_id}: PnL={pnl}, status={status}, duration={format_duration(duration_sec)}")
+
         self._sync_trades_csv()
+
+    def update_trade_pnl(self, trade_id: int, pnl: float, status: str) -> None:
+        """Update a trade's realized PnL and status, recording close timestamp and duration."""
+        self.batch_update_trade_pnls([(trade_id, pnl, status)])
 
     def _sync_trades_csv(self) -> None:
         """Export current trade_log table into trades_history.csv."""
