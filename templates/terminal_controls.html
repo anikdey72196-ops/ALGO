@@ -647,7 +647,7 @@
       // Local State Cache per pair
       const pairsLocal = {
         'XAUUSD': { lot: 0.05, sl: 25.0, enabled: true, isDirty: false, tickVal: 10 },
-        'GBPUSD': { lot: 0.12, sl: 20.0, enabled: true, isDirty: false, tickVal: 10 },
+        'GBPUSD': { lot: 0.12, sl: 6.0, enabled: true, isDirty: false, tickVal: 10 },
         'EURUSD': { lot: 0.10, sl: 15.0, enabled: true, isDirty: false, tickVal: 10 },
         'BTCUSD': { lot: 0.01, sl: 150.0, enabled: true, isDirty: false, tickVal: 1 },
         'ETHUSD': { lot: 0.05, sl: 80.0, enabled: true, isDirty: false, tickVal: 2 }
@@ -713,6 +713,34 @@
           masterBtn.disabled = true;
 
           const nextState = !isBotActive;
+
+          // If activating, flush any unsaved/pending pair settings immediately to the server!
+          if (nextState) {
+            for (const sym of Object.keys(pairSaveTimers)) {
+              if (pairSaveTimers[sym]) {
+                clearTimeout(pairSaveTimers[sym]);
+                pairSaveTimers[sym] = null;
+              }
+            }
+            for (const [sym, p] of Object.entries(pairsLocal)) {
+              if (p.isDirty) {
+                try {
+                  await fetch('/api/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'update_pair_settings',
+                      pair: sym,
+                      lot: p.lot,
+                      sl: p.sl
+                    })
+                  });
+                  p.isDirty = false;
+                } catch (_) {}
+              }
+            }
+          }
+
           updateBotUI(nextState);
 
           try {
