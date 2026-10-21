@@ -303,8 +303,8 @@ def test_api_update_unified():
             "strategies": {"smc": True, "scalp5m": True, "ict": True, "orderFlow": True},
             "pairs": {
                 "xauusd": {"active": True, "lot": 0.05, "sl": 25.0},
-                "eurusd": {"active": True, "lot": 0.10, "sl": 15.0},
-                "gbpusd": {"active": True, "lot": 0.12, "sl": 20.0},
+                "eurusd": {"active": True, "lot": 0.12, "sl": 6.0},
+                "gbpusd": {"active": True, "lot": 0.12, "sl": 6.0},
                 "btcusd": {"active": True, "lot": 0.01, "sl": 150.0},
                 "ethusd": {"active": True, "lot": 0.05, "sl": 80.0}
             }

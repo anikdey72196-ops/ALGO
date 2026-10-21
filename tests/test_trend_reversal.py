@@ -303,6 +303,8 @@ class TestTrendReversalDetector(unittest.TestCase):
 
         bot = TradingBot(TradingConfig(), load_saved_settings=False)
         bot.broker = MagicMock()
+        bot.broker.get_account_equity = MagicMock(return_value=10000.0)
+        bot.broker.get_account_info = MagicMock(return_value=MagicMock(equity=10000.0, balance=10000.0, margin_free=9000.0))
         bot.broker.get_current_price = MagicMock(return_value=MagicMock(bid=105.0, ask=105.05, spread=0.05))
 
         # Provide synthetic uptrend with bearish CHoCH for XAUUSD
