@@ -1930,6 +1930,23 @@
           deactivateBtn.disabled = true;
         }
       }
+
+      const isRunning = state.botStatus === 'RUNNING';
+      if (aiGateCheckbox) {
+        aiGateCheckbox.disabled = isRunning;
+        if (aiGateCheckbox.parentElement) {
+          aiGateCheckbox.parentElement.classList.toggle('opacity-60', isRunning);
+          aiGateCheckbox.parentElement.classList.toggle('cursor-not-allowed', isRunning);
+        }
+      }
+      if (mlShadowCheckbox) {
+        mlShadowCheckbox.disabled = isRunning;
+        if (mlShadowCheckbox.parentElement) {
+          mlShadowCheckbox.parentElement.classList.toggle('opacity-60', isRunning);
+          mlShadowCheckbox.parentElement.classList.toggle('cursor-not-allowed', isRunning);
+        }
+      }
+
       renderPairs();
     }
 
@@ -2034,11 +2051,21 @@
     const mlShadowCheckbox = document.getElementById('mlShadowCheckbox');
 
     aiGateCheckbox.addEventListener('change', (e) => {
+      if (state.botStatus === 'RUNNING') {
+        showToast("⚠️ Engine is ACTIVE! Standby or halt bot first before changing AI Gate.", true);
+        aiGateCheckbox.checked = !e.target.checked;
+        return;
+      }
       state.aiGateEnabled = e.target.checked;
     });
 
     if (mlShadowCheckbox) {
       mlShadowCheckbox.addEventListener('change', (e) => {
+        if (state.botStatus === 'RUNNING') {
+          showToast("⚠️ Engine is ACTIVE! Standby or halt bot first before changing ML Shadow Mode.", true);
+          mlShadowCheckbox.checked = !e.target.checked;
+          return;
+        }
         state.mlShadowMode = e.target.checked;
       });
     }

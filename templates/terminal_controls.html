@@ -583,9 +583,12 @@
 </div>
 
 <!-- Global Engine Guard Rails -->
-<div class="bg-white border border-slate-200 rounded-lg p-3 space-y-3 shadow-xs">
+<div class="bg-white border border-slate-200 rounded-lg p-3 space-y-3 shadow-xs" id="guardRailsCard">
 <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500 pb-1 border-b border-slate-100 flex items-center justify-between">
-  <span>Global Engine Guard Rails</span>
+  <div class="flex items-center gap-1.5">
+    <span>Global Engine Guard Rails</span>
+    <span id="guardRailsLockedBadge" class="text-[9px] font-mono px-1.5 py-0.2 rounded font-bold bg-amber-50 text-amber-700 border border-amber-200 {% if not is_active %}hidden{% endif %}">LOCKED (STANDBY FIRST)</span>
+  </div>
   <span class="material-symbols-outlined text-[15px] text-slate-400">security</span>
 </div>
 
@@ -598,7 +601,7 @@
 </div>
 <span class="text-[10px] text-slate-500 mt-0.5">Anchor SL along moving average tick on profitable trades</span>
 </div>
-<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<label class="relative inline-flex items-center cursor-pointer shrink-0" id="trailingToggleWrapper" title="Toggle Trailing Stop (Locked while Engine is Active)">
 <input checked="" class="sr-only" id="trailingToggle" type="checkbox">
 <div class="w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5" id="trailingBg">
 <div class="w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm" id="trailingDot"></div>
@@ -616,7 +619,7 @@
 </div>
 <span class="text-[10px] text-slate-500 mt-0.5">Observe &amp; record trap setups without vetoing (OFF = Live Veto)</span>
 </div>
-<label class="relative inline-flex items-center cursor-pointer shrink-0" title="Toggle ML Shadow Mode">
+<label class="relative inline-flex items-center cursor-pointer shrink-0" id="mlShadowToggleWrapper" title="Toggle ML Shadow Mode (Locked while Engine is Active)">
 <input {% if ml_shadow_mode %}checked=""{% endif %} class="sr-only" id="mlShadowToggle" type="checkbox">
 <div class="w-8 h-4.5 {% if ml_shadow_mode %}bg-indigo-600{% else %}bg-slate-300{% endif %} rounded-full transition-colors flex items-center p-0.5" id="mlShadowBg">
 <div class="w-3.5 h-3.5 bg-white rounded-full transition-transform {% if ml_shadow_mode %}translate-x-3.5{% else %}translate-x-0{% endif %} shadow-sm" id="mlShadowDot"></div>
@@ -634,7 +637,7 @@
 </div>
 <span class="text-[10px] text-slate-500 mt-0.5">Require Gemini AI consensus before trade execution</span>
 </div>
-<label class="relative inline-flex items-center cursor-pointer shrink-0" title="Toggle AI Gate">
+<label class="relative inline-flex items-center cursor-pointer shrink-0" id="aiGateToggleWrapper" title="Toggle AI Gate (Locked while Engine is Active)">
 <input {% if ai_confirmation_enabled %}checked=""{% endif %} class="sr-only" id="aiGateToggle" type="checkbox">
 <div class="w-8 h-4.5 {% if ai_confirmation_enabled %}bg-purple-600{% else %}bg-slate-300{% endif %} rounded-full transition-colors flex items-center p-0.5" id="aiGateBg">
 <div class="w-3.5 h-3.5 bg-white rounded-full transition-transform {% if ai_confirmation_enabled %}translate-x-3.5{% else %}translate-x-0{% endif %} shadow-sm" id="aiGateDot"></div>
@@ -756,6 +759,32 @@
               document.getElementById('headerLiveDot').className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
             }
           }
+
+          // Sync Global Guard Rails lock state
+          const lockedBadge = document.getElementById('guardRailsLockedBadge');
+          if (lockedBadge) {
+            if (isBotActive) {
+              lockedBadge.classList.remove('hidden');
+            } else {
+              lockedBadge.classList.add('hidden');
+            }
+          }
+          if (trailingToggle) trailingToggle.disabled = isBotActive;
+          if (mlShadowToggle) mlShadowToggle.disabled = isBotActive;
+          if (aiGateToggle) aiGateToggle.disabled = isBotActive;
+
+          ['trailingToggleWrapper', 'mlShadowToggleWrapper', 'aiGateToggleWrapper'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              if (isBotActive) {
+                el.classList.add('opacity-60', 'cursor-not-allowed');
+                el.classList.remove('cursor-pointer');
+              } else {
+                el.classList.remove('opacity-60', 'cursor-not-allowed');
+                el.classList.add('cursor-pointer');
+              }
+            }
+          });
         }
       }
 
@@ -1136,24 +1165,62 @@
         }
       });
 
+      // Click interceptor for Guard Rail toggles while bot is actively running
+      ['trailingToggleWrapper', 'mlShadowToggleWrapper', 'aiGateToggleWrapper'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('click', (e) => {
+            if (isBotActive) {
+              e.preventDefault();
+              e.stopPropagation();
+              showToast('⚠️ Engine is ACTIVE! Standby bot first to modify Guard Rail settings.');
+            }
+          }, true);
+        }
+      });
+
       // Trailing stop toggle
       if (trailingToggle) {
         trailingToggle.addEventListener('change', async (e) => {
+          if (isBotActive) {
+            showToast('⚠️ Engine is ACTIVE! Standby bot first to modify Trailing Stop Protection.');
+            trailingToggle.checked = !e.target.checked;
+            if (trailingBg) trailingBg.className = trailingToggle.checked ? 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5' : 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
+            if (trailingDot) trailingDot.className = trailingToggle.checked ? 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm' : 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+            return;
+          }
           const isChecked = e.target.checked;
           if (trailingBg) trailingBg.className = isChecked ? 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5' : 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
           if (trailingDot) trailingDot.className = isChecked ? 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm' : 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
 
-          await fetch('/api/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'toggle_trailing', enabled: isChecked })
-          }).catch(() => {});
+          try {
+            const res = await fetch('/api/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'toggle_trailing', enabled: isChecked })
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              showToast(err.detail || '⚠️ Failed to update Trailing Stop');
+              trailingToggle.checked = !isChecked;
+              if (trailingBg) trailingBg.className = trailingToggle.checked ? 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5' : 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5';
+              if (trailingDot) trailingDot.className = trailingToggle.checked ? 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm' : 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+            }
+          } catch (_) {
+            showToast('⚠️ Network error: Could not update Trailing Stop');
+            trailingToggle.checked = !isChecked;
+          }
         });
       }
 
       // ML Shadow Mode toggle
       if (mlShadowToggle) {
         mlShadowToggle.addEventListener('change', async (e) => {
+          if (isBotActive) {
+            showToast('⚠️ Engine is ACTIVE! Standby bot first to modify ML Shadow Mode.');
+            updateMLShadowUI(!e.target.checked);
+            return;
+          }
           const isChecked = e.target.checked;
           updateMLShadowUI(isChecked);
           try {
@@ -1165,10 +1232,13 @@
             if (res.ok) {
               showToast(isChecked ? '👁️ ML Shadow Mode ON (Observing only)' : '⚡ ML Shadow Mode OFF (Live Veto Active)');
             } else {
-              showToast('⚠️ Failed to update ML Shadow Mode');
+              const err = await res.json().catch(() => ({}));
+              showToast(err.detail || '⚠️ Failed to update ML Shadow Mode');
+              updateMLShadowUI(!isChecked);
             }
           } catch (_) {
             showToast('⚠️ Network error: Could not update ML Shadow Mode');
+            updateMLShadowUI(!isChecked);
           }
         });
       }
@@ -1177,7 +1247,7 @@
       if (aiGateToggle) {
         aiGateToggle.addEventListener('change', async (e) => {
           if (isBotActive) {
-            showToast('⚠️ Standby bot first before changing AI Gate!');
+            showToast('⚠️ Engine is ACTIVE! Standby bot first before changing AI Gate.');
             updateAIGateUI(!e.target.checked);
             return;
           }
@@ -1198,6 +1268,7 @@
             }
           } catch (_) {
             showToast('⚠️ Network error');
+            updateAIGateUI(!isChecked);
           }
         });
       }

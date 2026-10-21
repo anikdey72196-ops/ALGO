@@ -1086,6 +1086,11 @@ async def handle_dashboard_update(payload: dict):
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
     elif action == "toggle_ml_shadow":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="ML Shadow Mode setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
         enabled = payload.get("enabled", True)
         bot_instance.config.ml_shadow_mode = bool(enabled)
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
@@ -1169,14 +1174,15 @@ async def handle_dashboard_update(payload: dict):
 
         bot_instance.config.selected_symbols = selected_symbols
 
-        # Also sync global guard rails if provided in payload
-        if "ml_shadow_mode" in payload or "mlShadowMode" in payload:
-            m_val = bool(payload.get("ml_shadow_mode", payload.get("mlShadowMode", True)))
-            bot_instance.config.ml_shadow_mode = m_val
-            if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
-                bot_instance.trap_svc.cfg.shadow_mode = m_val
-        if "ai_confirmation_enabled" in payload or "aiGateEnabled" in payload:
-            bot_instance.config.ai_confirmation_enabled = bool(payload.get("ai_confirmation_enabled", payload.get("aiGateEnabled", True)))
+        # Also sync global guard rails if provided in payload and bot is NOT active
+        if not bot_instance.is_active:
+            if "ml_shadow_mode" in payload or "mlShadowMode" in payload:
+                m_val = bool(payload.get("ml_shadow_mode", payload.get("mlShadowMode", True)))
+                bot_instance.config.ml_shadow_mode = m_val
+                if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+                    bot_instance.trap_svc.cfg.shadow_mode = m_val
+            if "ai_confirmation_enabled" in payload or "aiGateEnabled" in payload:
+                bot_instance.config.ai_confirmation_enabled = bool(payload.get("ai_confirmation_enabled", payload.get("aiGateEnabled", True)))
 
         bot_instance.save_settings()
         invalidate_state_cache()
@@ -1627,6 +1633,11 @@ async def update_configuration(payload: BotConfigUpdate):
             bot_instance.trap_svc.cfg.p_genuine_threshold = 1.0 - payload.ml_max_sl_probability
 
     if payload.ml_shadow_mode is not None:
+        if bot_instance.is_active and payload.ml_shadow_mode != getattr(bot_instance.config, 'ml_shadow_mode', True):
+            raise HTTPException(
+                status_code=400,
+                detail="ML Shadow Mode setting is LOCKED during activation! Deactivate the bot first to toggle ML Shadow Mode."
+            )
         bot_instance.config.ml_shadow_mode = payload.ml_shadow_mode
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
             bot_instance.trap_svc.cfg.shadow_mode = payload.ml_shadow_mode
