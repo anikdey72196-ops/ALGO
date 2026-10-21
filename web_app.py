@@ -396,7 +396,17 @@ async def serve_terminal():
 @app.get("/terminal/controls", response_class=HTMLResponse)
 async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
-    return templates.TemplateResponse(request=request, name="terminal_controls.html", context={"is_active": bot_instance.is_active})
+    ml_shadow = getattr(bot_instance.config, "ml_shadow_mode", True) if bot_instance else True
+    ai_gate = getattr(bot_instance.config, "ai_confirmation_enabled", True) if bot_instance else True
+    return templates.TemplateResponse(
+        request=request, 
+        name="terminal_controls.html", 
+        context={
+            "is_active": bot_instance.is_active if bot_instance else False,
+            "ml_shadow_mode": ml_shadow,
+            "ai_confirmation_enabled": ai_gate,
+        }
+    )
 
 
 @app.get("/terminal/strategy", response_class=HTMLResponse)
@@ -1075,6 +1085,39 @@ async def handle_dashboard_update(payload: dict):
         asyncio.create_task(broadcast_bot_state())
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
+    elif action == "toggle_ml_shadow":
+        enabled = payload.get("enabled", True)
+        bot_instance.config.ml_shadow_mode = bool(enabled)
+        if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+            bot_instance.trap_svc.cfg.shadow_mode = bool(enabled)
+        bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
+        bot_instance.log(f"🎛️ ML Shadow Mode updated to: {'ON (Observe Only)' if enabled else 'OFF (Live Veto Active)'}")
+        return {
+            "status": "success",
+            "ml_shadow_mode": bot_instance.config.ml_shadow_mode,
+            "message": f"ML Shadow Mode {'engaged (observe only)' if enabled else 'disengaged (live gating)'}"
+        }
+
+    elif action == "toggle_ai_gate":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="AI Confirmation setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
+        enabled = payload.get("enabled", True)
+        bot_instance.config.ai_confirmation_enabled = bool(enabled)
+        bot_instance.save_settings()
+        invalidate_state_cache()
+        asyncio.create_task(broadcast_bot_state())
+        bot_instance.log(f"🎛️ AI Confirmation Gate updated to: {'ON' if enabled else 'OFF'}")
+        return {
+            "status": "success",
+            "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
+            "message": f"AI Gate {'enabled' if enabled else 'disabled'}"
+        }
+
     elif action == "save_all_pairs":
         pairs_data = payload.get("pairs", {})
         if not pairs_data:
@@ -1125,6 +1168,16 @@ async def handle_dashboard_update(payload: dict):
                 if "enabled" in p_vals: bot_instance.config.pair3.enabled = p_cfg.enabled
 
         bot_instance.config.selected_symbols = selected_symbols
+
+        # Also sync global guard rails if provided in payload
+        if "ml_shadow_mode" in payload or "mlShadowMode" in payload:
+            m_val = bool(payload.get("ml_shadow_mode", payload.get("mlShadowMode", True)))
+            bot_instance.config.ml_shadow_mode = m_val
+            if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+                bot_instance.trap_svc.cfg.shadow_mode = m_val
+        if "ai_confirmation_enabled" in payload or "aiGateEnabled" in payload:
+            bot_instance.config.ai_confirmation_enabled = bool(payload.get("ai_confirmation_enabled", payload.get("aiGateEnabled", True)))
+
         bot_instance.save_settings()
         invalidate_state_cache()
         asyncio.create_task(broadcast_bot_state())
