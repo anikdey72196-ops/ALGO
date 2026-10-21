@@ -187,16 +187,32 @@ class TradingBot:
         self._htf_cache: dict[str, object] = {}
         self._ltf_cache: dict[str, object] = {}
         self._daily_bias_cache: dict[str, dict] = {}
+        self._settings_last_mtime: float = 0.0
 
         # Load persisted settings if present
         if load_saved_settings:
             self.load_settings()
+
+    def check_and_reload_settings(self) -> None:
+        """Check if bot_settings.json has been modified on disk and auto-reload if changed."""
+        settings_path = Path(__file__).parent / "bot_settings.json"
+        if settings_path.exists():
+            try:
+                mtime = settings_path.stat().st_mtime
+                if self._settings_last_mtime > 0 and mtime > self._settings_last_mtime:
+                    logger.info("Detected change in bot_settings.json on disk — auto-reloading settings...")
+                    self.load_settings()
+                elif self._settings_last_mtime == 0.0:
+                    self._settings_last_mtime = mtime
+            except Exception as e:
+                logger.debug(f"Failed to check bot_settings.json mtime: {e}")
 
     def load_settings(self) -> None:
         """Load persisted user settings from bot_settings.json."""
         settings_path = Path(__file__).parent / "bot_settings.json"
         if settings_path.exists():
             try:
+                self._settings_last_mtime = settings_path.stat().st_mtime
                 import json
                 with open(settings_path, "r", encoding="utf-8") as f:
                     saved = json.load(f)
@@ -679,6 +695,9 @@ class TradingBot:
         self._htf_cache.clear()
         self._ltf_cache.clear()
 
+        # Step 0: Auto-reload settings if bot_settings.json was updated on disk
+        self.check_and_reload_settings()
+
         # Step 1: Day rollover & position sync
         self._check_day_rollover()
         self._sync_open_positions()
@@ -806,6 +825,13 @@ class TradingBot:
                     pair_sl = p_item.fixed_sl_pips
                 if getattr(p_item, 'avg_spread_points', None) is not None:
                     pair_spread = p_item.avg_spread_points
+
+            # Code-Level Hard Default Fallbacks for EURUSD & GBPUSD
+            if sym_clean in ("EURUSD", "GBPUSD"):
+                if pair_sl is None or pair_sl <= 0:
+                    pair_sl = 6.0
+                if pair_lot is None or pair_lot <= 0:
+                    pair_lot = 0.12
 
             active_pairs.append({
                 "pair_num": len(active_pairs) + 1,
@@ -1361,6 +1387,33 @@ class TradingBot:
                     f"| Equity: {eq_val}"
                 )
 
+                # ── Step 2c-4: Strict Stop Loss Live-Anchoring & Hard Cap Safety Ceiling ──
+                eff_sl_pips = pair_sl
+                if (eff_sl_pips is None or eff_sl_pips <= 0) and symbol in ("EURUSD", "GBPUSD"):
+                    eff_sl_pips = 6.0
+
+                live_entry = quote.ask if best_signal.direction == Direction.BUY else quote.bid
+
+                if eff_sl_pips is not None and eff_sl_pips > 0:
+                    sl_dist = eff_sl_pips * instrument.pip_size
+                    if best_signal.direction == Direction.BUY:
+                        best_signal.stop_loss = round(live_entry - sl_dist, instrument.digits)
+                    else:
+                        best_signal.stop_loss = round(live_entry + sl_dist, instrument.digits)
+
+                    best_signal.entry_price = live_entry
+                    best_signal.sl_distance = sl_dist
+
+                    # Re-anchor Take Profit to maintain desired R:R ratio
+                    eff_rr = max(1.5, min(3.0, getattr(best_signal, "rr_ratio", 2.0)))
+                    tp_dist = sl_dist * eff_rr
+                    if best_signal.direction == Direction.BUY:
+                        best_signal.take_profit = round(live_entry + tp_dist, instrument.digits)
+                    else:
+                        best_signal.take_profit = round(live_entry - tp_dist, instrument.digits)
+                    best_signal.tp_distance = tp_dist
+                    best_signal.rr_ratio = eff_rr
+
                 # Enforce strict R:R bounds [min 1:1.5, max 1:3.0] prior to submission (skip for ICT AOX models)
                 if getattr(best_signal, "strategy_id", "") != "ICT" and "ICT" not in str(best_signal.strategy_name).upper():
                     min_rr_limit = getattr(self.config.risk, 'min_rr_ratio', 1.5)
@@ -1375,6 +1428,14 @@ class TradingBot:
                     )
                     best_signal.take_profit = clamped_tp
                     best_signal.rr_ratio = eff_rr
+
+                # Final Hard Safety Ceiling: Under no circumstance can SL distance exceed eff_sl_pips if configured
+                if eff_sl_pips is not None and eff_sl_pips > 0:
+                    current_sl_pips = abs(live_entry - best_signal.stop_loss) / instrument.pip_size
+                    if current_sl_pips > eff_sl_pips + 0.01:
+                        sl_dist = eff_sl_pips * instrument.pip_size
+                        best_signal.stop_loss = round(live_entry - sl_dist if best_signal.direction == Direction.BUY else live_entry + sl_dist, instrument.digits)
+                        self.log(f"  🛡️ [SL HARD CAP ENFORCED] SL distance clamped strictly to {eff_sl_pips:.1f} pips on {symbol} @ {best_signal.stop_loss}", level="WARNING")
 
                 # Mark order submission in EQM
                 self.eqm.mark_submission(
@@ -1393,7 +1454,7 @@ class TradingBot:
                     symbol=symbol,
                     direction=best_signal.direction,
                     lot_size=auth.lot_size,
-                    entry_price=quote.ask if best_signal.direction == Direction.BUY else quote.bid,
+                    entry_price=live_entry,
                     stop_loss=best_signal.stop_loss,
                     take_profit=best_signal.take_profit,
                     magic=best_signal.magic_number,

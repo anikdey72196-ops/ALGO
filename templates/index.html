@@ -2103,7 +2103,7 @@
       const selectedSyms = Object.values(state.pairs).filter(p => p.active).map(p => p.symbol);
 
       try {
-        await fetch('/api/configure', {
+        const res = await fetch('/api/configure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2115,6 +2115,10 @@
             reversal_strategy_enabled: state.strategies.reversal ? state.strategies.reversal.active : false
           })
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server returned ${res.status}`);
+        }
         await apiUpdate('/api/update', { action: 'save_configuration', config: configSnapshot });
         showToast("Configuration and Pair Lot/SL settings saved!");
       } catch (e) {

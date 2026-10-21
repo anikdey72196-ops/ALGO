@@ -359,6 +359,7 @@ class TestAuthorizeTrade(unittest.TestCase):
         result = self.risk_engine.authorize_trade(
             signal=self.signal,
             current_equity=10_000.0,
+            current_time=datetime(2026, 10, 22, 14, 0, tzinfo=timezone.utc),
         )
         self.assertFalse(result.authorized)
         self.assertIn("Max open positions for EURUSD reached", result.rejection_reason)
