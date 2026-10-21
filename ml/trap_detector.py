@@ -98,7 +98,7 @@ class TrapDetectorConfig(BaseModel):
     # Gate behavior
     p_genuine_threshold: float = 0.50       # block if P(genuine) < threshold
     max_sl_probability: float = 0.50        # block if P(SL) > max_sl_probability
-    shadow_mode: bool = True                # passive observation without vetoing trades
+    shadow_mode: bool = False               # passive observation without vetoing trades
     shadow_until_samples: int = 0           # 0 = immediate active gating
     fail_open_on_error: bool = False        # inference error -> allow? (fail closed in production)
 

@@ -124,6 +124,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         """When ML model detects high SL probability, trade must be skipped and logged."""
         config = TradingConfig(use_mock_broker=True)
         config.ml_gating_enabled = True
+        config.ml_shadow_mode = False
         config.ml_max_sl_probability = 0.40  # Max allowable SL probability is 40%
         bot = TradingBot(config=config, load_saved_settings=False)
 
@@ -180,6 +181,7 @@ class TestMLDecisionOverride(unittest.TestCase):
 
         # Run tick
         bot.config.selected_symbols = ["EURUSD"]
+        bot.config.pair_configs = {}
         bot.state.is_circuit_breaker_active = MagicMock(return_value=False)
         bot.news_filter.is_blackout = MagicMock(return_value=(False, "No blackout"))
         bot.news_filter.check_news_blackout = MagicMock(return_value=MagicMock(blocked=False))
@@ -203,6 +205,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         """When ML model detects low SL probability, trade must proceed to AI & Risk."""
         config = TradingConfig(use_mock_broker=True)
         config.ml_gating_enabled = True
+        config.ml_shadow_mode = False
         config.ml_max_sl_probability = 0.50
         bot = TradingBot(config=config, load_saved_settings=False)
 
@@ -283,6 +286,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         bot.config.pair2.enabled = False
         bot.config.pair3.enabled = False
         bot.config.selected_symbols = ["EURUSD"]
+        bot.config.pair_configs = {}
         bot.state.is_circuit_breaker_active = MagicMock(return_value=False)
         bot.news_filter.is_blackout = MagicMock(return_value=(False, "No blackout"))
         bot.news_filter.check_news_blackout = MagicMock(return_value=MagicMock(blocked=False))
@@ -444,6 +448,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         bot.config.pair2.enabled = False
         bot.config.pair3.enabled = False
         bot.config.selected_symbols = ["EURUSD"]
+        bot.config.pair_configs = {}
         bot.state.is_circuit_breaker_active = MagicMock(return_value=False)
         bot.news_filter.is_blackout = MagicMock(return_value=(False, "No blackout"))
         bot.news_filter.check_news_blackout = MagicMock(return_value=MagicMock(blocked=False))

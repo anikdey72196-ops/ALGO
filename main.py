@@ -1329,14 +1329,15 @@ class TradingBot:
 
                 # ── Step 2c-2: AI Second-Opinion Confirmation Gate ──
                 ai_verdict = self.ai_analyst.evaluate_setup(best_signal, htf_analysis, current_spread)
-                eqm_order.ai_conviction = ai_verdict.confidence
+                conf_val = float(ai_verdict.confidence) if isinstance(getattr(ai_verdict, "confidence", None), (int, float)) else 85.0
+                eqm_order.ai_conviction = conf_val
 
                 if not ai_verdict.confirmed:
-                    self.log(f"  🤖 AI GATE REJECTED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}", level="WARNING")
+                    self.log(f"  🤖 AI GATE REJECTED ({conf_val:.1f}%): {ai_verdict.reason}", level="WARNING")
                     self.eqm.mark_rejected(eqm_order.order_id, rejection_code=4002, rejection_reason=f"AI Rejected: {ai_verdict.reason}")
                     continue
 
-                self.log(f"  🤖 AI CONFIRMED ({ai_verdict.confidence:.1f}%): {ai_verdict.reason}")
+                self.log(f"  🤖 AI CONFIRMED ({conf_val:.1f}%): {ai_verdict.reason}")
 
                 # ── Step 2c-3: Risk authorization (Pair-specific sizing, Market Regime, Temporal & Layered scaling) ──
                 sig_risk_frac = getattr(best_signal, "risk_fraction", 1.0) or 1.0
@@ -1411,17 +1412,19 @@ class TradingBot:
                 order_state, order_result = self.order_manager.submit_bracket_order(bracket, client_order_id)
 
                 if order_result and order_result.success:
+                    fill_p_str = f"{order_result.fill_price:.5f}" if isinstance(getattr(order_result, "fill_price", None), (int, float)) else str(getattr(order_result, "fill_price", ""))
                     self.log(
-                        f"  ✅ ORDER FILLED ({order_state.value}): ID={order_result.order_id} "
-                        f"@ {order_result.fill_price:.5f} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
+                        f"  ✅ ORDER FILLED ({getattr(order_state, 'value', order_state)}): ID={order_result.order_id} "
+                        f"@ {fill_p_str} ({bracket.symbol} {bracket.lot_size} lots | {best_signal.strategy_name})"
                     )
-                    # Record in state with strategy attribution
+                    order_id_int = int(order_result.order_id) if isinstance(getattr(order_result, "order_id", None), int) else (int(order_result.order_id) if str(getattr(order_result, "order_id", "")).isdigit() else 9999)
+                    entry_p_float = float(order_result.fill_price) if isinstance(getattr(order_result, "fill_price", None), (int, float)) else float(bracket.entry_price)
                     trade_record = TradeRecord(
-                        id=order_result.order_id,
+                        id=order_id_int,
                         timestamp=now_utc,
                         symbol=symbol,
                         direction=best_signal.direction,
-                        entry_price=order_result.fill_price or bracket.entry_price,
+                        entry_price=entry_p_float,
                         stop_loss=bracket.stop_loss,
                         take_profit=bracket.take_profit,
                         lot_size=bracket.lot_size,
@@ -1454,9 +1457,12 @@ class TradingBot:
                     )
                     if filled_rec:
                         self.spread_guard.record_fill_slippage(symbol, filled_rec.slippage_pips)
+                        lat_ms_str = f"{filled_rec.latency.total_latency_ms:.1f}ms" if isinstance(getattr(getattr(filled_rec, "latency", None), "total_latency_ms", None), (int, float)) else f"{getattr(getattr(filled_rec, 'latency', None), 'total_latency_ms', 0.0)}ms"
+                        slip_p_str = f"{filled_rec.slippage_pips:+.2f}" if isinstance(getattr(filled_rec, "slippage_pips", None), (int, float)) else f"{getattr(filled_rec, 'slippage_pips', '+0.00')}"
+                        slip_atr_str = f"{filled_rec.slippage_pct_atr:.1f}%" if isinstance(getattr(filled_rec, "slippage_pct_atr", None), (int, float)) else f"{getattr(filled_rec, 'slippage_pct_atr', 0.0)}%"
                         self.log(
-                            f"  📊 [EQM] Executed in {filled_rec.latency.total_latency_ms:.1f}ms "
-                            f"| Slippage: {filled_rec.slippage_pips:+.2f} pips ({filled_rec.slippage_pct_atr:.1f}% ATR) "
+                            f"  📊 [EQM] Executed in {lat_ms_str} "
+                            f"| Slippage: {slip_p_str} pips ({slip_atr_str} ATR) "
                             f"| Retries: {filled_rec.retries_used}"
                         )
                 else:
