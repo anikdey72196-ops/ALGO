@@ -507,9 +507,9 @@ class PositionManager:
 
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():
-            time.sleep(self.poll_interval_sec)
-            if not self._stop_event.is_set():
-                self.process_positions()
+            if self._stop_event.wait(self.poll_interval_sec):
+                break
+            self.process_positions()
 
     def on_trade_closed(self, trade, pnl: float, status: str) -> None:
         """Feed completed trade back into SmartPartialTPService for continuous self-learning."""
