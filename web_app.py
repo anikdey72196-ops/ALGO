@@ -583,10 +583,14 @@ async def get_bot_state():
             today_stats = bot_instance.trap_svc.store.stats_today() if hasattr(bot_instance.trap_svc.store, "stats_today") else {}
             strat_stats = bot_instance.trap_svc.store.stats_by_strategy() if hasattr(bot_instance.trap_svc.store, "stats_by_strategy") else {}
             is_shadow = (
-                bot_instance.trap_svc.cfg.shadow_until_samples > 0
-                and bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples
-                and not bot_instance.trap_svc.model._sgd_fitted
-                and bot_instance.trap_svc.model.lgbm is None
+                getattr(bot_instance.config, "ml_shadow_mode", True)
+                or getattr(bot_instance.trap_svc.cfg, "shadow_mode", True)
+                or (
+                    bot_instance.trap_svc.cfg.shadow_until_samples > 0
+                    and bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples
+                    and not bot_instance.trap_svc.model._sgd_fitted
+                    and bot_instance.trap_svc.model.lgbm is None
+                )
             )
             strategy_models = {}
             if hasattr(bot_instance.trap_svc, "models"):

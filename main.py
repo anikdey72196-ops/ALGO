@@ -324,7 +324,7 @@ class TradingBot:
                     f"Pair1={self.config.pair1.symbol} (lot={self.config.pair1.fixed_lot_size}, sl={self.config.pair1.fixed_sl_pips}) | "
                     f"Pair2={self.config.pair2.symbol} (lot={self.config.pair2.fixed_lot_size}, sl={self.config.pair2.fixed_sl_pips}) | "
                     f"Pair3={self.config.pair3.symbol} (lot={self.config.pair3.fixed_lot_size}, sl={self.config.pair3.fixed_sl_pips}) | "
-                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f}, shadow={'ON' if getattr(self.config, 'ml_shadow_mode', False) else 'OFF'}) | "
+                    f"MLGate={'ON' if getattr(self.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(self.config, 'ml_max_sl_probability', 0.50):.2f}, shadow={'ON' if getattr(self.config, 'ml_shadow_mode', True) else 'OFF'}) | "
                     f"TemporalML={'ON' if getattr(self.config, 'temporal_ml_enabled', True) else 'OFF'}"
                 )
             except Exception as e:

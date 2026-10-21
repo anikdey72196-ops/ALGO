@@ -38,6 +38,9 @@ class DBRow(dict):
     def values(self):
         return self._values
 
+    def __iter__(self):
+        return iter(self._values)
+
 
 def _translate_sqlite_to_mysql(sql: str) -> str:
     """
