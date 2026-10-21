@@ -935,7 +935,11 @@ class TemporalEdgeMLModel:
 
             return True
         except Exception as e:
-            logger.error(f"Error loading TemporalEdgeML model from {target}: {e}")
+            logger.warning(f"TemporalEdgeML: Artifact {target} is incompatible with current environment ({e}). Rebuilding clean model artifact...")
+            try:
+                target.unlink(missing_ok=True)
+            except Exception:
+                pass
             return False
 
 

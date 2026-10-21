@@ -686,7 +686,7 @@ async def get_bot_state():
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
         ml_max_sl_probability=getattr(bot_instance.config, "ml_max_sl_probability", 0.50),
-        ml_shadow_mode=getattr(bot_instance.config, "ml_shadow_mode", False),
+        ml_shadow_mode=getattr(bot_instance.config, "ml_shadow_mode", True),
         temporal_ml_enabled=getattr(bot_instance.config, "temporal_ml_enabled", True),
         reversal_strategy_enabled=getattr(bot_instance.config, "reversal_strategy_enabled", False),
         equity=round(equity, 2),
@@ -1252,6 +1252,12 @@ async def handle_dashboard_update(payload: dict):
 
         if "aiGateEnabled" in config:
             bot_instance.config.ai_confirmation_enabled = bool(config["aiGateEnabled"])
+
+        if "mlShadowMode" in config or "ml_shadow_mode" in config:
+            m_val = bool(config.get("mlShadowMode", config.get("ml_shadow_mode", True)))
+            bot_instance.config.ml_shadow_mode = m_val
+            if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+                bot_instance.trap_svc.cfg.shadow_mode = m_val
 
         bot_instance.save_settings()
         invalidate_state_cache()

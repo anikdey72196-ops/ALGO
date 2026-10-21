@@ -138,7 +138,7 @@ class TradingBot:
             p_genuine_threshold=1.0 - getattr(self.config, 'ml_max_sl_probability', 0.50),
             max_sl_probability=getattr(self.config, 'ml_max_sl_probability', 0.50),
             shadow_until_samples=getattr(self.config, 'ml_shadow_until_samples', 0),
-            shadow_mode=getattr(self.config, 'ml_shadow_mode', False),
+            shadow_mode=getattr(self.config, 'ml_shadow_mode', True),
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
 
@@ -194,7 +194,7 @@ class TradingBot:
 
     def load_settings(self) -> None:
         """Load persisted user settings from bot_settings.json."""
-        settings_path = Path("bot_settings.json")
+        settings_path = Path(__file__).parent / "bot_settings.json"
         if settings_path.exists():
             try:
                 import json
@@ -306,8 +306,10 @@ class TradingBot:
                     self.is_active = saved["is_active"]
                 if "ml_shadow_mode" in saved:
                     self.config.ml_shadow_mode = bool(saved["ml_shadow_mode"])
-                    if hasattr(self, "trap_svc") and self.trap_svc:
-                        self.trap_svc.cfg.shadow_mode = self.config.ml_shadow_mode
+                else:
+                    self.config.ml_shadow_mode = getattr(self.config, 'ml_shadow_mode', True)
+                if hasattr(self, "trap_svc") and self.trap_svc:
+                    self.trap_svc.cfg.shadow_mode = self.config.ml_shadow_mode
                 if "weekend_retrain_enabled" in saved:
                     self.config.weekend_retrain_enabled = bool(saved["weekend_retrain_enabled"])
                 if "weekend_retrain_day" in saved:
@@ -389,7 +391,7 @@ class TradingBot:
                 "weekend_retrain_hour_utc": getattr(self.config, "weekend_retrain_hour_utc", 2),
                 "is_active": self.is_active,
             }
-            with open("bot_settings.json", "w", encoding="utf-8") as f:
+            with open(Path(__file__).parent / "bot_settings.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save bot settings to bot_settings.json: {e}")
@@ -1247,7 +1249,7 @@ class TradingBot:
                             eqm_order.ml_p_tp = p_tp
                             eqm_order.ml_p_sl = p_sl
 
-                            is_shadow = getattr(self.config, 'ml_shadow_mode', False) or getattr(self.trap_svc.cfg, 'shadow_mode', False)
+                            is_shadow = getattr(self.config, 'ml_shadow_mode', True) or getattr(self.trap_svc.cfg, 'shadow_mode', True)
                             priority_tag = " [HIGH PRIORITY DISCOUNT <0.5 FIB / SD -4.5]" if trap_ev.features.get("priority_discount", 0.0) == 1.0 else ""
 
                             if is_shadow:

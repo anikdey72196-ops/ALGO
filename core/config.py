@@ -828,7 +828,7 @@ class TradingConfig(BaseModel):
         description="Number of samples before active gating begins (0 = immediate active protection).",
     )
     ml_shadow_mode: bool = Field(
-        default=False,
+        default=True,
         description="When True, Trap Detector operates in Shadow Mode: observes, predicts, and records traps/losses without vetoing trades in live market.",
     )
     # Machine Learning Temporal & Session Edge Settings
