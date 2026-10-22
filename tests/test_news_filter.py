@@ -398,12 +398,25 @@ class TestSpreadFilter(unittest.TestCase):
         self.assertIn("2.0x", result.reason)
 
     def test_non_positive_avg_spread_skips_check(self):
-        """Zero or negative average spread passes without error or false block."""
+        """Zero or negative average spread passes without error or false block, preserving fields."""
         res_zero = NewsFilter.check_spread(current_spread=0.0002, avg_spread=0.0)
         self.assertFalse(res_zero.blocked)
+        self.assertEqual(res_zero.current_spread, 0.0002)
+        self.assertEqual(res_zero.avg_spread, 0.0)
+        self.assertIsNone(res_zero.reason)
 
         res_negative = NewsFilter.check_spread(current_spread=0.0002, avg_spread=-0.0001)
         self.assertFalse(res_negative.blocked)
+        self.assertEqual(res_negative.current_spread, 0.0002)
+        self.assertEqual(res_negative.avg_spread, -0.0001)
+        self.assertIsNone(res_negative.reason)
+
+        # Extreme spike with non-positive spread should still not block
+        res_spike = NewsFilter.check_spread(current_spread=99.9, avg_spread=-1.0)
+        self.assertFalse(res_spike.blocked)
+        self.assertEqual(res_spike.current_spread, 99.9)
+        self.assertEqual(res_spike.avg_spread, -1.0)
+        self.assertIsNone(res_spike.reason)
 
     def test_precision_formatting_forex_vs_metals(self):
         """Forex (<0.05) formats with 5 decimals; metals/indices (>=0.05) format with 2 decimals."""

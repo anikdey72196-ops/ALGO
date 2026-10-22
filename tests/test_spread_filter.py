@@ -42,12 +42,64 @@ def test_spread_filter_excessive_spread_blocking_and_formatting():
 
 def test_spread_filter_zero_or_negative_avg_spread_fallback():
     """Verify that non-positive avg_spread doesn't crash or block trades unconditionally."""
-    res = NewsFilter.check_spread(
+    # Zero avg_spread
+    res_zero = NewsFilter.check_spread(
         current_spread=0.00024,
         avg_spread=0.0,
         max_spread_multiple=2.0,
     )
-    assert not res.blocked
+    assert not res_zero.blocked
+    assert res_zero.current_spread == 0.00024
+    assert res_zero.avg_spread == 0.0
+    assert res_zero.reason is None
+
+    # Negative avg_spread
+    res_neg = NewsFilter.check_spread(
+        current_spread=0.00024,
+        avg_spread=-0.00010,
+        max_spread_multiple=2.0,
+    )
+    assert not res_neg.blocked
+    assert res_neg.current_spread == 0.00024
+    assert res_neg.avg_spread == -0.00010
+    assert res_neg.reason is None
+
+
+def test_spread_filter_non_positive_avg_spread_skips_even_on_extreme_spike():
+    """Verify that when avg_spread <= 0, the check is skipped and does NOT block even on huge spread spikes."""
+    res_spike_zero = NewsFilter.check_spread(
+        current_spread=10.0,  # Massive 100,000-pip spike on forex
+        avg_spread=0.0,
+        max_spread_multiple=1.5,
+    )
+    assert not res_spike_zero.blocked
+    assert res_spike_zero.current_spread == 10.0
+    assert res_spike_zero.avg_spread == 0.0
+    assert res_spike_zero.reason is None
+
+    res_spike_neg = NewsFilter.check_spread(
+        current_spread=5.0,
+        avg_spread=-0.5,
+        max_spread_multiple=0.5,
+    )
+    assert not res_spike_neg.blocked
+    assert res_spike_neg.current_spread == 5.0
+    assert res_spike_neg.avg_spread == -0.5
+    assert res_spike_neg.reason is None
+
+
+@pytest.mark.parametrize("avg_spread", [0.0, -0.0, -0.00001, -1.0, -50.0])
+def test_spread_filter_various_non_positive_avg_spread_values(avg_spread):
+    """Verify various non-positive avg_spread edge values consistently skip check and return blocked=False."""
+    res = NewsFilter.check_spread(
+        current_spread=0.00030,
+        avg_spread=avg_spread,
+        max_spread_multiple=2.0,
+    )
+    assert res.blocked is False
+    assert res.current_spread == 0.00030
+    assert res.avg_spread == avg_spread
+    assert res.reason is None
 
 
 def test_pair_settings_avg_spread_points_override():
