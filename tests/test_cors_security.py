@@ -85,6 +85,6 @@ def test_get_allowed_origins_env_parsing(monkeypatch):
     monkeypatch.setenv("ALLOWED_ORIGINS", "https://trading.secure-domain.com, *, http://another-allowed.com/")
     origins = get_allowed_origins()
 
-    assert "https://trading.secure-domain.com" in origins
-    assert "http://another-allowed.com" in origins
-    assert "*" not in origins
+    expected_origins = {"https://trading.secure-domain.com", "http://another-allowed.com"}
+    assert expected_origins.issubset(set(origins))
+    assert origins.count("*") == 0

@@ -142,6 +142,9 @@ class ReconciliationEngine:
                         logger.error(f"[RECONCILE] Failed to adopt orphan position #{ticket}: {e}")
 
         except Exception as e:
+            if "closed database" in str(e).lower():
+                self._stop_event.set()
+                return report
             logger.error(f"Error during reconciliation pass: {e}")
 
         return report
@@ -150,7 +153,11 @@ class ReconciliationEngine:
         while not self._stop_event.is_set():
             time.sleep(self.sync_interval_sec)
             if not self._stop_event.is_set():
-                self.reconcile_now()
+                try:
+                    self.reconcile_now()
+                except Exception as e:
+                    if "closed database" in str(e).lower():
+                        break
 
     def shutdown(self) -> None:
         self._stop_event.set()

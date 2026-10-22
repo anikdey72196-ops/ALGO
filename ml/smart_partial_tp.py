@@ -60,7 +60,10 @@ def _cached_model_predict(classifier, online_clf, regressor, x_vec, pct_to_tp):
 
     return p_rev, p_full_tp, pred_r
 
-import shap
+try:
+    import shap
+except ImportError:
+    shap = None
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
@@ -915,7 +918,7 @@ class SmartPartialTPModel:
             base_estimator = self.classifier
 
         shap_values_dict = {}
-        if base_estimator is not None:
+        if base_estimator is not None and shap is not None:
             try:
                 explainer = shap.TreeExplainer(base_estimator)
                 sv = explainer.shap_values(x_vec)
@@ -1070,16 +1073,44 @@ def load_partial_tp_config(config_path: Optional[Path | str] = None) -> Dict[str
         "error_callback": None,
     }
     path = Path(config_path) if config_path else CONFIG_PATH
-    if path.exists() and yaml is not None:
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-            ptp_cfg = cfg.get("smart_partial_tp", {})
-            for k in defaults:
-                if k in ptp_cfg:
-                    defaults[k] = ptp_cfg[k]
-        except Exception as e:
-            logger.warning(f"Failed to read config from {path}: {e}")
+    if path.exists():
+        if yaml is not None:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                ptp_cfg = cfg.get("smart_partial_tp", {})
+                for k in defaults:
+                    if k in ptp_cfg:
+                        defaults[k] = ptp_cfg[k]
+            except Exception as e:
+                logger.warning(f"Failed to read config from {path}: {e}")
+        else:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    in_section = False
+                    for line in f:
+                        line_stripped = line.strip()
+                        if line_stripped.startswith("smart_partial_tp:"):
+                            in_section = True
+                            continue
+                        if in_section:
+                            if line and not line.startswith(" ") and not line.startswith("\t"):
+                                in_section = False
+                                continue
+                            if ":" in line_stripped:
+                                k, v = line_stripped.split(":", 1)
+                                k = k.strip()
+                                v = v.strip()
+                                if k in defaults:
+                                    try:
+                                        if "." in v:
+                                            defaults[k] = float(v)
+                                        else:
+                                            defaults[k] = int(v)
+                                    except ValueError:
+                                        defaults[k] = v
+            except Exception as e:
+                logger.warning(f"Failed to read config fallback from {path}: {e}")
     return defaults
 
 

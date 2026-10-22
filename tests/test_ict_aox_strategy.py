@@ -387,6 +387,12 @@ class TestPositionManagerICTRules(unittest.TestCase):
             poll_interval_sec=60.0,
         )
 
+    def tearDown(self):
+        if hasattr(self, "pm") and self.pm is not None:
+            self.pm.shutdown()
+        if hasattr(self, "state") and self.state is not None:
+            self.state.close()
+
     def test_ict_breakeven_and_daily_quota(self):
         """
         Verify:

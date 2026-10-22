@@ -215,7 +215,7 @@ class MySQLConnectionWrapper:
     def _ensure_connected(self):
         try:
             if self._raw_conn:
-                self._raw_conn.ping(reconnect=True)
+                self._raw_conn.ping()
             else:
                 self._connect()
         except Exception:

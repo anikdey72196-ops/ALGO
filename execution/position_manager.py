@@ -464,10 +464,13 @@ class PositionManager:
                         self._close_mt5_position(trade.id, trade.symbol, trade.lot_size, trade.direction)
 
         except Exception as e:
+            if "closed database" in str(e).lower():
+                self._stop_event.set()
+                return
             logger.error(f"Error in PositionManager evaluation: {e}")
 
     def _modify_mt5_sl_tp(self, ticket: int, symbol: str, new_sl: float, new_tp: float) -> bool:
-        if mt5 is None:
+        if mt5 is None or mt5.terminal_info() is None:
             return True
         try:
             req = {
@@ -484,7 +487,7 @@ class PositionManager:
             return False
 
     def _close_mt5_position(self, ticket: int, symbol: str, lot: float, direction: Direction) -> bool:
-        if mt5 is None:
+        if mt5 is None or mt5.terminal_info() is None:
             return True
         try:
             order_type = mt5.ORDER_TYPE_SELL if direction == Direction.BUY else mt5.ORDER_TYPE_BUY
@@ -509,7 +512,11 @@ class PositionManager:
         while not self._stop_event.is_set():
             time.sleep(self.poll_interval_sec)
             if not self._stop_event.is_set():
-                self.process_positions()
+                try:
+                    self.process_positions()
+                except Exception as e:
+                    if "closed database" in str(e).lower():
+                        break
 
     def on_trade_closed(self, trade, pnl: float, status: str) -> None:
         """Feed completed trade back into SmartPartialTPService for continuous self-learning."""

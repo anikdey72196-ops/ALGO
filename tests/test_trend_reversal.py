@@ -587,6 +587,7 @@ class TestTrendReversalDetector(unittest.TestCase):
         self.assertEqual(called_sym, "XAUUSD")
         self.assertAlmostEqual(called_sl, 2000.1, places=1)
         self.assertIn(777, pos_mgr._be_applied)
+        pos_mgr.shutdown()
 
     def test_priority_order_first_fvg_below_50_fib(self):
         """
