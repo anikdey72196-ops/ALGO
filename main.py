@@ -7,7 +7,7 @@ import sys
 import signal
 import asyncio
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -24,8 +24,8 @@ from core.state import StateManager, TradeRecord
 from core.news_filter import NewsFilter
 from core.risk_engine import RiskEngine
 from core.conflict_resolver import ConflictResolver
-from core.ai_analyst import AIAnalyst, AIDecision
-from core.market_regime import MarketRegimeDetector, MarketRegime
+from core.ai_analyst import AIAnalyst
+from core.market_regime import MarketRegimeDetector
 
 from strategies.strategy import StrategyEngine, TradeSignal, clamp_tp_to_rr
 from strategies.trend_reversal import (
@@ -34,18 +34,18 @@ from strategies.trend_reversal import (
 
 from execution.execution import (
     BrokerAdapter, MockBrokerAdapter, MT5Adapter,
-    BracketOrder, PriceQuote,
+    BracketOrder,
 )
-from execution.execution_metrics import ExecutionMetricsCollector, ExecutionOrderRecord
+from execution.execution_metrics import ExecutionMetricsCollector
 from execution.metrics_aggregator import MetricsAggregator
 from execution.spread_guard import DynamicSpreadGuard
-from execution.order_manager import OrderManager, generate_idempotency_key, OrderState
+from execution.order_manager import OrderManager, generate_idempotency_key
 from execution.reconciliation import ReconciliationEngine
 from execution.position_manager import PositionManager
 
 from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
-from ml.temporal_analyzer import TemporalModelConfig, TemporalEdgeService, EdgeTier
-from ml.temporal_window_recorder import window_recorder, TemporalWindowRecorder
+from ml.temporal_analyzer import TemporalModelConfig, TemporalEdgeService
+from ml.temporal_window_recorder import window_recorder
 
 
 # ─────────────────────────────────────────────
