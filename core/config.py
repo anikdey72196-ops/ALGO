@@ -613,6 +613,76 @@ class TradingConfig(BaseModel):
                 max_lot=100.0,
                 lot_step=0.01,
             ),
+            InstrumentConfig(
+                symbol="AUDJPY",
+                point_value=1.0,
+                pip_size=0.01,
+                avg_spread_points=25.0,
+                digits=3,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="EURJPY",
+                point_value=1.0,
+                pip_size=0.01,
+                avg_spread_points=25.0,
+                digits=3,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="USDCHF",
+                point_value=1.0,
+                pip_size=0.0001,
+                avg_spread_points=20.0,
+                digits=5,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="CADCHF",
+                point_value=1.0,
+                pip_size=0.0001,
+                avg_spread_points=25.0,
+                digits=5,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="NZDCAD",
+                point_value=1.0,
+                pip_size=0.0001,
+                avg_spread_points=30.0,
+                digits=5,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="NZDCHF",
+                point_value=1.0,
+                pip_size=0.0001,
+                avg_spread_points=30.0,
+                digits=5,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
+            InstrumentConfig(
+                symbol="NZDUSD",
+                point_value=1.0,
+                pip_size=0.0001,
+                avg_spread_points=22.0,
+                digits=5,
+                min_lot=0.01,
+                max_lot=100.0,
+                lot_step=0.01,
+            ),
         ],
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
@@ -831,6 +901,25 @@ class TradingConfig(BaseModel):
         default=True,
         description="When True, Trap Detector operates in Shadow Mode: observes, predicts, and records traps/losses without vetoing trades in live market.",
     )
+    # 4-Cluster Trap Detection & Pair Safety Lockout Settings
+    cluster_ml_min_confidence: float = Field(
+        default=0.50,
+        ge=0.10,
+        le=0.90,
+        description="Mandatory confidence threshold for 4-cluster trap detection consensus.",
+    )
+    cluster_loss_lockout_limit: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Consecutive loss limit per pair before dynamic temporary lockout is applied.",
+    )
+    cluster_lockout_duration_minutes: int = Field(
+        default=120,
+        ge=5,
+        le=1440,
+        description="Temporary lockout duration in minutes for an underperforming pair.",
+    )
     # Machine Learning Temporal & Session Edge Settings
     temporal_ml_enabled: bool = Field(
         default=True,
@@ -917,11 +1006,49 @@ DEFAULT_CONFIG = TradingConfig()
 
 
 def get_instrument(config: TradingConfig, symbol: str) -> InstrumentConfig:
-    """Look up an instrument by symbol, raising ValueError if not found."""
+    """Look up an instrument by symbol, dynamically generating a validated InstrumentConfig if absent."""
+    sym_clean = re.sub(r'[^A-Z0-9]', '', str(symbol).strip().upper())
     for inst in config.instruments:
-        if inst.symbol == symbol:
+        if inst.symbol.upper() == sym_clean:
             return inst
-    raise ValueError(
-        f"Instrument '{symbol}' not found in config. "
-        f"Available: {[i.symbol for i in config.instruments]}"
-    )
+
+    # Dynamic heuristic fallback for any currency/asset pair
+    is_jpy = "JPY" in sym_clean
+    is_gold = "XAU" in sym_clean or "GOLD" in sym_clean
+    is_crypto = "BTC" in sym_clean or "ETH" in sym_clean or "SOL" in sym_clean
+
+    if is_jpy:
+        inst = InstrumentConfig(
+            symbol=sym_clean,
+            point_value=1.0,
+            pip_size=0.01,
+            avg_spread_points=25.0,
+            digits=3,
+            min_lot=0.01,
+            max_lot=100.0,
+            lot_step=0.01,
+        )
+    elif is_gold or is_crypto:
+        inst = InstrumentConfig(
+            symbol=sym_clean,
+            point_value=1.0,
+            pip_size=0.01,
+            avg_spread_points=35.0 if is_gold else 200.0,
+            digits=2,
+            min_lot=0.01,
+            max_lot=100.0,
+            lot_step=0.01,
+        )
+    else:
+        inst = InstrumentConfig(
+            symbol=sym_clean,
+            point_value=1.0,
+            pip_size=0.0001,
+            avg_spread_points=25.0,
+            digits=5,
+            min_lot=0.01,
+            max_lot=100.0,
+            lot_step=0.01,
+        )
+    config.instruments.append(inst)
+    return inst

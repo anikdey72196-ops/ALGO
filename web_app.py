@@ -12,6 +12,7 @@ Features:
 from __future__ import annotations
 
 import os
+import re
 import socket
 import asyncio
 import threading
@@ -548,6 +549,13 @@ async def get_bot_state():
         "GBPUSD": {"name": "Pound / USD", "lot": 0.12, "sl": 20.0},
         "BTCUSD": {"name": "Bitcoin / USD", "lot": 0.01, "sl": 150.0},
         "ETHUSD": {"name": "Ethereum / USD", "lot": 0.05, "sl": 80.0},
+        "AUDJPY": {"name": "AUD / JPY", "lot": 0.10, "sl": 25.0},
+        "EURJPY": {"name": "EUR / JPY", "lot": 0.10, "sl": 25.0},
+        "USDCHF": {"name": "USD / CHF", "lot": 0.10, "sl": 20.0},
+        "CADCHF": {"name": "CAD / CHF", "lot": 0.10, "sl": 20.0},
+        "NZDCAD": {"name": "NZD / CAD", "lot": 0.10, "sl": 25.0},
+        "NZDCHF": {"name": "NZD / CHF", "lot": 0.10, "sl": 25.0},
+        "NZDUSD": {"name": "NZD / USD", "lot": 0.10, "sl": 20.0},
     }
     for s_name, meta in default_meta.items():
         lot_val = meta["lot"]
@@ -1042,8 +1050,9 @@ async def handle_dashboard_update(payload: dict):
             )
         pair_id = payload.get("pair")
         active = payload.get("active", True)
-        sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
-        sym = sym_map.get(str(pair_id).lower(), str(pair_id).upper())
+        sym = re.sub(r'[^A-Z0-9]', '', str(pair_id).strip().upper())
+        if not sym:
+            raise HTTPException(status_code=400, detail="Invalid symbol format")
         current = list(bot_instance.config.selected_symbols)
         if active and sym not in current:
             current.append(sym)
@@ -1201,12 +1210,95 @@ async def handle_dashboard_update(payload: dict):
             }
         }
 
-    elif action == "update_pair_settings":
-        pair_id = payload.get("pair")
+    elif action == "switch_pair_slot":
+        if bot_instance.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Market pair changes are LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+            )
+        slot = int(payload.get("slot", 1))
+        raw_new = payload.get("new_symbol") or payload.get("newSymbol") or payload.get("pair")
+        raw_old = payload.get("old_symbol") or payload.get("oldSymbol")
+        new_sym = re.sub(r'[^A-Z0-9]', '', str(raw_new).strip().upper())
+        old_sym = re.sub(r'[^A-Z0-9]', '', str(raw_old).strip().upper()) if raw_old else ""
+        if not new_sym or len(new_sym) < 3 or len(new_sym) > 12:
+            raise HTTPException(status_code=400, detail="Invalid currency pair symbol format.")
+
+        from core.config import PairSettings, get_instrument
+        # Ensure instrument definition exists
+        get_instrument(bot_instance.config, new_sym)
+
+        if not hasattr(bot_instance.config, "pair_configs"):
+            bot_instance.config.pair_configs = {}
+        if new_sym not in bot_instance.config.pair_configs:
+            bot_instance.config.pair_configs[new_sym] = PairSettings(symbol=new_sym, enabled=True)
+        else:
+            bot_instance.config.pair_configs[new_sym].enabled = True
+
+        # Assign to slot 1, 2, or 3
+        if slot == 1 and hasattr(bot_instance.config, "pair1"):
+            bot_instance.config.pair1.symbol = new_sym
+            bot_instance.config.pair1.enabled = True
+        elif slot == 2 and hasattr(bot_instance.config, "pair2"):
+            bot_instance.config.pair2.symbol = new_sym
+            bot_instance.config.pair2.enabled = True
+        elif slot == 3 and hasattr(bot_instance.config, "pair3"):
+            bot_instance.config.pair3.symbol = new_sym
+            bot_instance.config.pair3.enabled = True
+
+        # Update lot / sl if provided
         lot_val = payload.get("lot")
         sl_val = payload.get("sl")
-        sym_map = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}
-        sym = sym_map.get(str(pair_id).lower(), str(pair_id).upper())
+        if lot_val is not None:
+            bot_instance.config.pair_configs[new_sym].fixed_lot_size = round(float(lot_val), 2)
+        if sl_val is not None:
+            bot_instance.config.pair_configs[new_sym].fixed_sl_pips = round(float(sl_val), 1)
+
+        # Update selected_symbols
+        cur_syms = list(bot_instance.config.selected_symbols)
+        if old_sym and old_sym in cur_syms:
+            idx = cur_syms.index(old_sym)
+            cur_syms[idx] = new_sym
+        elif new_sym not in cur_syms:
+            cur_syms.append(new_sym)
+        seen = set()
+        deduped = []
+        for s in cur_syms:
+            if s not in seen:
+                seen.add(s)
+                deduped.append(s)
+        bot_instance.config.selected_symbols = deduped
+
+        bot_instance.save_settings()
+        invalidate_state_cache()
+
+        # Trigger immediate daily bias analysis on the newly chosen pair
+        try:
+            bot_instance.compute_daily_bias(new_sym)
+        except Exception as e:
+            logger.warning(f"Failed pre-computing bias for {new_sym}: {e}")
+
+        asyncio.create_task(broadcast_bot_state())
+        bot_instance.log(f"🔀 Pair Slot #{slot} switched to {new_sym}. Daily bias analysis triggered.")
+        return {
+            "status": "success",
+            "slot": slot,
+            "symbol": new_sym,
+            "selected_symbols": bot_instance.config.selected_symbols
+        }
+
+    elif action == "update_pair_settings":
+        pair_id = payload.get("pair")
+        slot = payload.get("slot")
+        lot_val = payload.get("lot")
+        sl_val = payload.get("sl")
+        is_enabled = payload.get("enabled")
+        sym = re.sub(r'[^A-Z0-9]', '', str(pair_id).strip().upper())
+        if not sym or len(sym) < 3 or len(sym) > 12:
+            raise HTTPException(status_code=400, detail="Invalid symbol format.")
+
+        from core.config import PairSettings, get_instrument
+        get_instrument(bot_instance.config, sym)
 
         from core.config import PairSettings
         if not hasattr(bot_instance.config, "pair_configs"):
@@ -1505,6 +1597,9 @@ async def update_configuration(payload: BotConfigUpdate):
                     detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch symbols."
                 )
             bot_instance.config.selected_symbols = valid_symbols
+            for s in valid_symbols:
+                if hasattr(bot_instance.config, "pair_configs") and s in bot_instance.config.pair_configs:
+                    bot_instance.config.pair_configs[s].enabled = True
             if not payload.pair1 and not payload.pair2 and not payload.pair3:
                 bot_instance.config.pair1.symbol = valid_symbols[0]
                 bot_instance.config.pair1.enabled = True
@@ -1674,6 +1769,10 @@ async def update_configuration(payload: BotConfigUpdate):
         f"ML Trap Filter={'ON' if getattr(bot_instance.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):.2f}) | "
         f"Temporal ML={'ON' if getattr(bot_instance.config, 'temporal_ml_enabled', True) else 'OFF'}"
     )
+
+    bot_instance.save_settings()
+    invalidate_state_cache()
+    asyncio.create_task(broadcast_bot_state())
 
     return {
         "status": "success",

@@ -191,5 +191,71 @@ def get_demo_datasets() -> dict[str, dict[str, pd.DataFrame]]:
     ethusd_1d = generate_trending_ohlcv('ETHUSD', '1D', bars=100, start_price=3200.0, trend_direction='bullish', volatility=40.0, seed=50)
     datasets['ETHUSD'] = {'1H': ethusd_1h, '15m': ethusd_15m, '4H': ethusd_4h, '1D': ethusd_1d}
 
+    # AUDJPY Bullish
+    audjpy_1h = generate_trending_ohlcv('AUDJPY', '1H', bars=300, start_price=98.50, trend_direction='bullish', volatility=0.15, seed=52)
+    audjpy_15m = generate_trending_ohlcv('AUDJPY', '15m', bars=1200, start_price=98.50, trend_direction='bullish', volatility=0.08, seed=53)
+    audjpy_4h = generate_trending_ohlcv('AUDJPY', '4H', bars=150, start_price=98.50, trend_direction='bullish', volatility=0.25, seed=52)
+    audjpy_1d = generate_trending_ohlcv('AUDJPY', '1D', bars=100, start_price=98.50, trend_direction='bullish', volatility=0.50, seed=52)
+    datasets['AUDJPY'] = {'1H': audjpy_1h, '15m': audjpy_15m, '4H': audjpy_4h, '1D': audjpy_1d}
+
+    # EURJPY Bullish
+    eurjpy_1h = generate_trending_ohlcv('EURJPY', '1H', bars=300, start_price=163.20, trend_direction='bullish', volatility=0.20, seed=54)
+    eurjpy_15m = generate_trending_ohlcv('EURJPY', '15m', bars=1200, start_price=163.20, trend_direction='bullish', volatility=0.10, seed=55)
+    eurjpy_4h = generate_trending_ohlcv('EURJPY', '4H', bars=150, start_price=163.20, trend_direction='bullish', volatility=0.35, seed=54)
+    eurjpy_1d = generate_trending_ohlcv('EURJPY', '1D', bars=100, start_price=163.20, trend_direction='bullish', volatility=0.60, seed=54)
+    datasets['EURJPY'] = {'1H': eurjpy_1h, '15m': eurjpy_15m, '4H': eurjpy_4h, '1D': eurjpy_1d}
+
+    # USDCHF Bearish
+    usdchf_1h = generate_trending_ohlcv('USDCHF', '1H', bars=300, start_price=0.8950, trend_direction='bearish', volatility=0.0003, seed=56)
+    usdchf_15m = generate_trending_ohlcv('USDCHF', '15m', bars=1200, start_price=0.8950, trend_direction='bearish', volatility=0.00015, seed=57)
+    usdchf_4h = generate_trending_ohlcv('USDCHF', '4H', bars=150, start_price=0.8950, trend_direction='bearish', volatility=0.0006, seed=56)
+    usdchf_1d = generate_trending_ohlcv('USDCHF', '1D', bars=100, start_price=0.8950, trend_direction='bearish', volatility=0.0012, seed=56)
+    datasets['USDCHF'] = {'1H': usdchf_1h, '15m': usdchf_15m, '4H': usdchf_4h, '1D': usdchf_1d}
+
+    # CADCHF Bearish
+    cadchf_1h = generate_trending_ohlcv('CADCHF', '1H', bars=300, start_price=0.6550, trend_direction='bearish', volatility=0.00025, seed=58)
+    cadchf_15m = generate_trending_ohlcv('CADCHF', '15m', bars=1200, start_price=0.6550, trend_direction='bearish', volatility=0.00012, seed=59)
+    cadchf_4h = generate_trending_ohlcv('CADCHF', '4H', bars=150, start_price=0.6550, trend_direction='bearish', volatility=0.0005, seed=58)
+    cadchf_1d = generate_trending_ohlcv('CADCHF', '1D', bars=100, start_price=0.6550, trend_direction='bearish', volatility=0.0010, seed=58)
+    datasets['CADCHF'] = {'1H': cadchf_1h, '15m': cadchf_15m, '4H': cadchf_4h, '1D': cadchf_1d}
+
+    # NZDCAD Bullish
+    nzdcad_1h = generate_trending_ohlcv('NZDCAD', '1H', bars=300, start_price=0.8350, trend_direction='bullish', volatility=0.0003, seed=60)
+    nzdcad_15m = generate_trending_ohlcv('NZDCAD', '15m', bars=1200, start_price=0.8350, trend_direction='bullish', volatility=0.00015, seed=61)
+    nzdcad_4h = generate_trending_ohlcv('NZDCAD', '4H', bars=150, start_price=0.8350, trend_direction='bullish', volatility=0.0006, seed=60)
+    nzdcad_1d = generate_trending_ohlcv('NZDCAD', '1D', bars=100, start_price=0.8350, trend_direction='bullish', volatility=0.0012, seed=60)
+    datasets['NZDCAD'] = {'1H': nzdcad_1h, '15m': nzdcad_15m, '4H': nzdcad_4h, '1D': nzdcad_1d}
+
+    # NZDCHF Bearish
+    nzdchf_1h = generate_trending_ohlcv('NZDCHF', '1H', bars=300, start_price=0.5480, trend_direction='bearish', volatility=0.00025, seed=62)
+    nzdchf_15m = generate_trending_ohlcv('NZDCHF', '15m', bars=1200, start_price=0.5480, trend_direction='bearish', volatility=0.00012, seed=63)
+    nzdchf_4h = generate_trending_ohlcv('NZDCHF', '4H', bars=150, start_price=0.5480, trend_direction='bearish', volatility=0.0005, seed=62)
+    nzdchf_1d = generate_trending_ohlcv('NZDCHF', '1D', bars=100, start_price=0.5480, trend_direction='bearish', volatility=0.0010, seed=62)
+    datasets['NZDCHF'] = {'1H': nzdchf_1h, '15m': nzdchf_15m, '4H': nzdchf_4h, '1D': nzdchf_1d}
+
+    # NZDUSD Bullish
+    nzdusd_1h = generate_trending_ohlcv('NZDUSD', '1H', bars=300, start_price=0.6120, trend_direction='bullish', volatility=0.0003, seed=64)
+    nzdusd_15m = generate_trending_ohlcv('NZDUSD', '15m', bars=1200, start_price=0.6120, trend_direction='bullish', volatility=0.00015, seed=65)
+    nzdusd_4h = generate_trending_ohlcv('NZDUSD', '4H', bars=150, start_price=0.6120, trend_direction='bullish', volatility=0.0006, seed=64)
+    nzdusd_1d = generate_trending_ohlcv('NZDUSD', '1D', bars=100, start_price=0.6120, trend_direction='bullish', volatility=0.0012, seed=64)
+    datasets['NZDUSD'] = {'1H': nzdusd_1h, '15m': nzdusd_15m, '4H': nzdusd_4h, '1D': nzdusd_1d}
+
     return datasets
+
+
+def get_demo_dataset_for_symbol(symbol: str, timeframe: str = "1H", bars: int = 300) -> pd.DataFrame:
+    """Dynamically return or synthesize OHLCV demo data for any requested symbol."""
+    sym_u = str(symbol).strip().upper()
+    datasets = get_demo_datasets()
+    if sym_u in datasets and timeframe in datasets[sym_u]:
+        return datasets[sym_u][timeframe]
+
+    is_jpy = "JPY" in sym_u
+    is_gold = "XAU" in sym_u or "GOLD" in sym_u
+    is_crypto = "BTC" in sym_u or "ETH" in sym_u
+    start_p = 100.0 if is_jpy else (2500.0 if is_gold else (50000.0 if is_crypto else 1.0))
+    vol = 0.15 if is_jpy else (2.0 if is_gold else (100.0 if is_crypto else 0.0003))
+
+    return generate_trending_ohlcv(sym_u, timeframe, bars=bars, start_price=start_p, volatility=vol)
+
 

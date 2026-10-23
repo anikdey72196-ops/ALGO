@@ -58,7 +58,35 @@ class ConflictResolver:
             
         rejection_reasons = []
         survivors = []
-        
+
+        # Gate 0 — Opposing Simultaneous Signal Conflict Check:
+        # If multiple strategies trigger opposing signals (BUY and SELL) on the same symbol,
+        # reject all conflicting signals immediately to prevent erratic entries or over-leveraging.
+        symbols_in_batch = {s.symbol.upper() for s in signals}
+        conflicted_symbols = set()
+        for sym in symbols_in_batch:
+            sym_signals = [s for s in signals if s.symbol.upper() == sym]
+            has_buy = any(s.direction == Direction.BUY for s in sym_signals)
+            has_sell = any(s.direction == Direction.SELL for s in sym_signals)
+            if has_buy and has_sell:
+                conflicted_symbols.add(sym)
+                reason = (
+                    f"[OPPOSING_SIGNAL_CONFLICT] Multiple strategies triggered opposing directions (BUY and SELL) "
+                    f"on {sym} simultaneously. All {len(sym_signals)} signals rejected."
+                )
+                logger.warning(reason)
+                rejection_reasons.append(reason)
+
+        if conflicted_symbols:
+            signals = [s for s in signals if s.symbol.upper() not in conflicted_symbols]
+            if not signals:
+                return FilterResult(
+                    accepted_signal=None,
+                    total_signals=len(rejection_reasons),
+                    rejected_count=len(rejection_reasons),
+                    rejection_reasons=rejection_reasons,
+                )
+
         for signal in signals:
             # Gate 1: HTF Alignment
             if signal.htf_bias == MarketBias.NEUTRAL or \

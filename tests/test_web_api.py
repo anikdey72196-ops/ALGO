@@ -205,6 +205,8 @@ def test_api_workflow():
     assert saved_data["strategy_type"] == "SMC_SCALP_5M", f"Saved strategy: {saved_data.get('strategy_type')}"
     assert saved_data["fixed_sl_pips"] == 167.0, f"Saved SL: {saved_data.get('fixed_sl_pips')}"
     print(f"   [PASSED] Persisted settings verified in bot_settings.json: {saved_data}")
+    # Return bot to standby state
+    client.post("/api/deactivate")
 
     print("\nAll Web API integration tests passed successfully!")
 
@@ -257,6 +259,8 @@ def test_mobile_terminal_and_pwa_endpoints():
 
 def test_api_update_unified():
     client = TestClient(app)
+    # Ensure standby before test execution
+    client.post("/api/deactivate")
 
     # 1. Toggle strategy
     res = client.post("/api/update", json={
@@ -313,7 +317,29 @@ def test_api_update_unified():
     assert res.status_code == 200
     assert res.json()["status"] == "success"
 
-    print("Unified /api/update and Lot/SL tests passed successfully!")
+    # 5. Switch Pair Slot (Dropdown selection test)
+    res_switch = client.post("/api/update", json={
+        "action": "switch_pair_slot",
+        "slot": 4,
+        "old_symbol": "AUDJPY",
+        "new_symbol": "NZDUSD",
+        "lot": 0.10,
+        "sl": 20.0,
+        "enabled": True
+    })
+    assert res_switch.status_code == 200
+    assert res_switch.json()["symbol"] == "NZDUSD"
+    assert "NZDUSD" in res_switch.json()["selected_symbols"]
+
+    # Security check: invalid/injection symbols rejected with 400
+    res_sec = client.post("/api/update", json={
+        "action": "switch_pair_slot",
+        "slot": 4,
+        "new_symbol": "'; DROP TABLE trades;--"
+    })
+    assert res_sec.status_code == 400
+
+    print("Unified /api/update, slot switching, and Lot/SL tests passed successfully!")
 
 
 if __name__ == "__main__":

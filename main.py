@@ -46,6 +46,14 @@ from execution.position_manager import PositionManager
 from ml.trap_detector import TrapDetectorConfig, TrapDetectorService, EventKind
 from ml.temporal_analyzer import TemporalModelConfig, TemporalEdgeService
 from ml.temporal_window_recorder import window_recorder
+from ml.cluster_manager import (
+    AssetCluster,
+    ClusterTrapDetectorService,
+    ClusterModelInitializer,
+    ExecutionGatekeeper,
+    PairPerformanceTracker,
+    get_cluster_for_symbol,
+)
 
 
 # ─────────────────────────────────────────────
@@ -145,6 +153,29 @@ class TradingBot:
             shadow_mode=getattr(self.config, 'ml_shadow_mode', True),
         )
         self.trap_svc = TrapDetectorService(trap_cfg)
+
+        # 4-Cluster ML Trap Detection, Execution Gatekeeper & Safety Lockout
+        self.cluster_trap_svc = ClusterTrapDetectorService(
+            base_dir="ml/artifacts/clusters",
+            legacy_dir="ml/artifacts",
+            db_path=self.config.db_path,
+        )
+        self.cluster_initializer = ClusterModelInitializer(self.cluster_trap_svc)
+        try:
+            self.cluster_initializer.initialize_all_clusters(force=False)
+        except Exception as _c_init_err:
+            logger.warning(f"Cluster model initialization notice: {_c_init_err}")
+
+        self.pair_tracker = PairPerformanceTracker(
+            consecutive_loss_limit=getattr(self.config, 'cluster_loss_lockout_limit', 3),
+            lockout_duration_minutes=getattr(self.config, 'cluster_lockout_duration_minutes', 120),
+        )
+        self.execution_gatekeeper = ExecutionGatekeeper(
+            cluster_service=self.cluster_trap_svc,
+            tracker=self.pair_tracker,
+            min_confidence_threshold=getattr(self.config, 'cluster_ml_min_confidence', 0.50),
+            max_sl_probability=getattr(self.config, 'ml_max_sl_probability', 0.50),
+        )
 
         # ML Model 2: Temporal & Session Edge Analyzer (Day/Time/Session Profitability & Hazard Gate)
         temporal_cfg = TemporalModelConfig(
@@ -387,10 +418,7 @@ class TradingBot:
                     for sym, p_cfg in getattr(self.config, "pair_configs", {}).items()
                 },
                 "enabled_strategies": self.config.enabled_strategies,
-                "selected_symbols": [
-                    s for s in self.config.selected_symbols
-                    if not (hasattr(self.config, "pair_configs") and s in self.config.pair_configs and not getattr(self.config.pair_configs[s], "enabled", True))
-                ],
+                "selected_symbols": list(self.config.selected_symbols),
                 "strategy_type": self.config.strategy_type,
                 "fixed_lot_size": self.config.fixed_lot_size,
                 "fixed_sl_pips": self.config.fixed_sl_pips,
@@ -659,6 +687,10 @@ class TradingBot:
             for trade, pnl, status, found in trade_events:
                 if hasattr(self, "position_manager") and self.position_manager:
                     self.position_manager.on_trade_closed(trade, pnl, status)
+
+                # Record win/loss streak for pair-specific safety lockout
+                if hasattr(self, "pair_tracker") and self.pair_tracker and getattr(trade, "symbol", None):
+                    self.pair_tracker.record_trade_result(trade.symbol, pnl, status)
 
                 if found:
                     self.log(
@@ -1205,6 +1237,12 @@ class TradingBot:
             if not candidate_signals and filter_result.accepted_signal:
                 candidate_signals = [filter_result.accepted_signal]
 
+            # Enforce hardcoded ExecutionGatekeeper conflict filter on candidate batch
+            if hasattr(self, "execution_gatekeeper") and self.execution_gatekeeper and candidate_signals:
+                candidate_signals, conflict_rejections = self.execution_gatekeeper.filter_conflicting_signals(candidate_signals)
+                for r_msg in conflict_rejections:
+                    self.log(f"  🚫 {r_msg}", level="WARNING")
+
             for best_signal in candidate_signals:
                 # Dynamic re-check of limits before each execution
                 open_trades = self.state.get_open_positions()
@@ -1354,6 +1392,34 @@ class TradingBot:
                                 )
                         except Exception as e:
                             self.log(f"  ⚠️ Trap Gate error (failing open): {e}", level="WARNING")
+
+                # ── Step 2c-1.7: Hardcoded 4-Cluster Execution Gatekeeper & Safety Lockout ──
+                if hasattr(self, "execution_gatekeeper") and self.execution_gatekeeper:
+                    gk_feats = trap_ev.features if ('trap_ev' in locals() and trap_ev) else {}
+                    gk_verdict = self.execution_gatekeeper.validate_execution(
+                        symbol=symbol,
+                        strategy_name=best_signal.strategy_name,
+                        direction=best_signal.direction,
+                        features=gk_feats,
+                        is_shadow=getattr(self.config, 'ml_shadow_mode', True),
+                    )
+                    if not gk_verdict.allowed:
+                        self.log(
+                            f"  🛑 [CLUSTER GATEKEEPER VETO] {gk_verdict.reason} | "
+                            f"Pair '{symbol}' [{gk_verdict.cluster}] Strategy '{best_signal.strategy_name}'",
+                            level="WARNING",
+                        )
+                        self.eqm.mark_rejected(
+                            eqm_order.order_id,
+                            rejection_code=gk_verdict.rejection_code or 4001,
+                            rejection_reason=gk_verdict.reason,
+                        )
+                        continue
+                    else:
+                        self.log(
+                            f"  🛡️ [CLUSTER GATEKEEPER PASSED] {gk_verdict.reason}",
+                            level="INFO",
+                        )
 
                 # ── Step 2c-1.8: ML Model 2 — Temporal & Session Edge Analyzer ──
                 temporal_risk_mult = 1.0
@@ -1639,13 +1705,15 @@ class TradingBot:
         # In mock mode, generate data on first call
         if self.config.use_mock_broker:
             try:
-                from mock_data import get_demo_datasets
+                from mock_data import get_demo_datasets, get_demo_dataset_for_symbol
                 datasets = get_demo_datasets()
                 if symbol in datasets and timeframe in datasets[symbol]:
                     df = datasets[symbol][timeframe]
-                    if count == 300:
-                        self._htf_cache[cache_key] = df
-                    return df
+                else:
+                    df = get_demo_dataset_for_symbol(symbol, timeframe, bars=count)
+                if count == 300:
+                    self._htf_cache[cache_key] = df
+                return df
             except ImportError:
                 logger.warning("mock_data module not available.")
             return None
