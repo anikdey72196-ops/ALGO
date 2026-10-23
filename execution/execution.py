@@ -295,6 +295,28 @@ class MT5Adapter(BrokerAdapter):
         if not self.ensure_connected():
             return OrderResult(success=False, error_message="MT5 terminal not connected or not logged in", t1_submit_ns=t1_submit_ns)
 
+        # HARD SECURITY GUARD: Night Limit & Max Open Positions Pre-Dispatch Check
+        if hasattr(self, 'config') and self.config and hasattr(self.config, 'risk'):
+            now_dt = datetime.now(timezone.utc)
+            if hasattr(self.config.risk, 'get_effective_max_open_positions'):
+                max_allowed = self.config.risk.get_effective_max_open_positions(now_dt)
+                is_night = self.config.risk.is_night_window(now_dt)
+            else:
+                max_allowed = getattr(self.config.risk, 'max_open_positions', 15)
+                is_night = False
+
+            curr_positions = self.get_open_positions()
+            if len(curr_positions) >= max_allowed:
+                limit_lbl = "Night Limit (11 PM - 8 AM)" if is_night else "Max Open Trades"
+                err_msg = f"Broker pre-dispatch safety veto: {len(curr_positions)}/{max_allowed} positions active on MT5 ({limit_lbl})"
+                logger.warning(f"⛔ {err_msg}")
+                return OrderResult(
+                    success=False,
+                    error_message=err_msg,
+                    error_code=10027,
+                    t1_submit_ns=t1_submit_ns,
+                )
+
         broker_symbol = self.resolve_symbol(order.symbol)
         mt5.symbol_select(broker_symbol, True)
 
@@ -671,6 +693,28 @@ class MockBrokerAdapter(BrokerAdapter):
         t1_submit_ns = _time.perf_counter_ns()
         if order.symbol not in self._prices:
             return OrderResult(success=False, error_message=f"No mock price set for symbol: {order.symbol}", t1_submit_ns=t1_submit_ns)
+
+        # HARD SECURITY GUARD: Night Limit & Max Open Positions Pre-Dispatch Check
+        if hasattr(self, 'config') and self.config and hasattr(self.config, 'risk'):
+            now_dt = datetime.now(timezone.utc)
+            if hasattr(self.config.risk, 'get_effective_max_open_positions'):
+                max_allowed = self.config.risk.get_effective_max_open_positions(now_dt)
+                is_night = self.config.risk.is_night_window(now_dt)
+            else:
+                max_allowed = getattr(self.config.risk, 'max_open_positions', 15)
+                is_night = False
+
+            curr_positions = self.get_open_positions()
+            if len(curr_positions) >= max_allowed:
+                limit_lbl = "Night Limit (11 PM - 8 AM)" if is_night else "Max Open Trades"
+                err_msg = f"Mock broker pre-dispatch safety veto: {len(curr_positions)}/{max_allowed} positions active ({limit_lbl})"
+                logger.warning(f"⛔ {err_msg}")
+                return OrderResult(
+                    success=False,
+                    error_message=err_msg,
+                    error_code=10027,
+                    t1_submit_ns=t1_submit_ns,
+                )
             
         t2_ack_ns = _time.perf_counter_ns()
         # Apply simulated slippage

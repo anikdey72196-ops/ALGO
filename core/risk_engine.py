@@ -63,7 +63,12 @@ class RiskEngine:
         # Round to 2 decimal places to avoid floating point issues
         return round(lot_size, 2)
     
-    def check_circuit_breakers(self, equity: float, current_time: datetime | None = None) -> tuple[bool, str | None]:
+    def check_circuit_breakers(
+        self,
+        equity: float,
+        current_time: datetime | None = None,
+        broker_open_positions: list | None = None,
+    ) -> tuple[bool, str | None]:
         """
         Check all circuit breaker conditions:
         1. Is circuit breaker already activated for today? -> blocked
@@ -78,6 +83,8 @@ class RiskEngine:
         # Check maximum concurrent open positions (default 15, auto 2 from 11 PM to 8 AM)
         check_time = current_time or datetime.now(timezone.utc)
         open_positions = self.state.get_open_positions()
+        broker_cnt = len(broker_open_positions) if broker_open_positions is not None else 0
+        effective_open_count = max(len(open_positions), broker_cnt)
         if hasattr(self.config.risk, 'get_effective_max_open_positions'):
             max_open = self.config.risk.get_effective_max_open_positions(check_time)
             is_night = self.config.risk.is_night_window(check_time)
@@ -85,10 +92,10 @@ class RiskEngine:
             max_open = getattr(self.config.risk, 'max_open_positions', 15)
             is_night = False
 
-        if len(open_positions) >= max_open:
+        if effective_open_count >= max_open:
             if is_night:
-                return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open, Night Limit (11 PM - 8 AM))"
-            return True, f"Max concurrent open positions reached ({len(open_positions)}/{max_open} open)"
+                return True, f"Max concurrent open positions reached ({effective_open_count}/{max_open} open, Night Limit (11 PM - 8 AM))"
+            return True, f"Max concurrent open positions reached ({effective_open_count}/{max_open} open)"
 
         pnl = self.state.get_daily_pnl()
         limit = equity * self.config.account.max_daily_drawdown_pct
@@ -107,10 +114,11 @@ class RiskEngine:
         fixed_lot_size: float | None = None,
         risk_multiplier: float = 1.0,
         current_time: datetime | None = None,
+        broker_open_positions: list | None = None,
     ) -> AuthorizationResult:
         """
         Full authorization pipeline:
-        1. Check circuit breakers using current execution time.
+        1. Check circuit breakers using current execution time and broker live positions.
         2. Look up instrument config.
         3. Calculate lot size (supports per-pair / per-trade fixed_lot_size override).
         4. Validate lot size > 0 and within bounds.
@@ -119,7 +127,9 @@ class RiskEngine:
         # Always evaluate real-time circuit breakers / night limits using current execution time
         # (defaulting to current UTC wall-clock time), NEVER against historical candle bar timestamps.
         check_time = current_time or datetime.now(timezone.utc)
-        is_blocked, reason = self.check_circuit_breakers(current_equity, check_time)
+        is_blocked, reason = self.check_circuit_breakers(
+            current_equity, check_time, broker_open_positions=broker_open_positions
+        )
         if is_blocked:
             logger.warning(f"Trade rejected: {reason}")
             return AuthorizationResult(
@@ -141,9 +151,15 @@ class RiskEngine:
         # ── Strict Rule 1: Max concurrent open positions per symbol (e.g. max 3 for XAUUSD, max 3 for EURUSD) ──
         open_positions = self.state.get_open_positions()
         open_symbol_trades = [t for t in open_positions if t.symbol == signal.symbol]
+        broker_symbol_cnt = (
+            len([p for p in broker_open_positions if (p.get('symbol') or '').upper() == signal.symbol.upper()])
+            if broker_open_positions is not None
+            else 0
+        )
+        effective_symbol_count = max(len(open_symbol_trades), broker_symbol_cnt)
         max_per_symbol = getattr(self.config.risk, 'max_open_per_symbol', 3)
-        if len(open_symbol_trades) >= max_per_symbol:
-            msg = f"Max open positions for {signal.symbol} reached ({len(open_symbol_trades)}/{max_per_symbol} open). Duplicate entry blocked."
+        if effective_symbol_count >= max_per_symbol:
+            msg = f"Max open positions for {signal.symbol} reached ({effective_symbol_count}/{max_per_symbol} open). Duplicate entry blocked."
             logger.info(f"Trade rejected: {msg}")
             return AuthorizationResult(
                 authorized=False,

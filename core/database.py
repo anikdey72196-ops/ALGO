@@ -268,7 +268,13 @@ def get_db_connection(db_path: str = "trading_state.db"):
     Factory that returns either a MySQL connection wrapper or an SQLite connection,
     based on the DB_BACKEND environment variable.
     """
-    backend = "sqlite" if (db_path == ":memory:" or (db_path != "trading_state.db" and db_path.endswith(".db"))) else os.getenv("DB_BACKEND", "sqlite").strip().lower()
+    # Strictly protect live production MySQL from tests and mock environments
+    is_test_env = bool(
+        os.getenv("PYTEST_CURRENT_TEST") or
+        os.getenv("TESTING") or
+        os.getenv("USE_MOCK_BROKER", "false").lower() in ("true", "1", "yes")
+    )
+    backend = "sqlite" if (is_test_env or db_path == ":memory:" or (db_path != "trading_state.db" and db_path.endswith(".db"))) else os.getenv("DB_BACKEND", "sqlite").strip().lower()
 
     if backend == "mysql":
         host = os.getenv("DB_HOST", "localhost")

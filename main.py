@@ -92,15 +92,19 @@ def create_broker(config: TradingConfig) -> BrokerAdapter:
     """Create the appropriate broker adapter based on configuration."""
     if config.use_mock_broker:
         logger.info("Using MockBrokerAdapter for local testing.")
-        return MockBrokerAdapter(initial_equity=config.account.equity)
+        adapter = MockBrokerAdapter(initial_equity=config.account.equity)
+        adapter.config = config
+        return adapter
     else:
         logger.info("Using MT5Adapter for live real-market trading.")
-        return MT5Adapter(
+        adapter = MT5Adapter(
             mt5_path=config.mt5_path or os.environ.get("MT5_PATH"),
             login=config.mt5_login or (int(os.environ.get("MT5_LOGIN", "0")) if os.environ.get("MT5_LOGIN", "0").isdigit() and int(os.environ.get("MT5_LOGIN", "0")) > 0 else None),
             password=config.mt5_password or os.environ.get("MT5_PASSWORD"),
             server=config.mt5_server or os.environ.get("MT5_SERVER"),
         )
+        adapter.config = config
+        return adapter
 
 
 # ─────────────────────────────────────────────
@@ -590,11 +594,26 @@ class TradingBot:
         If a trade reached TP or SL and is no longer open in MT5, update state.
         """
         try:
+            # 1. Safety Guard: Mock broker must NEVER close real broker trades in shared state
+            if getattr(self.config, 'use_mock_broker', False):
+                return
+
             open_trades = self.state.get_open_positions()
             if not open_trades:
                 return
 
+            # 2. Safety Guard: Ensure broker is alive before assuming missing positions are closed
+            if hasattr(self.broker, "ensure_connected") and not self.broker.ensure_connected():
+                logger.warning("[SYNC] Broker disconnected; preserving database open positions.")
+                return
+
             live_positions = self.broker.get_open_positions()
+            if not live_positions and open_trades:
+                # Double-check connection to prevent false wipe on temporary network/IPC drop
+                if hasattr(self.broker, "is_connected") and not self.broker.is_connected():
+                    logger.warning("[SYNC] Broker connection dropped; preserving database open positions.")
+                    return
+
             live_order_ids = {
                 p.get("ticket") or p.get("order_id")
                 for p in live_positions
@@ -704,6 +723,17 @@ class TradingBot:
 
         # Step 1b: Max concurrent open positions guard (auto capped to 2 between 11 PM and 8 AM, 15 daytime)
         open_trades = self.state.get_open_positions()
+        live_broker_positions = []
+        if hasattr(self.broker, 'get_open_positions'):
+            try:
+                live_broker_positions = self.broker.get_open_positions() or []
+            except Exception as e:
+                logger.debug(f"Direct broker get_open_positions check failed: {e}")
+
+        # The effective open count is the MAXIMUM between DB state and live broker positions.
+        # This guarantees that if MT5 has active positions, a DB glitch or test desync CAN NEVER bypass the limit!
+        effective_open_count = max(len(open_trades), len(live_broker_positions))
+
         if hasattr(self.config.risk, 'get_effective_max_open_positions'):
             max_open = self.config.risk.get_effective_max_open_positions(now_utc)
             is_night = self.config.risk.is_night_window(now_utc)
@@ -711,10 +741,10 @@ class TradingBot:
             max_open = getattr(self.config.risk, 'max_open_positions', 15)
             is_night = False
 
-        if len(open_trades) >= max_open:
+        if effective_open_count >= max_open:
             limit_name = "NIGHT LIMIT (11 PM - 8 AM)" if is_night else "MAX OPEN TRADES"
             self.log(
-                f"⏸️ {limit_name} ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                f"⏸️ {limit_name} ACTIVE ({effective_open_count}/{max_open} positions open). "
                 f"Skipping new trade execution until an existing position closes.",
                 level="INFO"
             )
@@ -862,6 +892,14 @@ class TradingBot:
             # Dynamic check: Re-fetch open positions so that as trades execute on earlier pairs,
             # subsequent pairs immediately see the updated open count within the exact same scan cycle!
             open_trades = self.state.get_open_positions()
+            live_broker_positions = []
+            if hasattr(self.broker, 'get_open_positions'):
+                try:
+                    live_broker_positions = self.broker.get_open_positions() or []
+                except Exception as e:
+                    logger.debug(f"Direct broker get_open_positions check failed: {e}")
+            effective_open_count = max(len(open_trades), len(live_broker_positions))
+
             if hasattr(self.config.risk, 'get_effective_max_open_positions'):
                 max_open = self.config.risk.get_effective_max_open_positions(now_utc)
                 is_night = self.config.risk.is_night_window(now_utc)
@@ -869,10 +907,10 @@ class TradingBot:
                 max_open = getattr(self.config.risk, 'max_open_positions', 15)
                 is_night = False
 
-            if len(open_trades) >= max_open:
+            if effective_open_count >= max_open:
                 limit_name = "NIGHT LIMIT (11 PM - 8 AM)" if is_night else "MAX OPEN TRADES"
                 self.log(
-                    f"  ⏸️ {limit_name} ACTIVE ({len(open_trades)}/{max_open} positions open). "
+                    f"  ⏸️ {limit_name} ACTIVE ({effective_open_count}/{max_open} positions open). "
                     f"Skipping Pair {pair_num} ({symbol}).",
                     level="INFO"
                 )
@@ -886,10 +924,12 @@ class TradingBot:
 
             # ── Check open positions for this symbol (max 3 for XAUUSD, max 3 for EURUSD) ──
             open_symbol_trades = [t for t in open_trades if t.symbol == symbol]
+            broker_sym_cnt = len([p for p in live_broker_positions if (p.get('symbol') or '').upper() == symbol.upper()])
+            effective_sym_count = max(len(open_symbol_trades), broker_sym_cnt)
             max_per_symbol = getattr(self.config.risk, 'max_open_per_symbol', 3)
-            if len(open_symbol_trades) >= max_per_symbol:
+            if effective_sym_count >= max_per_symbol:
                 self.log(
-                    f"  ⏸️ Max open positions reached for {symbol} ({len(open_symbol_trades)}/{max_per_symbol} open). "
+                    f"  ⏸️ Max open positions reached for {symbol} ({effective_sym_count}/{max_per_symbol} open). "
                     f"Skipping new entry for Pair {pair_num}."
                 )
                 continue
@@ -1168,18 +1208,29 @@ class TradingBot:
             for best_signal in candidate_signals:
                 # Dynamic re-check of limits before each execution
                 open_trades = self.state.get_open_positions()
-                if len(open_trades) >= max_open:
+                live_broker_positions = []
+                if hasattr(self.broker, 'get_open_positions'):
+                    try:
+                        live_broker_positions = self.broker.get_open_positions() or []
+                    except Exception as e:
+                        logger.debug(f"Direct broker get_open_positions check failed: {e}")
+                effective_open_count = max(len(open_trades), len(live_broker_positions))
+
+                if effective_open_count >= max_open:
+                    limit_name = "NIGHT LIMIT (11 PM - 8 AM)" if is_night else "MAX OPEN TRADES"
                     self.log(
-                        f"  ⏸️ Global max open positions reached ({len(open_trades)}/{max_open}). "
+                        f"  ⏸️ Global max open positions reached ({effective_open_count}/{max_open}, {limit_name}). "
                         f"Rejecting/queuing extra signal [{best_signal.strategy_name}] on {symbol}.",
                         level="INFO"
                     )
                     break
 
                 open_symbol_trades = [t for t in open_trades if t.symbol == symbol]
-                if len(open_symbol_trades) >= max_per_symbol:
+                broker_sym_cnt = len([p for p in live_broker_positions if (p.get('symbol') or '').upper() == symbol.upper()])
+                effective_symbol_count = max(len(open_symbol_trades), broker_sym_cnt)
+                if effective_symbol_count >= max_per_symbol:
                     self.log(
-                        f"  ⏸️ Max per-pair open positions reached for {symbol} ({len(open_symbol_trades)}/{max_per_symbol}). "
+                        f"  ⏸️ Max per-pair open positions reached for {symbol} ({effective_symbol_count}/{max_per_symbol}). "
                         f"Rejecting/queuing signal [{best_signal.strategy_name}]."
                     )
                     break
@@ -1370,7 +1421,7 @@ class TradingBot:
                 combined_risk_multiplier = regime_analysis.risk_multiplier * temporal_risk_mult * sig_risk_frac
                 equity = self.broker.get_account_equity()
                 auth = self.risk_engine.authorize_trade(
-                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier, current_time=now_utc
+                    best_signal, equity, fixed_lot_size=pair_lot, risk_multiplier=combined_risk_multiplier, current_time=now_utc, broker_open_positions=live_broker_positions
                 )
 
                 if not auth.authorized:
