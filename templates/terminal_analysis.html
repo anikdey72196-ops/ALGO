@@ -5,7 +5,7 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium {% if is_active %}text-primary{% else %}text-secondary{% endif %}" id="headerLiveStatusBadge"><span class="w-1.5 h-1.5 rounded-full {% if is_active %}bg-primary animate-pulse{% else %}bg-secondary{% endif %}" id="headerLiveDot"></span><span id="headerLiveText">{% if is_active %}LIVE{% else %}STANDBY{% endif %}</span></span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Analysis</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="analysisLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="analysisAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 py-4 space-y-5 max-w-xl mx-auto">
+  </head><body class="bg-background font-body text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.12)]"><div class="h-16 px-4 flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><img alt="Glacier Terminal Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WBxtztAcZrWDSZqMuxKA5ZXiKptotFs8lUm8h19qdWjYspDW9ZavXm3S5wajQloR1ClCiH2pMisF_AttfBYm9_3GKeTc4IQEYLgj4PrGTtOYvZn-V1X6nD7kEQdM6ci2T_77OTt-F4Cu2JAy3x9PMbgQ9CsW2Bet73wROtd4-hwYMQkSZiipJL5EuL5AHReJsUuPjUrnA9ANpawOoDE25c179zr2ard2nZU_VWU3gmRC6UCN47imbpLpw"/><div class="flex flex-col min-w-0"><div class="flex items-center gap-1.5"><span class="text-xs font-semibold tracking-wider uppercase text-on-surface truncate">GLACIER</span><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container text-[10px] font-medium {% if is_active %}text-primary{% else %}text-secondary{% endif %}" id="headerLiveStatusBadge"><span class="w-1.5 h-1.5 rounded-full {% if is_active %}bg-primary animate-pulse{% else %}bg-secondary{% endif %}" id="headerLiveDot"></span><span id="headerLiveText">{% if is_active %}LIVE{% else %}STANDBY{% endif %}</span></span></div><span class="text-[11px] font-medium text-on-surface-variant truncate">Analysis</span></div></div><div class="flex items-center gap-2 shrink-0"><div class="relative inline-flex items-center"><select id="headerPairSelect" class="appearance-none bg-surface-container-high border border-outline-variant hover:border-primary text-primary font-mono font-bold text-[11px] rounded-lg pl-2 pr-6 py-1.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-all" aria-label="Filter pair analysis"><option value="ALL">All Pairs (12)</option><option value="XAUUSD">XAUUSD</option><option value="EURUSD">EURUSD</option><option value="GBPUSD">GBPUSD</option><option value="USDCHF">USDCHF</option><option value="AUDJPY">AUDJPY</option><option value="EURJPY">EURJPY</option><option value="CADCHF">CADCHF</option><option value="NZDCAD">NZDCAD</option><option value="NZDCHF">NZDCHF</option><option value="NZDUSD">NZDUSD</option><option value="BTCUSD">BTCUSD</option><option value="ETHUSD">ETHUSD</option></select><span class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 material-symbols-outlined text-[15px] text-primary">expand_more</span></div><div class="hidden sm:flex flex-col items-end text-right px-2 py-1 rounded bg-surface-container-low"><div class="flex items-center gap-1 text-[10px] font-medium text-secondary"><span class="material-symbols-outlined text-[12px]">wifi_tethering</span><span id="analysisLatency">12ms NY4</span></div><span class="text-[10px] text-on-surface-variant uppercase tracking-wider" id="analysisAccount">ACC: #4902-INST</span></div><button class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-left"><div class="flex flex-col"><span class="text-[9px] uppercase tracking-wider text-on-surface-variant leading-none">Desk</span><span class="text-[11px] font-semibold text-on-surface leading-tight">ALPHA-1</span></div><span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 bg-background pb-28"><div class="flex flex-col w-full px-4 py-4 space-y-5 max-w-xl mx-auto">
 <!-- Ambient Frozen Glow Orbs (Subtle Depth) -->
 <div class="relative w-full">
 <div class="absolute -top-10 -left-12 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -222,17 +222,39 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
 </section>
 <!-- Section 3: Pair Performance SVG Bar Chart -->
 <section class="rounded-xl bg-surface-container/70 backdrop-blur-md p-4 shadow-sm flex flex-col gap-3">
-<div class="flex items-center justify-between">
-<div class="flex flex-col">
-<span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Asset Profitability Index</span>
-<span class="text-[11px] text-on-surface-variant">Normalized net yield &amp; win rate per ticker</span>
-</div>
-<div class="flex items-center gap-1 text-[10px] text-on-surface-variant">
-<span class="w-2 h-2 rounded bg-primary"></span> Win Rate %
+<div class="flex items-center justify-between gap-2 flex-wrap">
+  <div class="flex flex-col">
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <span class="text-xs font-semibold uppercase tracking-wider text-on-surface">Asset Profitability Index</span>
+      <div class="relative inline-flex items-center">
+        <select id="analysisPairSelect"
+          class="appearance-none bg-surface-container-highest border-2 border-primary/60 hover:border-primary text-primary font-mono font-bold text-xs rounded-lg pl-2.5 pr-7 py-1 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer transition-all"
+          aria-label="Select asset pair for deep dive">
+          <option value="ALL">All Pairs (12)</option>
+          <option value="XAUUSD">XAUUSD (Gold)</option>
+          <option value="EURUSD">EURUSD</option>
+          <option value="GBPUSD">GBPUSD</option>
+          <option value="USDCHF">USDCHF</option>
+          <option value="AUDJPY">AUDJPY</option>
+          <option value="EURJPY">EURJPY</option>
+          <option value="CADCHF">CADCHF</option>
+          <option value="NZDCAD">NZDCAD</option>
+          <option value="NZDCHF">NZDCHF</option>
+          <option value="NZDUSD">NZDUSD</option>
+          <option value="BTCUSD">BTCUSD</option>
+          <option value="ETHUSD">ETHUSD</option>
+        </select>
+        <span class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-primary">expand_more</span>
       </div>
+    </div>
+    <span class="text-[11px] text-on-surface-variant">Normalized net yield &amp; win rate per ticker</span>
+  </div>
+  <div class="flex items-center gap-1 text-[10px] text-on-surface-variant">
+    <span class="w-2 h-2 rounded bg-primary"></span> Win Rate %
+  </div>
 </div>
 <!-- Clean SVG Bar Graph with horizontal scrolling for all 12 pairs in one unified line -->
-<div class="w-full pt-2 overflow-x-auto scrollbar-none pb-1">
+<div id="barScrollWrapper" class="w-full pt-2 overflow-x-auto scrollbar-none pb-1">
 <div class="min-w-[820px] w-full">
 <svg aria-label="Asset win rate bar chart" class="w-full h-44 select-none overflow-visible" role="img" viewbox="0 0 820 150">
 <!-- Horizontal Grid Reference Lines -->
@@ -245,90 +267,122 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
 <text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="816" y="103">40%</text>
 
 <!-- Bar 1: XAUUSD (Group 1 - Metals) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="XAUUSD">
 <rect fill="#f59e0b" height="37" opacity="0.9" rx="4" width="34" x="16" y="88" id="barRect1"></rect>
 <text class="text-[9px] fill-amber-400 font-bold font-mono" text-anchor="middle" x="33" y="82" id="barVal1">28.2%</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="33" y="140">XAUUSD</text>
 </g>
 
 <!-- Bar 2: EURUSD (Group 2 - Majors) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="EURUSD">
 <rect fill="#38bdf8" height="55" opacity="0.85" rx="4" width="34" x="82" y="70" id="barRect2"></rect>
 <text class="text-[9px] fill-sky-400 font-bold font-mono" text-anchor="middle" x="99" y="64" id="barVal2">41.8%</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="99" y="140">EURUSD</text>
 </g>
 
 <!-- Bar 3: GBPUSD (Group 2 - Majors) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="GBPUSD">
 <rect fill="#38bdf8" height="51" opacity="0.85" rx="4" width="34" x="148" y="74" id="barRect3"></rect>
 <text class="text-[9px] fill-sky-400 font-bold font-mono" text-anchor="middle" x="165" y="68" id="barVal3">38.8%</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="165" y="140">GBPUSD</text>
 </g>
 
 <!-- Bar 4: USDCHF (Group 2 - Majors) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="USDCHF">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="214" y="122" id="barRect4"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="231" y="117" id="barVal4">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="231" y="140">USDCHF</text>
 </g>
 
 <!-- Bar 5: AUDJPY (Group 3 - Yen) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="AUDJPY">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="280" y="122" id="barRect5"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="297" y="117" id="barVal5">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="297" y="140">AUDJPY</text>
 </g>
 
 <!-- Bar 6: EURJPY (Group 3 - Yen) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="EURJPY">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="346" y="122" id="barRect6"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="363" y="117" id="barVal6">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="363" y="140">EURJPY</text>
 </g>
 
 <!-- Bar 7: CADCHF (Group 4 - Commodity) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="CADCHF">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="412" y="122" id="barRect7"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="429" y="117" id="barVal7">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="429" y="140">CADCHF</text>
 </g>
 
 <!-- Bar 8: NZDCAD (Group 4 - Commodity) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="NZDCAD">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="478" y="122" id="barRect8"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="495" y="117" id="barVal8">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="495" y="140">NZDCAD</text>
 </g>
 
 <!-- Bar 9: NZDCHF (Group 4 - Commodity) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="NZDCHF">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="544" y="122" id="barRect9"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="561" y="117" id="barVal9">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="561" y="140">NZDCHF</text>
 </g>
 
 <!-- Bar 10: NZDUSD (Group 4 - Commodity) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="NZDUSD">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="610" y="122" id="barRect10"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="627" y="117" id="barVal10">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="627" y="140">NZDUSD</text>
 </g>
 
 <!-- Bar 11: BTCUSD (Crypto) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="BTCUSD">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="676" y="122" id="barRect11"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="693" y="117" id="barVal11">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="693" y="140">BTCUSD</text>
 </g>
 
 <!-- Bar 12: ETHUSD (Crypto) -->
-<g class="group cursor-pointer">
+<g class="group cursor-pointer" data-symbol="ETHUSD">
 <rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="742" y="122" id="barRect12"></rect>
 <text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="759" y="117" id="barVal12">0 Trd</text>
 <text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="759" y="140">ETHUSD</text>
 </g>
 </svg>
 </div>
+</div>
+<!-- Selected Pair Spotlight Bar (Dynamic based on Dropdown Selection) -->
+<div id="pairSpotlightContainer" class="hidden rounded-lg bg-surface-container-high/90 border border-primary/40 p-2.5 flex flex-col gap-1.5 transition-all shadow-sm">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+      <span class="text-xs font-mono font-bold text-primary" id="spotlightSymbol">XAUUSD</span>
+      <span class="text-[10px] text-on-surface font-medium" id="spotlightName">Gold / US Dollar</span>
+      <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-primary-container/40 text-primary-fixed border border-primary/30 font-semibold" id="spotlightCluster">Group 1 • Precious Metals</span>
+    </div>
+    <button type="button" id="clearSpotlightBtn" class="text-[10px] text-on-surface-variant hover:text-primary font-medium flex items-center gap-0.5 cursor-pointer">
+      Show All <span class="material-symbols-outlined text-[12px]">close</span>
+    </button>
+  </div>
+  <div class="grid grid-cols-4 gap-2 pt-1.5 border-t border-surface-container-highest/80 text-center text-xs font-mono">
+    <div class="flex flex-col">
+      <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Win Rate</span>
+      <span class="font-bold text-primary" id="spotlightWR">0.0%</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Trades</span>
+      <span class="font-semibold text-on-surface" id="spotlightTrades">0 (0W / 0L)</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">Net PnL</span>
+      <span class="font-bold text-primary" id="spotlightPnL">$0.00</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-[9px] uppercase tracking-wider text-on-surface-variant">ML Cluster Gate</span>
+      <span class="font-semibold text-emerald-400" id="spotlightMLGate">ACTIVE</span>
+    </div>
+  </div>
 </div>
 <!-- Subtext Breakdown -->
 <div class="flex items-center justify-between pt-1 text-[11px] text-on-surface-variant border-t border-surface-container-high/60">
@@ -693,11 +747,7 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
         // Performance by pair (Real SVG Bar Graph with flat zero-baseline for un-traded pairs)
         if (s.stats_by_pair) {
           const pairs = s.stats_by_pair;
-          const pairKeys = [
-            'XAUUSD', 'EURUSD', 'GBPUSD', 'USDCHF',
-            'AUDJPY', 'EURJPY', 'CADCHF', 'NZDCAD',
-            'NZDCHF', 'NZDUSD', 'BTCUSD', 'ETHUSD'
-          ];
+          cachedPairStats = pairs;
           pairKeys.forEach((sym, idx) => {
             const p = pairs[sym];
             const valEl = document.getElementById(`barVal${idx + 1}`);
@@ -716,29 +766,36 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
               if (rectEl) {
                 rectEl.setAttribute('height', h);
                 rectEl.setAttribute('y', 125 - h);
-                rectEl.setAttribute('opacity', '0.9');
+                rectEl.setAttribute('opacity', selectedPairFilter === 'ALL' || selectedPairFilter === sym ? '0.9' : '0.2');
                 rectEl.setAttribute('fill', col);
               }
               if (valEl) {
                 valEl.textContent = `${wr}%`;
                 valEl.setAttribute('y', Math.max(15, 125 - h - 5));
                 valEl.setAttribute('fill', col);
+                valEl.style.opacity = selectedPairFilter === 'ALL' || selectedPairFilter === sym ? '1' : '0.2';
               }
             } else {
               // Exact 0 trades: draw baseline bar, flat 0 indicator (avoids fake bars for un-traded pairs)
               if (rectEl) {
                 rectEl.setAttribute('height', 3);
                 rectEl.setAttribute('y', 122);
-                rectEl.setAttribute('opacity', '0.25');
+                rectEl.setAttribute('opacity', selectedPairFilter === 'ALL' || selectedPairFilter === sym ? '0.25' : '0.1');
                 rectEl.setAttribute('fill', '#475569');
               }
               if (valEl) {
                 valEl.textContent = '0 Trd';
                 valEl.setAttribute('y', 117);
                 valEl.setAttribute('fill', '#64748b');
+                valEl.style.opacity = selectedPairFilter === 'ALL' || selectedPairFilter === sym ? '1' : '0.2';
               }
             }
           });
+
+          // Refresh spotlight if a pair is focused
+          if (selectedPairFilter !== 'ALL') {
+            updateSpotlightUI(selectedPairFilter);
+          }
 
           // Top Yield and Best Win Rate from real pair stats
           const tradedPairs = Object.values(pairs).filter(x => x && (x.total > 0 || x.total_trades > 0));
@@ -758,6 +815,141 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
           }
         }
   }
+
+  // ── Pair Focus & Spotlight Controller ──
+  const PAIR_METADATA = {
+    'XAUUSD': { name: 'Gold / US Dollar', cluster: 'Group 1 • Precious Metals' },
+    'EURUSD': { name: 'Euro / US Dollar', cluster: 'Group 2 • Major Forex' },
+    'GBPUSD': { name: 'British Pound / US Dollar', cluster: 'Group 2 • Major Forex' },
+    'USDCHF': { name: 'US Dollar / Swiss Franc', cluster: 'Group 2 • Major Forex' },
+    'AUDJPY': { name: 'Aussie / Japanese Yen', cluster: 'Group 3 • Yen Crosses' },
+    'EURJPY': { name: 'Euro / Japanese Yen', cluster: 'Group 3 • Yen Crosses' },
+    'CADCHF': { name: 'Loonie / Swiss Franc', cluster: 'Group 4 • Commodity Crosses' },
+    'NZDCAD': { name: 'Kiwi / Canadian Dollar', cluster: 'Group 4 • Commodity Crosses' },
+    'NZDCHF': { name: 'Kiwi / Swiss Franc', cluster: 'Group 4 • Commodity Crosses' },
+    'NZDUSD': { name: 'Kiwi / US Dollar', cluster: 'Group 4 • Commodity Crosses' },
+    'BTCUSD': { name: 'Bitcoin / US Dollar', cluster: 'Crypto Assets' },
+    'ETHUSD': { name: 'Ethereum / US Dollar', cluster: 'Crypto Assets' }
+  };
+
+  const pairKeys = [
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDCHF',
+    'AUDJPY', 'EURJPY', 'CADCHF', 'NZDCAD',
+    'NZDCHF', 'NZDUSD', 'BTCUSD', 'ETHUSD'
+  ];
+
+  let selectedPairFilter = 'ALL';
+  let cachedPairStats = {};
+
+  function updateSpotlightUI(sym) {
+    const meta = PAIR_METADATA[sym] || { name: sym, cluster: 'Asset Pair' };
+    const pData = cachedPairStats[sym] || {};
+    const totalTrades = pData.total || pData.total_trades || 0;
+    const wins = pData.wins || pData.winning_trades || 0;
+    const losses = pData.losses || pData.losing_trades || 0;
+    const wr = pData.win_rate !== undefined ? parseFloat(pData.win_rate).toFixed(1) : (totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : '0.0');
+    const pnl = pData.pnl || pData.total_pnl || 0;
+    const pnlSign = pnl >= 0 ? `+$${parseFloat(pnl).toFixed(2)}` : `-$${Math.abs(parseFloat(pnl)).toFixed(2)}`;
+
+    const symEl = document.getElementById('spotlightSymbol');
+    const nameEl = document.getElementById('spotlightName');
+    const clusterEl = document.getElementById('spotlightCluster');
+    const wrEl = document.getElementById('spotlightWR');
+    const trdEl = document.getElementById('spotlightTrades');
+    const pnlEl = document.getElementById('spotlightPnL');
+    const mlEl = document.getElementById('spotlightMLGate');
+
+    if (symEl) symEl.textContent = sym;
+    if (nameEl) nameEl.textContent = meta.name;
+    if (clusterEl) clusterEl.textContent = meta.cluster;
+    if (wrEl) wrEl.textContent = `${wr}%`;
+    if (trdEl) trdEl.textContent = `${totalTrades} (${wins}W / ${losses}L)`;
+    if (pnlEl) {
+      pnlEl.textContent = pnlSign;
+      pnlEl.className = `font-bold ${pnl >= 0 ? 'text-primary' : 'text-rose-400'}`;
+    }
+    if (mlEl) mlEl.textContent = 'ACTIVE (4-Cluster Guard)';
+  }
+
+  function setPairFocus(sym) {
+    selectedPairFilter = sym || 'ALL';
+    const hSelect = document.getElementById('headerPairSelect');
+    const aSelect = document.getElementById('analysisPairSelect');
+    if (hSelect && hSelect.value !== selectedPairFilter) hSelect.value = selectedPairFilter;
+    if (aSelect && aSelect.value !== selectedPairFilter) aSelect.value = selectedPairFilter;
+
+    const spotlight = document.getElementById('pairSpotlightContainer');
+    const scrollWrap = document.getElementById('barScrollWrapper');
+
+    if (selectedPairFilter === 'ALL') {
+      if (spotlight) spotlight.classList.add('hidden');
+      pairKeys.forEach((k, idx) => {
+        const rectEl = document.getElementById(`barRect${idx + 1}`);
+        const valEl = document.getElementById(`barVal${idx + 1}`);
+        if (rectEl) {
+          rectEl.style.opacity = '';
+          rectEl.removeAttribute('stroke');
+          rectEl.removeAttribute('stroke-width');
+        }
+        if (valEl) valEl.style.opacity = '';
+      });
+      return;
+    }
+
+    const idx = pairKeys.indexOf(selectedPairFilter);
+    if (idx !== -1) {
+      pairKeys.forEach((k, i) => {
+        const rectEl = document.getElementById(`barRect${i + 1}`);
+        const valEl = document.getElementById(`barVal${i + 1}`);
+        if (i === idx) {
+          if (rectEl) {
+            rectEl.style.opacity = '1';
+            rectEl.setAttribute('stroke', '#ffffff');
+            rectEl.setAttribute('stroke-width', '2');
+          }
+          if (valEl) valEl.style.opacity = '1';
+        } else {
+          if (rectEl) {
+            rectEl.style.opacity = '0.2';
+            rectEl.removeAttribute('stroke');
+            rectEl.removeAttribute('stroke-width');
+          }
+          if (valEl) valEl.style.opacity = '0.2';
+        }
+      });
+
+      if (scrollWrap) {
+        const barX = 16 + idx * 66;
+        scrollWrap.scrollTo({ left: Math.max(0, barX - 120), behavior: 'smooth' });
+      }
+    }
+
+    updateSpotlightUI(selectedPairFilter);
+    if (spotlight) spotlight.classList.remove('hidden');
+  }
+
+  // Event Listeners for Pair Dropdowns & SVG Bars
+  document.addEventListener('DOMContentLoaded', () => {
+    const hSelect = document.getElementById('headerPairSelect');
+    if (hSelect) {
+      hSelect.addEventListener('change', (e) => setPairFocus(e.target.value));
+    }
+    const aSelect = document.getElementById('analysisPairSelect');
+    if (aSelect) {
+      aSelect.addEventListener('change', (e) => setPairFocus(e.target.value));
+    }
+    const clearBtn = document.getElementById('clearSpotlightBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => setPairFocus('ALL'));
+    }
+
+    document.querySelectorAll('svg g[data-symbol]').forEach(g => {
+      g.addEventListener('click', () => {
+        const sym = g.getAttribute('data-symbol');
+        if (sym) setPairFocus(sym);
+      });
+    });
+  });
 
   async function fetchLiveState() {
     try {
