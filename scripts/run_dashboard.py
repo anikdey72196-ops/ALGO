@@ -1,4 +1,4 @@
-# run_dashboard.py - Clean entrypoint for launching Web Control Station
+# scripts/run_dashboard.py - Clean entrypoint for launching Web Control Station
 import os
 import sys
 import time
@@ -33,7 +33,7 @@ def open_browser():
     webbrowser.open("http://127.0.0.1:8000")
 
 if __name__ == "__main__":
-    script_dir = Path(__file__).parent.resolve()
+    script_dir = Path(__file__).resolve().parent.parent
     os.chdir(script_dir)
 
     # 1. Ensure execution within virtual environment if available

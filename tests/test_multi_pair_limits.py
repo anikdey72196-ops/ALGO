@@ -18,11 +18,11 @@ from datetime import datetime, timezone
 import pandas as pd
 from unittest.mock import MagicMock
 
-from config import TradingConfig, InstrumentConfig, Direction, MarketBias
-from strategy import TradeSignal, LTFConfirmation
-from state import TradeRecord
-from risk_engine import RiskEngine
-from ai_analyst import AIAnalyst
+from core.config import TradingConfig, InstrumentConfig, Direction, MarketBias
+from strategies.strategy import TradeSignal, LTFConfirmation
+from core.state import TradeRecord
+from core.risk_engine import RiskEngine
+from core.ai_analyst import AIAnalyst
 from ml.trap_detector import TrapDetectorService, TrapDetectorConfig, EventKind
 from main import TradingBot
 

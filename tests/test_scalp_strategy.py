@@ -18,7 +18,7 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import numpy as np
 
-from config import (
+from core.config import (
     TradingConfig,
     InstrumentConfig,
     Direction,
@@ -27,7 +27,7 @@ from config import (
     RiskConfig,
     StrategyType,
 )
-from strategy import (
+from strategies.strategy import (
     StrategyEngine,
     SMCScalp5MEngine,
     HTFAnalyzer,
@@ -35,8 +35,8 @@ from strategy import (
     TradeSignal,
     LTFConfirmation,
 )
-from conflict_resolver import ConflictResolver
-from ai_analyst import AIAnalyst
+from core.conflict_resolver import ConflictResolver
+from core.ai_analyst import AIAnalyst
 
 
 def make_candle(time, o, h, l, c, vol=100):

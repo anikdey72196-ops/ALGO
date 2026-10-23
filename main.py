@@ -359,6 +359,7 @@ class TradingBot:
                     self.config.ml_shadow_mode = bool(saved["ml_shadow_mode"])
                 else:
                     self.config.ml_shadow_mode = getattr(self.config, 'ml_shadow_mode', True)
+                self.config.temporal_ml_shadow_mode = bool(saved.get("temporal_ml_shadow_mode", self.config.ml_shadow_mode))
                 if hasattr(self, "trap_svc") and self.trap_svc:
                     self.trap_svc.cfg.shadow_mode = self.config.ml_shadow_mode
                 if "weekend_retrain_enabled" in saved:
@@ -432,6 +433,7 @@ class TradingBot:
                 "ml_gating_enabled": getattr(self.config, "ml_gating_enabled", True),
                 "ml_max_sl_probability": getattr(self.config, "ml_max_sl_probability", 0.50),
                 "ml_shadow_mode": getattr(self.config, "ml_shadow_mode", True),
+                "temporal_ml_shadow_mode": getattr(self.config, "temporal_ml_shadow_mode", getattr(self.config, "ml_shadow_mode", True)),
                 "temporal_ml_enabled": getattr(self.config, "temporal_ml_enabled", True),
                 "reversal_strategy_enabled": getattr(self.config, "reversal_strategy_enabled", False),
                 "weekend_retrain_enabled": getattr(self.config, "weekend_retrain_enabled", True),
@@ -1705,7 +1707,7 @@ class TradingBot:
         # In mock mode, generate data on first call
         if self.config.use_mock_broker:
             try:
-                from mock_data import get_demo_datasets, get_demo_dataset_for_symbol
+                from strategies.mock_data import get_demo_datasets, get_demo_dataset_for_symbol
                 datasets = get_demo_datasets()
                 if symbol in datasets and timeframe in datasets[symbol]:
                     df = datasets[symbol][timeframe]

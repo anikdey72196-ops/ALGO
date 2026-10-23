@@ -80,7 +80,7 @@ exit /b 1
 
 :run
 echo Using interpreter: %PY_EXE%
-%PY_EXE% run_dashboard.py
+%PY_EXE% scripts\run_dashboard.py
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

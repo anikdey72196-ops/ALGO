@@ -363,8 +363,26 @@ def train_and_evaluate_all(db_path: str = "trading_state.db") -> dict[str, dict]
     print("SUCCESS: All 5 strategy models are now operational, isolated, and calibrated!")
     print("=" * 80 + "\n")
 
+    # 4-Cluster ML Models Initialization & Calibration
+    initialize_and_train_clusters(db_path=db_path)
+
     svc.close()
     return report
+
+
+def initialize_and_train_clusters(db_path: str = "trading_state.db", force: bool = False) -> dict[str, Any]:
+    """Initialize and calibrate the 4-Cluster ML Trap Detectors without modifying legacy weights."""
+    from ml.cluster_manager import ClusterTrapDetectorService, ClusterModelInitializer
+    print("\n" + "=" * 80)
+    print("      4-CLUSTER MACHINE LEARNING MODEL INITIALIZATION & RESTRUCTURING")
+    print("=" * 80)
+    svc = ClusterTrapDetectorService(base_dir="ml/artifacts/clusters", legacy_dir="ml/artifacts", db_path=db_path)
+    initr = ClusterModelInitializer(svc)
+    res = initr.initialize_all_clusters(force=force)
+    for grp, msg in res.items():
+        print(f"[+] {msg}")
+    print("=" * 80 + "\n")
+    return res
 
 
 if __name__ == "__main__":

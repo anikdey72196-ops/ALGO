@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
 
-from config import (
+from core.config import (
     DEFAULT_CONFIG,
     Direction,
     InstrumentConfig,
@@ -18,8 +18,8 @@ from config import (
     TradingConfig,
     normalize_strategy_key,
 )
-from conflict_resolver import ConflictResolver
-from strategy import (
+from core.conflict_resolver import ConflictResolver
+from strategies.strategy import (
     HTFAnalysis,
     HTFAnalyzer,
     LiquidityPool,

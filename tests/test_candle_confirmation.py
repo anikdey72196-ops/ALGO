@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import numpy as np
 
-from config import (
+from core.config import (
     TradingConfig,
     InstrumentConfig,
     Direction,
@@ -29,7 +29,7 @@ from config import (
     ICTConfig,
     OrderFlowConfig,
 )
-from strategy import (
+from strategies.strategy import (
     check_candle_body_confirmation,
     SMCEntryDetector,
     SMCScalp5MEngine,

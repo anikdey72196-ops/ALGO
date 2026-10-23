@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
 
-from config import StrategyType, normalize_strategy_key
+from core.config import StrategyType, normalize_strategy_key
 from ml.trap_detector import (
     TrapDetectorConfig,
     TrapDetectorService,

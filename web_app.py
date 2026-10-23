@@ -43,6 +43,12 @@ try:
 except ImportError:
     SmartPartialTPService = None
 
+try:
+    from ml.cluster_manager import AssetCluster, CLUSTER_PAIRS
+except ImportError:
+    AssetCluster = None
+    CLUSTER_PAIRS = {}
+
 
 # ─────────────────────────────────────────────
 #  Pydantic Schemas for Web API
@@ -135,6 +141,8 @@ class BotStateResponse(BaseModel):
     current_window: dict = {}
     temporal_ml_shadow_mode: bool = True
     daily_bias: dict = {}
+    ml_clusters: dict = {}
+    pair_lockouts: dict = {}
 
 
 
@@ -738,6 +746,8 @@ async def get_bot_state():
         current_window=getattr(bot_instance, "window_recorder", None).get_window_info() if hasattr(bot_instance, "window_recorder") and bot_instance.window_recorder else {},
         temporal_ml_shadow_mode=getattr(bot_instance.config, "temporal_ml_shadow_mode", True),
         daily_bias=bot_instance.get_daily_bias_summary() if hasattr(bot_instance, "get_daily_bias_summary") else {},
+        ml_clusters=_get_clusters_status(bot_instance),
+        pair_lockouts=bot_instance.pair_tracker.summary() if hasattr(bot_instance, "pair_tracker") and bot_instance.pair_tracker else {},
     )
 
 
@@ -1102,6 +1112,7 @@ async def handle_dashboard_update(payload: dict):
             )
         enabled = payload.get("enabled", True)
         bot_instance.config.ml_shadow_mode = bool(enabled)
+        bot_instance.config.temporal_ml_shadow_mode = bool(enabled)
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
             bot_instance.trap_svc.cfg.shadow_mode = bool(enabled)
         bot_instance.save_settings()
@@ -1188,6 +1199,7 @@ async def handle_dashboard_update(payload: dict):
             if "ml_shadow_mode" in payload or "mlShadowMode" in payload:
                 m_val = bool(payload.get("ml_shadow_mode", payload.get("mlShadowMode", True)))
                 bot_instance.config.ml_shadow_mode = m_val
+                bot_instance.config.temporal_ml_shadow_mode = m_val
                 if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
                     bot_instance.trap_svc.cfg.shadow_mode = m_val
             if "ai_confirmation_enabled" in payload or "aiGateEnabled" in payload:
@@ -1411,6 +1423,7 @@ async def handle_dashboard_update(payload: dict):
         if "mlShadowMode" in config or "ml_shadow_mode" in config:
             m_val = bool(config.get("mlShadowMode", config.get("ml_shadow_mode", True)))
             bot_instance.config.ml_shadow_mode = m_val
+            bot_instance.config.temporal_ml_shadow_mode = m_val
             if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
                 bot_instance.trap_svc.cfg.shadow_mode = m_val
 
@@ -1734,6 +1747,7 @@ async def update_configuration(payload: BotConfigUpdate):
                 detail="ML Shadow Mode setting is LOCKED during activation! Deactivate the bot first to toggle ML Shadow Mode."
             )
         bot_instance.config.ml_shadow_mode = payload.ml_shadow_mode
+        bot_instance.config.temporal_ml_shadow_mode = payload.ml_shadow_mode
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
             bot_instance.trap_svc.cfg.shadow_mode = payload.ml_shadow_mode
 
@@ -2030,6 +2044,63 @@ async def get_ml_shadow_stats(threshold: float = 0.50):
                 stats["rolling_accuracy_pct"] = base_acc
                 stats["alpha_drift_pct"] = 0.0
         return {"status": "success", **stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_clusters_status(bot) -> dict[str, Any]:
+    if not bot or not hasattr(bot, "cluster_trap_svc") or not bot.cluster_trap_svc:
+        return {}
+    res = {}
+    if AssetCluster:
+        for c in AssetCluster:
+            c_models = bot.cluster_trap_svc.get_cluster_models(c)
+            res[c.value] = {
+                "cluster_name": c.value,
+                "pairs": CLUSTER_PAIRS.get(c, []),
+                "models": {
+                    s: {
+                        "version": m.version,
+                        "n_samples": m.n_samples,
+                        "is_fitted": m._sgd_fitted or m.lgbm is not None,
+                    }
+                    for s, m in c_models.items()
+                },
+            }
+    return res
+
+
+@app.get("/api/ml/clusters")
+async def get_ml_clusters_status():
+    """Return status of all 4 asset clusters, member pairs, and their 20 dedicated ML models."""
+    if not bot_instance or not hasattr(bot_instance, "cluster_trap_svc") or not bot_instance.cluster_trap_svc:
+        return {"status": "inactive", "message": "ClusterTrapDetectorService not initialized"}
+    try:
+        clusters = _get_clusters_status(bot_instance)
+        lockouts = bot_instance.pair_tracker.summary() if hasattr(bot_instance, "pair_tracker") and bot_instance.pair_tracker else {}
+        return {
+            "status": "success",
+            "clusters": clusters,
+            "pair_lockouts": lockouts,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ml/lockout/reset")
+async def reset_pair_lockout(payload: dict = Body(default={})):
+    """Reset dynamic safety lockout for a pair or all pairs."""
+    if not bot_instance or not hasattr(bot_instance, "pair_tracker") or not bot_instance.pair_tracker:
+        raise HTTPException(status_code=500, detail="PairPerformanceTracker not initialized")
+    try:
+        symbol = payload.get("symbol")
+        if symbol:
+            bot_instance.pair_tracker.unlock_pair(symbol)
+            return {"status": "success", "message": f"Lockout reset for {symbol}"}
+        else:
+            for s in list(bot_instance.pair_tracker._states.keys()):
+                bot_instance.pair_tracker.unlock_pair(s)
+            return {"status": "success", "message": "All pair lockouts reset successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

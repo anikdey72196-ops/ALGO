@@ -231,48 +231,104 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
 <span class="w-2 h-2 rounded bg-primary"></span> Win Rate %
       </div>
 </div>
-<!-- Clean SVG Bar Graph -->
-<div class="w-full pt-2">
-<svg aria-label="Asset win rate bar chart" class="w-full h-40 select-none overflow-visible" role="img" viewbox="0 0 340 150">
+<!-- Clean SVG Bar Graph with horizontal scrolling for all 12 pairs in one unified line -->
+<div class="w-full pt-2 overflow-x-auto scrollbar-none pb-1">
+<div class="min-w-[820px] w-full">
+<svg aria-label="Asset win rate bar chart" class="w-full h-44 select-none overflow-visible" role="img" viewbox="0 0 820 150">
 <!-- Horizontal Grid Reference Lines -->
-<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="20" y2="20"></line>
-<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="60" y2="60"></line>
-<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="340" y1="100" y2="100"></line>
-<line class="text-outline-variant/80" stroke="currentColor" stroke-width="1" x1="0" x2="340" y1="125" y2="125"></line>
-<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="23">80%</text>
-<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="63">60%</text>
-<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="338" y="103">40%</text>
-<!-- Bar 1: XAUUSD -->
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="820" y1="20" y2="20"></line>
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="820" y1="60" y2="60"></line>
+<line class="text-outline-variant/40" stroke="currentColor" stroke-dasharray="3 3" stroke-width="0.8" x1="0" x2="820" y1="100" y2="100"></line>
+<line class="text-outline-variant/80" stroke="currentColor" stroke-width="1" x1="0" x2="820" y1="125" y2="125"></line>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="816" y="23">80%</text>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="816" y="63">60%</text>
+<text class="text-[8px] fill-on-surface-variant font-mono" text-anchor="end" x="816" y="103">40%</text>
+
+<!-- Bar 1: XAUUSD (Group 1 - Metals) -->
 <g class="group cursor-pointer">
-<rect fill="#7dd3fc" height="37" opacity="0.9" rx="4" width="30" x="22" y="88" id="barRect1"></rect>
-<text class="text-[9px] fill-primary font-bold font-mono" text-anchor="middle" x="37" y="82" id="barVal1">28.2%</text>
-<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="37" y="140">XAUUSD</text>
+<rect fill="#f59e0b" height="37" opacity="0.9" rx="4" width="34" x="16" y="88" id="barRect1"></rect>
+<text class="text-[9px] fill-amber-400 font-bold font-mono" text-anchor="middle" x="33" y="82" id="barVal1">28.2%</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="33" y="140">XAUUSD</text>
 </g>
-<!-- Bar 2: GBPUSD -->
+
+<!-- Bar 2: EURUSD (Group 2 - Majors) -->
 <g class="group cursor-pointer">
-<rect fill="#88b4cc" height="51" opacity="0.85" rx="4" width="30" x="88" y="74" id="barRect2"></rect>
-<text class="text-[9px] fill-secondary font-bold font-mono" text-anchor="middle" x="103" y="68" id="barVal2">38.8%</text>
-<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="103" y="140">GBPUSD</text>
+<rect fill="#38bdf8" height="55" opacity="0.85" rx="4" width="34" x="82" y="70" id="barRect2"></rect>
+<text class="text-[9px] fill-sky-400 font-bold font-mono" text-anchor="middle" x="99" y="64" id="barVal2">41.8%</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="99" y="140">EURUSD</text>
 </g>
-<!-- Bar 3: EURUSD -->
+
+<!-- Bar 3: GBPUSD (Group 2 - Majors) -->
 <g class="group cursor-pointer">
-<rect fill="#7dd3fc" height="55" opacity="0.7" rx="4" width="30" x="154" y="70" id="barRect3"></rect>
-<text class="text-[9px] fill-primary-fixed font-bold font-mono" text-anchor="middle" x="169" y="64" id="barVal3">41.8%</text>
-<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="169" y="140">EURUSD</text>
+<rect fill="#38bdf8" height="51" opacity="0.85" rx="4" width="34" x="148" y="74" id="barRect3"></rect>
+<text class="text-[9px] fill-sky-400 font-bold font-mono" text-anchor="middle" x="165" y="68" id="barVal3">38.8%</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="165" y="140">GBPUSD</text>
 </g>
-<!-- Bar 4: BTCUSD -->
+
+<!-- Bar 4: USDCHF (Group 2 - Majors) -->
 <g class="group cursor-pointer">
-<rect fill="#475569" height="3" opacity="0.3" rx="2" width="30" x="220" y="122" id="barRect4"></rect>
-<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="235" y="117" id="barVal4">0 Trd</text>
-<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="235" y="140">BTCUSD</text>
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="214" y="122" id="barRect4"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="231" y="117" id="barVal4">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="231" y="140">USDCHF</text>
 </g>
-<!-- Bar 5: ETHUSD -->
+
+<!-- Bar 5: AUDJPY (Group 3 - Yen) -->
 <g class="group cursor-pointer">
-<rect fill="#475569" height="3" opacity="0.3" rx="2" width="30" x="286" y="122" id="barRect5"></rect>
-<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="301" y="117" id="barVal5">0 Trd</text>
-<text class="text-[10px] fill-on-surface font-medium" text-anchor="middle" x="301" y="140">ETHUSD</text>
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="280" y="122" id="barRect5"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="297" y="117" id="barVal5">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="297" y="140">AUDJPY</text>
+</g>
+
+<!-- Bar 6: EURJPY (Group 3 - Yen) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="346" y="122" id="barRect6"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="363" y="117" id="barVal6">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="363" y="140">EURJPY</text>
+</g>
+
+<!-- Bar 7: CADCHF (Group 4 - Commodity) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="412" y="122" id="barRect7"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="429" y="117" id="barVal7">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="429" y="140">CADCHF</text>
+</g>
+
+<!-- Bar 8: NZDCAD (Group 4 - Commodity) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="478" y="122" id="barRect8"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="495" y="117" id="barVal8">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="495" y="140">NZDCAD</text>
+</g>
+
+<!-- Bar 9: NZDCHF (Group 4 - Commodity) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="544" y="122" id="barRect9"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="561" y="117" id="barVal9">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="561" y="140">NZDCHF</text>
+</g>
+
+<!-- Bar 10: NZDUSD (Group 4 - Commodity) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="610" y="122" id="barRect10"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="627" y="117" id="barVal10">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="627" y="140">NZDUSD</text>
+</g>
+
+<!-- Bar 11: BTCUSD (Crypto) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="676" y="122" id="barRect11"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="693" y="117" id="barVal11">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="693" y="140">BTCUSD</text>
+</g>
+
+<!-- Bar 12: ETHUSD (Crypto) -->
+<g class="group cursor-pointer">
+<rect fill="#475569" height="3" opacity="0.3" rx="2" width="34" x="742" y="122" id="barRect12"></rect>
+<text class="text-[9px] fill-slate-500 font-bold font-mono" text-anchor="middle" x="759" y="117" id="barVal12">0 Trd</text>
+<text class="text-[9px] fill-on-surface font-medium" text-anchor="middle" x="759" y="140">ETHUSD</text>
 </g>
 </svg>
+</div>
 </div>
 <!-- Subtext Breakdown -->
 <div class="flex items-center justify-between pt-1 text-[11px] text-on-surface-variant border-t border-surface-container-high/60">
@@ -637,7 +693,11 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
         // Performance by pair (Real SVG Bar Graph with flat zero-baseline for un-traded pairs)
         if (s.stats_by_pair) {
           const pairs = s.stats_by_pair;
-          const pairKeys = ['XAUUSD', 'GBPUSD', 'EURUSD', 'BTCUSD', 'ETHUSD'];
+          const pairKeys = [
+            'XAUUSD', 'EURUSD', 'GBPUSD', 'USDCHF',
+            'AUDJPY', 'EURJPY', 'CADCHF', 'NZDCAD',
+            'NZDCHF', 'NZDUSD', 'BTCUSD', 'ETHUSD'
+          ];
           pairKeys.forEach((sym, idx) => {
             const p = pairs[sym];
             const valEl = document.getElementById(`barVal${idx + 1}`);
@@ -646,21 +706,26 @@ Inspect Log <span class="material-symbols-outlined text-[12px]">chevron_right</s
             if (p && total > 0) {
               const wr = parseFloat(p.win_rate || 0).toFixed(1);
               const h = Math.max(12, Math.min(105, Math.round(wr * 1.3125)));
+              let col = '#38bdf8';
+              if (sym === 'XAUUSD') col = '#f59e0b';
+              else if (['EURUSD', 'GBPUSD', 'USDCHF'].includes(sym)) col = '#38bdf8';
+              else if (['AUDJPY', 'EURJPY'].includes(sym)) col = '#34d399';
+              else if (['CADCHF', 'NZDCAD', 'NZDCHF', 'NZDUSD'].includes(sym)) col = '#818cf8';
+              else if (['BTCUSD', 'ETHUSD'].includes(sym)) col = '#fb923c';
+
               if (rectEl) {
                 rectEl.setAttribute('height', h);
                 rectEl.setAttribute('y', 125 - h);
                 rectEl.setAttribute('opacity', '0.9');
-                if (idx === 0) rectEl.setAttribute('fill', '#7dd3fc');
-                else if (idx === 1) rectEl.setAttribute('fill', '#88b4cc');
-                else if (idx === 2) rectEl.setAttribute('fill', '#7dd3fc');
+                rectEl.setAttribute('fill', col);
               }
               if (valEl) {
                 valEl.textContent = `${wr}%`;
                 valEl.setAttribute('y', Math.max(15, 125 - h - 5));
-                valEl.setAttribute('fill', idx === 1 ? '#88b4cc' : '#7dd3fc');
+                valEl.setAttribute('fill', col);
               }
             } else {
-              // Exact 0 trades: draw baseline bar, flat 0 indicator (avoids fake bars for BTC/ETH)
+              // Exact 0 trades: draw baseline bar, flat 0 indicator (avoids fake bars for un-traded pairs)
               if (rectEl) {
                 rectEl.setAttribute('height', 3);
                 rectEl.setAttribute('y', 122);

@@ -18,11 +18,11 @@ from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 
-from config import TradingConfig, Direction, MarketBias, InstrumentConfig
+from core.config import TradingConfig, Direction, MarketBias, InstrumentConfig
 from execution import MockBrokerAdapter
-from state import StateManager, TradeRecord
-from risk_engine import RiskEngine
-from strategy import TradeSignal, LTFConfirmation
+from core.state import StateManager, TradeRecord
+from core.risk_engine import RiskEngine
+from strategies.strategy import TradeSignal, LTFConfirmation
 from main import TradingBot
 
 

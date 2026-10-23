@@ -54,7 +54,7 @@ import pandas as pd
 from pydantic import BaseModel, Field, field_validator
 
 try:
-    from config import normalize_strategy_key
+    from core.config import normalize_strategy_key
 except ImportError:
     def normalize_strategy_key(strat_name: str | None, magic: int | None = None) -> str:
         if magic == 124456:

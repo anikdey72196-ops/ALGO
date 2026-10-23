@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 from fastapi.testclient import TestClient
 
-from config import TradingConfig, Direction, MarketBias, InstrumentConfig
-from strategy import LTFConfirmation, TradeSignal
+from core.config import TradingConfig, Direction, MarketBias, InstrumentConfig
+from strategies.strategy import LTFConfirmation, TradeSignal
 from ml.trap_detector import (
     TrapDetectorConfig,
     TrapGate,
@@ -151,8 +151,8 @@ class TestMLDecisionOverride(unittest.TestCase):
         bot.broker.get_current_price = MagicMock(return_value=mock_quote)
 
         # Mock strategy engine and conflict resolver
-        from conflict_resolver import FilterResult
-        from news_filter import SpreadFilterResult, NewsFilter
+        from core.conflict_resolver import FilterResult
+        from core.news_filter import SpreadFilterResult, NewsFilter
         bot.strategy.evaluate_all = MagicMock(return_value=[mock_signal])
         bot.conflict_resolver.resolve = MagicMock(
             return_value=FilterResult(accepted_signal=mock_signal, total_signals=1, rejected_count=0, rejection_reasons=[])
@@ -229,8 +229,8 @@ class TestMLDecisionOverride(unittest.TestCase):
         mock_quote.spread = 0.0001
         bot.broker.get_current_price = MagicMock(return_value=mock_quote)
 
-        from conflict_resolver import FilterResult
-        from news_filter import SpreadFilterResult, NewsFilter
+        from core.conflict_resolver import FilterResult
+        from core.news_filter import SpreadFilterResult, NewsFilter
         bot.strategy.evaluate_all = MagicMock(return_value=[mock_signal])
         bot.conflict_resolver.resolve = MagicMock(
             return_value=FilterResult(accepted_signal=mock_signal, total_signals=1, rejected_count=0, rejection_reasons=[])
@@ -268,7 +268,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         bot.risk_engine.authorize_trade = MagicMock(return_value=mock_auth)
 
         import itertools
-        from state import StateManager
+        from core.state import StateManager
         bot.state = StateManager(db_path=":memory:")
 
         # Broker fills with unique IDs
@@ -395,8 +395,8 @@ class TestMLDecisionOverride(unittest.TestCase):
         mock_quote.spread = 0.0001
         bot.broker.get_current_price = MagicMock(return_value=mock_quote)
 
-        from conflict_resolver import FilterResult
-        from news_filter import SpreadFilterResult, NewsFilter
+        from core.conflict_resolver import FilterResult
+        from core.news_filter import SpreadFilterResult, NewsFilter
         bot.strategy.evaluate_all = MagicMock(return_value=[mock_signal])
         bot.conflict_resolver.resolve = MagicMock(
             return_value=FilterResult(accepted_signal=mock_signal, total_signals=1, rejected_count=0, rejection_reasons=[])
@@ -432,7 +432,7 @@ class TestMLDecisionOverride(unittest.TestCase):
         mock_auth.account_equity = 10000.0
         bot.risk_engine.authorize_trade = MagicMock(return_value=mock_auth)
 
-        from state import StateManager
+        from core.state import StateManager
         bot.state = StateManager(db_path=":memory:")
 
         def create_mock_order_res(bracket):

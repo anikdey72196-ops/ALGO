@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 
-from config import TradingConfig, RiskConfig, Direction, MarketBias
-from strategy import HTFAnalyzer, SwingPoint
-from risk_engine import RiskEngine
-from state import StateManager, TradeRecord
+from core.config import TradingConfig, RiskConfig, Direction, MarketBias
+from strategies.strategy import HTFAnalyzer, SwingPoint
+from core.risk_engine import RiskEngine
+from core.state import StateManager, TradeRecord
 
 
 class TestHTFBiasAndCache(unittest.TestCase):

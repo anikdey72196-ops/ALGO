@@ -210,7 +210,7 @@ class TestTemporalAnalyzer(unittest.TestCase):
 
     def test_temporal_ml_shadow_mode_configuration(self):
         """Verify that TradingConfig defaults temporal_ml_shadow_mode to True (no live lot manipulation)."""
-        from config import TradingConfig
+        from core.config import TradingConfig
         cfg = TradingConfig()
         self.assertTrue(cfg.temporal_ml_shadow_mode, "temporal_ml_shadow_mode should default to True for funded accounts")
 

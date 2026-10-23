@@ -15,7 +15,7 @@ import numpy as np
 import tempfile
 import os
 
-from config import (
+from core.config import (
     TradingConfig,
     InstrumentConfig,
     Direction,
@@ -24,7 +24,7 @@ from config import (
     PairSettings,
     ICTConfig,
 )
-from strategy import (
+from strategies.strategy import (
     StrategyEngine,
     BaseStrategy,
     SMCSwingStrategy,
@@ -36,10 +36,10 @@ from strategy import (
     LTFConfirmation,
     HTFAnalysis,
 )
-from risk_engine import RiskEngine
-from state import StateManager, TradeRecord
+from core.risk_engine import RiskEngine
+from core.state import StateManager, TradeRecord
 from execution import BracketOrder, MockBrokerAdapter
-from conflict_resolver import ConflictResolver
+from core.conflict_resolver import ConflictResolver
 from web_app import app
 from fastapi.testclient import TestClient
 

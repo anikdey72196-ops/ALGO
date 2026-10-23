@@ -5,8 +5,8 @@ test_trend_reversal.py — Comprehensive Unit Tests for CHoCH & Trend Reversal D
 import unittest
 import numpy as np
 import pandas as pd
-from config import MarketBias, Direction
-from trend_reversal import (
+from core.config import MarketBias, Direction
+from strategies.trend_reversal import (
     TrendReversalDetector,
     CHoCHType,
     ReversalStage,
@@ -298,8 +298,8 @@ class TestTrendReversalDetector(unittest.TestCase):
         """Test that TradingBot executes reversal analysis during tick and shields active trades."""
         from unittest.mock import MagicMock, patch
         from main import TradingBot
-        from config import TradingConfig
-        from state import TradeRecord
+        from core.config import TradingConfig
+        from core.state import TradeRecord
 
         bot = TradingBot(TradingConfig(), load_saved_settings=False)
         bot.broker = MagicMock()
@@ -514,8 +514,8 @@ class TestTrendReversalDetector(unittest.TestCase):
 
     def test_trend_reversal_strategy_signal_generation(self):
         """Test that TrendReversalStrategy generates trade signal in biased direction of reversal zone."""
-        from strategy import TrendReversalStrategy, HTFAnalyzer, TradeSignal
-        from config import InstrumentConfig
+        from strategies.strategy import TrendReversalStrategy, HTFAnalyzer, TradeSignal
+        from core.config import InstrumentConfig
 
         df_htf = create_uptrend_with_bearish_choch(bars_before_peak=35)
         # LTF 15m data around current price
@@ -546,8 +546,8 @@ class TestTrendReversalDetector(unittest.TestCase):
         """Test that PositionManager moves SL to cost-to-cost (+0.3R) for Trend Reversal trades."""
         from execution.position_manager import PositionManager
         from unittest.mock import MagicMock
-        from config import TradingConfig, DEFAULT_CONFIG
-        from state import StateManager, TradeRecord
+        from core.config import TradingConfig, DEFAULT_CONFIG
+        from core.state import StateManager, TradeRecord
 
         mock_broker = MagicMock()
         mock_state = MagicMock()
@@ -701,8 +701,8 @@ class TestTrendReversalDetector(unittest.TestCase):
 
     def test_priority_order_strategy_signal_incorporation(self):
         """Test that TrendReversalStrategy reflects the priority rank in TradeSignal."""
-        from strategy import TrendReversalStrategy, HTFAnalyzer
-        from config import InstrumentConfig
+        from strategies.strategy import TrendReversalStrategy, HTFAnalyzer
+        from core.config import InstrumentConfig
 
         df_htf = create_uptrend_with_bearish_choch(bars_before_peak=35)
         ltf_timestamps = pd.date_range("2026-09-01 03:00:00", periods=20, freq="15min", tz="UTC")

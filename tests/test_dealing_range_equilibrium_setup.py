@@ -16,8 +16,8 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from config import MarketBias, Direction, InstrumentConfig
-from strategy import HTFAnalyzer, TrendReversalStrategy, check_candle_body_confirmation
+from core.config import MarketBias, Direction, InstrumentConfig
+from strategies.strategy import HTFAnalyzer, TrendReversalStrategy, check_candle_body_confirmation
 
 
 class TestDealingRangeEquilibriumSetup(unittest.TestCase):

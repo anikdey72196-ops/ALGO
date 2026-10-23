@@ -7,16 +7,16 @@ import os
 import sqlite3
 import pandas as pd
 import numpy as np
-from config import Direction, InstrumentConfig, DEFAULT_CONFIG
+from core.config import Direction, InstrumentConfig, DEFAULT_CONFIG
 from execution import MockBrokerAdapter, BracketOrder, OrderResult
-from market_regime import MarketRegimeDetector, MarketRegime
-from spread_guard import DynamicSpreadGuard
-from order_manager import (
+from core.market_regime import MarketRegimeDetector, MarketRegime
+from execution.spread_guard import DynamicSpreadGuard
+from execution.order_manager import (
     OrderManager, OrderState, classify_error, ErrorClassification, generate_idempotency_key
 )
-from reconciliation import ReconciliationEngine
-from position_manager import PositionManager
-from state import StateManager, TradeRecord
+from execution.reconciliation import ReconciliationEngine
+from execution.position_manager import PositionManager
+from core.state import StateManager, TradeRecord
 
 
 def create_synthetic_candles(count: int = 100, trend: bool = True) -> pd.DataFrame:
