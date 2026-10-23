@@ -94,6 +94,7 @@ class BotStateResponse(BaseModel):
     pair2: dict
     pair3: dict
     pairs_config: dict = {}
+    pair_slots: Dict[str, str] = {}
     enabled_strategies: List[str]
     strategy_type: str
     fixed_lot_size: Optional[float]
@@ -407,6 +408,13 @@ async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
     ml_shadow = getattr(bot_instance.config, "ml_shadow_mode", True) if bot_instance else True
     ai_gate = getattr(bot_instance.config, "ai_confirmation_enabled", True) if bot_instance else True
+    pair_slots = getattr(bot_instance.config, "pair_slots", {
+        "1": bot_instance.config.pair1.symbol if bot_instance else "XAUUSD",
+        "2": bot_instance.config.pair2.symbol if bot_instance else "EURUSD",
+        "3": bot_instance.config.pair3.symbol if bot_instance else "GBPUSD",
+        "4": "AUDJPY",
+        "5": "NZDCAD",
+    }) if bot_instance else {"1": "XAUUSD", "2": "EURUSD", "3": "GBPUSD", "4": "AUDJPY", "5": "NZDCAD"}
     return templates.TemplateResponse(
         request=request, 
         name="terminal_controls.html", 
@@ -414,6 +422,7 @@ async def serve_terminal_controls(request: Request):
             "is_active": bot_instance.is_active if bot_instance else False,
             "ml_shadow_mode": ml_shadow,
             "ai_confirmation_enabled": ai_gate,
+            "pair_slots": pair_slots,
         }
     )
 
@@ -699,6 +708,13 @@ async def get_bot_state():
         pair2=pair2_data,
         pair3=pair3_data,
         pairs_config=pairs_cfg_data,
+        pair_slots=getattr(bot_instance.config, "pair_slots", {
+            "1": bot_instance.config.pair1.symbol,
+            "2": bot_instance.config.pair2.symbol,
+            "3": bot_instance.config.pair3.symbol,
+            "4": "AUDJPY",
+            "5": "NZDCAD",
+        }),
         enabled_strategies=bot_instance.config.enabled_strategies,
         strategy_type=bot_instance.config.strategy_type,
         fixed_lot_size=bot_instance.config.fixed_lot_size,
@@ -1159,6 +1175,26 @@ async def handle_dashboard_update(payload: dict):
         if not hasattr(bot_instance.config, "pair_configs"):
             bot_instance.config.pair_configs = {}
 
+        # Handle explicit slots mapping (1-5)
+        slots_data = payload.get("slots") or payload.get("pair_slots")
+        if slots_data and isinstance(slots_data, dict):
+            if not hasattr(bot_instance.config, "pair_slots"):
+                bot_instance.config.pair_slots = {}
+            for s_k, s_v in slots_data.items():
+                if isinstance(s_v, dict):
+                    sym_name = s_v.get("symbol", "")
+                else:
+                    sym_name = str(s_v)
+                s_clean = re.sub(r'[^A-Z0-9]', '', sym_name.strip().upper())
+                if s_clean:
+                    bot_instance.config.pair_slots[str(s_k)] = s_clean
+                    if str(s_k) == "1" and hasattr(bot_instance.config, "pair1"):
+                        bot_instance.config.pair1.symbol = s_clean
+                    elif str(s_k) == "2" and hasattr(bot_instance.config, "pair2"):
+                        bot_instance.config.pair2.symbol = s_clean
+                    elif str(s_k) == "3" and hasattr(bot_instance.config, "pair3"):
+                        bot_instance.config.pair3.symbol = s_clean
+
         selected_symbols = list(bot_instance.config.selected_symbols)
         for sym_raw, p_vals in pairs_data.items():
             sym = str(sym_raw).upper().strip()
@@ -1257,6 +1293,17 @@ async def handle_dashboard_update(payload: dict):
         elif slot == 3 and hasattr(bot_instance.config, "pair3"):
             bot_instance.config.pair3.symbol = new_sym
             bot_instance.config.pair3.enabled = True
+
+        # Assign to persistent pair_slots mapping
+        if not hasattr(bot_instance.config, "pair_slots") or not isinstance(bot_instance.config.pair_slots, dict):
+            bot_instance.config.pair_slots = {
+                "1": bot_instance.config.pair1.symbol,
+                "2": bot_instance.config.pair2.symbol,
+                "3": bot_instance.config.pair3.symbol,
+                "4": "AUDJPY",
+                "5": "NZDCAD",
+            }
+        bot_instance.config.pair_slots[str(slot)] = new_sym
 
         # Update lot / sl if provided
         lot_val = payload.get("lot")
@@ -2488,5 +2535,10 @@ async def run_client_sync(target_url: Optional[str] = None):
     except Exception as e:
         logger.error(f"Client synchronization failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Client synchronization failed. See server logs.")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
 
 

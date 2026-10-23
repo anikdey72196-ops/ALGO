@@ -7,6 +7,11 @@ import webbrowser
 import threading
 from pathlib import Path
 
+# Add project root to sys.path immediately
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('127.0.0.1', port)) == 0
@@ -73,4 +78,4 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
 
     import uvicorn
-    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
+    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=False, log_level="info", app_dir=str(PROJECT_ROOT))

@@ -207,7 +207,7 @@
       <div class="space-y-3" id="pairMatrixList">
 
         <!-- PAIR 1 -->
-        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="1"
+        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="1" data-slot-id="1"
           data-symbol="XAUUSD" data-tick-val="10">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2.5">
@@ -355,7 +355,7 @@
         </div>
 
         <!-- PAIR 2 -->
-        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="2"
+        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="2" data-slot-id="2"
           data-symbol="EURUSD" data-tick-val="10">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2.5">
@@ -500,7 +500,7 @@
         </div>
 
         <!-- PAIR 3 -->
-        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="3"
+        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="3" data-slot-id="3"
           data-symbol="GBPUSD" data-tick-val="10">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2.5">
@@ -645,7 +645,7 @@
         </div>
 
         <!-- PAIR 4 -->
-        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="4"
+        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="4" data-slot-id="4"
           data-symbol="AUDJPY" data-tick-val="7">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2.5">
@@ -790,7 +790,7 @@
         </div>
 
         <!-- PAIR 5 -->
-        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="5"
+        <div class="pair-card bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm transition-all" data-slot="5" data-slot-id="5"
           data-symbol="NZDCAD" data-tick-val="7.5">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2.5">
@@ -1062,8 +1062,9 @@
   <script>
     (function initLightControls() {
       let isBotActive = {{ 'true' if is_active else 'false' }};
+      const INITIAL_SERVER_SLOTS = {{ pair_slots | tojson | safe if pair_slots else '{"1":"XAUUSD","2":"EURUSD","3":"GBPUSD","4":"AUDJPY","5":"NZDCAD"}' }};
       let isActionPending = false;
-    const masterBtn = document.getElementById('masterBotToggle');
+      const masterBtn = document.getElementById('masterBotToggle');
     const toggleKnob = document.getElementById('toggleKnob');
     const botStatusLabel = document.getElementById('botStatusLabel');
     const botBadge = document.getElementById('botBadge');
@@ -1650,29 +1651,78 @@
       }
     }
 
-    // Switch pair for a card slot, immediately updating DOM and sending backend command
-    async function switchCardPair(card, newSymbol, oldSymbol) {
+    // ─────────────────────────────────────────────
+    // Global Persistent Slot Store (localStorage + backend sync)
+    // ─────────────────────────────────────────────
+    const STORAGE_KEY = 'ALGO_PERSISTENT_SLOTS_V2';
+
+    function getPersistentStore() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {
+        console.warn('Failed reading from localStorage:', e);
+      }
+      return null;
+    }
+
+    function savePersistentStore() {
+      try {
+        const store = {
+          slots: {},
+          timestamp: Date.now()
+        };
+        pairCards.forEach(card => {
+          const slot = card.getAttribute('data-slot');
+          const sym = (card.getAttribute('data-symbol') || '').toUpperCase();
+          const lotInput = card.querySelector('.input-lot');
+          const slInput = card.querySelector('.input-sl');
+          const routeSwitch = card.querySelector('.pair-switch');
+
+          if (sym && PAIR_CATALOG[sym]) {
+            store.slots[slot] = {
+              slot_id: slot,
+              symbol: sym,
+              lot: lotInput ? (parseFloat(lotInput.value) || pairsLocal[sym]?.lot || 0.05) : 0.05,
+              sl: slInput ? (parseFloat(slInput.value) || pairsLocal[sym]?.sl || 25) : 25,
+              enabled: routeSwitch ? !!routeSwitch.checked : true
+            };
+          }
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      } catch (e) {
+        console.warn('Failed saving to localStorage:', e);
+      }
+    }
+
+    function renderSlotUI(card, newSymbol, lot, sl, enabled) {
       const meta = PAIR_CATALOG[newSymbol];
       if (!meta) return;
 
-      const slot = parseInt(card.getAttribute('data-slot') || 1);
+      const slot = card.getAttribute('data-slot');
       card.setAttribute('data-symbol', newSymbol);
       card.setAttribute('data-tick-val', meta.tickVal);
 
-      // Update Avatar
+      // 1. Dropdown
+      const sel = card.querySelector('.pair-select');
+      if (sel && sel.value !== newSymbol) {
+        sel.value = newSymbol;
+      }
+
+      // 2. Avatar
       const avatarEl = card.querySelector('.pair-avatar');
       if (avatarEl) {
         avatarEl.textContent = meta.avatar;
         avatarEl.className = `pair-avatar w-8 h-8 rounded ${meta.avatarBg} border ${meta.avatarBorder} flex items-center justify-center font-mono text-[11px] font-bold ${meta.avatarText}`;
       }
 
-      // Update Description & Contract
+      // 3. Description & Contract
       const descEl = card.querySelector('.pair-desc');
       if (descEl) descEl.textContent = meta.desc;
       const contractEl = card.querySelector('.pair-contract');
       if (contractEl) contractEl.textContent = meta.contract;
 
-      // Update Price, change, bid, ask, spread badge
+      // 4. Price & Market Details
       const priceEl = card.querySelector('.pair-price');
       if (priceEl) priceEl.textContent = meta.price;
       const chgEl = card.querySelector('.pair-chg');
@@ -1686,30 +1736,90 @@
       if (askEl) askEl.textContent = meta.ask;
       const spdEl = card.querySelector('.spd-badge');
       if (spdEl) spdEl.textContent = meta.spd;
-
       const slUnitEl = card.querySelector('.sl-unit-label');
       if (slUnitEl) slUnitEl.textContent = meta.slUnit;
 
-      // Ensure pairsLocal has entry
-      if (!pairsLocal[newSymbol]) {
-        pairsLocal[newSymbol] = {
-          lot: meta.lot,
-          sl: meta.sl,
-          enabled: true,
-          isDirty: false,
-          tickVal: meta.tickVal
-        };
-      }
+      // 5. Lot & SL Values
+      const effectiveLot = lot != null ? parseFloat(lot) : (pairsLocal[newSymbol] ? pairsLocal[newSymbol].lot : meta.lot);
+      const effectiveSl = sl != null ? parseFloat(sl) : (pairsLocal[newSymbol] ? pairsLocal[newSymbol].sl : meta.sl);
+      const effectiveEnabled = enabled !== undefined ? !!enabled : (pairsLocal[newSymbol] ? pairsLocal[newSymbol].enabled : true);
+
+      pairsLocal[newSymbol] = {
+        lot: effectiveLot,
+        sl: effectiveSl,
+        enabled: effectiveEnabled,
+        isDirty: false,
+        tickVal: meta.tickVal
+      };
 
       const lotInput = card.querySelector('.input-lot');
       const slInput = card.querySelector('.input-sl');
-      if (lotInput) lotInput.value = pairsLocal[newSymbol].lot.toFixed(2);
-      if (slInput) slInput.value = Math.round(pairsLocal[newSymbol].sl);
+      if (lotInput) lotInput.value = effectiveLot.toFixed(2);
+      if (slInput) slInput.value = Math.round(effectiveSl);
 
-      // Render chips for new symbol
+      // 6. Route Toggle switch
+      const routeSwitch = card.querySelector('.pair-switch');
+      if (routeSwitch) {
+        routeSwitch.checked = effectiveEnabled;
+        const toggleBg = routeSwitch.nextElementSibling;
+        const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
+        if (effectiveEnabled) {
+          card.style.opacity = '1';
+          if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-brand-600 rounded-full transition-colors flex items-center p-0.5 peer';
+          if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5 shadow-sm';
+        } else {
+          card.style.opacity = '0.55';
+          if (toggleBg) toggleBg.className = 'w-8 h-4.5 bg-slate-300 rounded-full transition-colors flex items-center p-0.5 peer';
+          if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+        }
+      }
+
+      // 7. Chips & Risk Calculation
       renderChips(card, newSymbol);
-      updateCardRisk(card, pairsLocal[newSymbol].lot, pairsLocal[newSymbol].sl, meta.tickVal);
+      updateCardRisk(card, effectiveLot, effectiveSl, meta.tickVal);
+    }
+
+    // Hydrate all 5 card slots immediately from persistent storage or initial server slots
+    function hydrateInitialSlots() {
+      const stored = getPersistentStore();
+      pairCards.forEach(card => {
+        const slot = card.getAttribute('data-slot');
+        let sData = null;
+        if (stored && stored.slots && stored.slots[slot]) {
+          sData = stored.slots[slot];
+        } else if (INITIAL_SERVER_SLOTS && INITIAL_SERVER_SLOTS[slot]) {
+          const sym = INITIAL_SERVER_SLOTS[slot];
+          const meta = PAIR_CATALOG[sym] || {};
+          sData = {
+            symbol: sym,
+            lot: meta.lot || 0.10,
+            sl: meta.sl || 25,
+            enabled: true
+          };
+        }
+        if (sData && sData.symbol && PAIR_CATALOG[sData.symbol]) {
+          renderSlotUI(card, sData.symbol, sData.lot, sData.sl, sData.enabled);
+        }
+      });
+    }
+
+    // Switch pair for a card slot, immediately updating DOM and sending backend command
+    async function switchCardPair(card, newSymbol, oldSymbol) {
+      const meta = PAIR_CATALOG[newSymbol];
+      if (!meta) return;
+
+      const slot = parseInt(card.getAttribute('data-slot') || 1);
+      
+      const curLot = pairsLocal[newSymbol] ? pairsLocal[newSymbol].lot : meta.lot;
+      const curSl = pairsLocal[newSymbol] ? pairsLocal[newSymbol].sl : meta.sl;
+      const curEn = pairsLocal[newSymbol] ? pairsLocal[newSymbol].enabled : true;
+
+      // Render UI immediately
+      renderSlotUI(card, newSymbol, curLot, curSl, curEn);
       updateDirtyPill(card, 'saving');
+
+      // Persist state to localStorage immediately so tab switches preserve it
+      savePersistentStore();
 
       try {
         const res = await fetch('/api/update', {
@@ -1720,9 +1830,9 @@
             slot: slot,
             old_symbol: oldSymbol,
             new_symbol: newSymbol,
-            lot: pairsLocal[newSymbol].lot,
-            sl: pairsLocal[newSymbol].sl,
-            enabled: pairsLocal[newSymbol].enabled
+            lot: curLot,
+            sl: curSl,
+            enabled: curEn
           })
         });
 
@@ -1740,6 +1850,9 @@
         updateDirtyPill(card, 'edited');
       }
     }
+
+    // Fast synchronous hydration on mount
+    hydrateInitialSlots();
 
     // Individual Pair Calculation & Control Binding
     pairCards.forEach(card => {
@@ -1799,6 +1912,7 @@
             }
             syncChipsActive(card.querySelectorAll('.lot-chip'), val, 'data-val');
             updateCardRisk(card, val, pairsLocal[sym]?.sl || 25, tickVal);
+            savePersistentStore();
             schedulePairAutoSave(sym, card);
           }
         });
@@ -1821,6 +1935,7 @@
             }
             syncSlChipsActive(card.querySelectorAll('.sl-chip'), pips, 'data-pips');
             updateCardRisk(card, pairsLocal[sym]?.lot || 0.05, pips, tickVal);
+            savePersistentStore();
             schedulePairAutoSave(sym, card);
           }
         });
@@ -1841,6 +1956,7 @@
           }
           syncChipsActive(card.querySelectorAll('.lot-chip'), next, 'data-val');
           updateCardRisk(card, next, pairsLocal[sym]?.sl || 25, tickVal);
+          savePersistentStore();
           schedulePairAutoSave(sym, card);
         });
       }
@@ -1858,6 +1974,7 @@
           }
           syncChipsActive(card.querySelectorAll('.lot-chip'), next, 'data-val');
           updateCardRisk(card, next, pairsLocal[sym]?.sl || 25, tickVal);
+          savePersistentStore();
           schedulePairAutoSave(sym, card);
         });
       }
@@ -1878,6 +1995,7 @@
           }
           syncSlChipsActive(card.querySelectorAll('.sl-chip'), next, 'data-pips');
           updateCardRisk(card, pairsLocal[sym]?.lot || 0.05, next, tickVal);
+          savePersistentStore();
           schedulePairAutoSave(sym, card);
         });
       }
@@ -1896,6 +2014,7 @@
           }
           syncSlChipsActive(card.querySelectorAll('.sl-chip'), next, 'data-pips');
           updateCardRisk(card, pairsLocal[sym]?.lot || 0.05, next, tickVal);
+          savePersistentStore();
           schedulePairAutoSave(sym, card);
         });
       }
@@ -1914,6 +2033,7 @@
             }
             syncChipsActive(card.querySelectorAll('.lot-chip'), parsed, 'data-val');
             updateCardRisk(card, parsed, pairsLocal[sym]?.sl || 25, tickVal);
+            savePersistentStore();
             schedulePairAutoSave(sym, card);
           }
         };
@@ -1934,6 +2054,7 @@
             }
             syncSlChipsActive(card.querySelectorAll('.sl-chip'), parsed, 'data-pips');
             updateCardRisk(card, pairsLocal[sym]?.lot || 0.05, parsed, tickVal);
+            savePersistentStore();
             schedulePairAutoSave(sym, card);
           }
         };
@@ -1950,6 +2071,7 @@
             pairsLocal[sym].enabled = isChecked;
             pairsLocal[sym].isDirty = true;
           }
+          savePersistentStore();
           updateDirtyPill(card, 'saving');
 
           const toggleBg = e.target.nextElementSibling;
@@ -2104,7 +2226,9 @@
 
         try {
           const pairsPayload = {};
+          const slotsPayload = {};
           pairCards.forEach(card => {
+            const slot = card.getAttribute('data-slot');
             const sym = card.getAttribute('data-symbol').toUpperCase();
             const lotInput = card.querySelector('.input-lot');
             const slInput = card.querySelector('.input-sl');
@@ -2115,6 +2239,8 @@
             const enabled = routeSwitch ? !!routeSwitch.checked : true;
 
             pairsPayload[sym] = { lot: lot, sl: sl, enabled: enabled };
+            slotsPayload[slot] = sym;
+
             if (pairsLocal[sym]) {
               pairsLocal[sym].lot = lot;
               pairsLocal[sym].sl = sl;
@@ -2124,12 +2250,17 @@
             updateDirtyPill(card, false);
           });
 
+          // Save state to localStorage immediately
+          savePersistentStore();
+
           const res = await fetch('/api/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'save_all_pairs',
               pairs: pairsPayload,
+              slots: slotsPayload,
+              pair_slots: slotsPayload,
               ml_shadow_mode: mlShadowToggle ? mlShadowToggle.checked : true,
               ai_confirmation_enabled: aiGateToggle ? aiGateToggle.checked : true
             })
@@ -2162,6 +2293,14 @@
       });
     }
 
+    // Tab Navigation and Unload Handlers: Persist current state before unmounting
+    window.addEventListener('beforeunload', savePersistentStore);
+    document.querySelectorAll('a[href]').forEach(link => {
+      link.addEventListener('click', () => {
+        savePersistentStore();
+      });
+    });
+
     function applyServerState(data) {
       if (!data) return;
 
@@ -2179,36 +2318,47 @@
         if (accEl) accEl.textContent = `ACC: #${data.broker_info.account_id}`;
       }
 
-      // Hydrate pairs configuration
-      if (data.pairs_config) {
+      // Hydrate & reconcile pairs configuration and slot assignments
+      if (data.pair_slots || data.pairs_config) {
         pairCards.forEach(card => {
-          const sym = card.getAttribute('data-symbol').toUpperCase();
-          const pData = data.pairs_config[sym.toLowerCase()] || data.pairs_config[sym];
-          if (pData) {
+          const slot = card.getAttribute('data-slot');
+          const currentSym = card.getAttribute('data-symbol').toUpperCase();
+          const serverSym = (data.pair_slots && data.pair_slots[slot]) ? data.pair_slots[slot].toUpperCase() : currentSym;
+          const targetSym = (serverSym && PAIR_CATALOG[serverSym]) ? serverSym : currentSym;
+
+          const pData = data.pairs_config ? (data.pairs_config[targetSym.toLowerCase()] || data.pairs_config[targetSym]) : null;
+
+          if (targetSym !== currentSym) {
+            // Server slot differs from DOM card symbol (and user is not currently editing it)
+            if (!pairsLocal[currentSym]?.isDirty) {
+              const lot = pData && pData.lot != null ? parseFloat(pData.lot) : undefined;
+              const sl = pData && pData.sl != null ? parseFloat(pData.sl) : undefined;
+              const en = pData && pData.active != null ? !!pData.active : undefined;
+              renderSlotUI(card, targetSym, lot, sl, en);
+            }
+          } else if (pData) {
             const lotInput = card.querySelector('.input-lot');
             const slInput = card.querySelector('.input-sl');
-            const lotChips = card.querySelectorAll('.lot-chip');
-            const slChips = card.querySelectorAll('.sl-chip');
             const routeSwitch = card.querySelector('.pair-switch');
             const tickVal = parseFloat(card.getAttribute('data-tick-val')) || 10;
 
             // Only hydrate if user has not made unsaved local edits
-            if (!pairsLocal[sym].isDirty && document.activeElement !== lotInput && document.activeElement !== slInput) {
+            if (!pairsLocal[targetSym]?.isDirty && document.activeElement !== lotInput && document.activeElement !== slInput) {
               if (pData.lot != null && lotInput) {
                 const lotVal = parseFloat(pData.lot);
                 lotInput.value = lotVal.toFixed(2);
-                pairsLocal[sym].lot = lotVal;
-                syncChipsActive(lotChips, lotVal, 'data-val');
+                pairsLocal[targetSym].lot = lotVal;
+                syncChipsActive(card.querySelectorAll('.lot-chip'), lotVal, 'data-val');
               }
               if (pData.sl != null && slInput) {
                 const slVal = parseFloat(pData.sl);
                 slInput.value = Math.round(slVal);
-                pairsLocal[sym].sl = slVal;
-                syncChipsActive(slChips, slVal, 'data-pips');
+                pairsLocal[targetSym].sl = slVal;
+                syncSlChipsActive(card.querySelectorAll('.sl-chip'), slVal, 'data-pips');
               }
               if (pData.active != null && routeSwitch) {
                 routeSwitch.checked = !!pData.active;
-                pairsLocal[sym].enabled = !!pData.active;
+                pairsLocal[targetSym].enabled = !!pData.active;
                 const toggleBg = routeSwitch.nextElementSibling;
                 const toggleThumb = toggleBg ? toggleBg.querySelector('div') : null;
                 if (pData.active) {
@@ -2221,10 +2371,11 @@
                   if (toggleThumb) toggleThumb.className = 'w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
                 }
               }
-              updateCardRisk(card, pairsLocal[sym].lot, pairsLocal[sym].sl, tickVal);
+              updateCardRisk(card, pairsLocal[targetSym].lot, pairsLocal[targetSym].sl, tickVal);
             }
           }
         });
+        savePersistentStore();
       }
     }
 

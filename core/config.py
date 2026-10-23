@@ -810,6 +810,16 @@ class TradingConfig(BaseModel):
         },
         description="Multi-pair independent settings (lot size, SL, enabled) for all monitored assets.",
     )
+    pair_slots: dict[str, str] = Field(
+        default_factory=lambda: {
+            "1": "XAUUSD",
+            "2": "EURUSD",
+            "3": "GBPUSD",
+            "4": "AUDJPY",
+            "5": "NZDCAD",
+        },
+        description="Mapping of UI slots 1-5 to active currency pairs.",
+    )
 
     # Legacy compatibility fields
     fixed_lot_size: float | None = Field(

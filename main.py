@@ -291,6 +291,19 @@ class TradingBot:
                                 enabled=s_v.get("enabled", True),
                             )
 
+                # UI Pair Slots (1-5) mapping persistence
+                if "pair_slots" in saved and isinstance(saved["pair_slots"], dict):
+                    if not hasattr(self.config, "pair_slots"):
+                        self.config.pair_slots = {}
+                    for sl_k, sl_v in saved["pair_slots"].items():
+                        self.config.pair_slots[str(sl_k)] = str(sl_v).upper().strip()
+                    if "1" in self.config.pair_slots:
+                        self.config.pair1.symbol = self.config.pair_slots["1"]
+                    if "2" in self.config.pair_slots:
+                        self.config.pair2.symbol = self.config.pair_slots["2"]
+                    if "3" in self.config.pair_slots:
+                        self.config.pair3.symbol = self.config.pair_slots["3"]
+
                 # Enabled strategies
                 if "enabled_strategies" in saved and isinstance(saved["enabled_strategies"], list):
                     self.config.enabled_strategies = saved["enabled_strategies"]
@@ -418,6 +431,13 @@ class TradingBot:
                     }
                     for sym, p_cfg in getattr(self.config, "pair_configs", {}).items()
                 },
+                "pair_slots": getattr(self.config, "pair_slots", {
+                    "1": self.config.pair1.symbol,
+                    "2": self.config.pair2.symbol,
+                    "3": self.config.pair3.symbol,
+                    "4": "AUDJPY",
+                    "5": "NZDCAD",
+                }),
                 "enabled_strategies": self.config.enabled_strategies,
                 "selected_symbols": list(self.config.selected_symbols),
                 "strategy_type": self.config.strategy_type,
