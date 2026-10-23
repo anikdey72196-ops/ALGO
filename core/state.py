@@ -799,6 +799,75 @@ class StateManager:
                 
         return stats
 
+    def _fetch_trades_from_mt5_fallback(self) -> list[dict]:
+        """
+        Dual Fallback System: Fetches closed trades directly from MetaTrader 5
+        if the primary MySQL database is unreachable or down.
+        """
+        try:
+            import MetaTrader5 as mt5
+            if not mt5.initialize():
+                return []
+            deals = mt5.history_deals_get(datetime(2020, 1, 1), datetime.now())
+            if not deals:
+                return []
+            positions: dict[int, dict] = {}
+            for d in deals:
+                if not d.position_id:
+                    continue
+                p = positions.setdefault(d.position_id, {
+                    "position_id": d.position_id,
+                    "symbol": d.symbol,
+                    "magic": d.magic,
+                    "open_deal": None,
+                    "close_deal": None,
+                    "profit": 0.0,
+                    "swap": 0.0,
+                    "commission": 0.0,
+                })
+                p["profit"] += d.profit
+                p["swap"] += d.swap
+                p["commission"] += d.commission
+                if d.entry == 0:
+                    p["open_deal"] = d
+                elif d.entry == 1:
+                    p["close_deal"] = d
+
+            fallback_rows = []
+            for pos_id, p in positions.items():
+                if p["close_deal"] and p["open_deal"]:
+                    open_d = p["open_deal"]
+                    close_d = p["close_deal"]
+                    net_pnl = round(p["profit"] + p["swap"] + p["commission"], 2)
+                    open_dt = datetime.fromtimestamp(open_d.time, tz=timezone.utc)
+                    close_dt = datetime.fromtimestamp(close_d.time, tz=timezone.utc)
+                    magic = open_d.magic
+                    strat = (
+                        "SMC Scalp (5m)" if magic == 125456
+                        else ("Order Flow (Delta & Absorption)" if magic == 127456
+                        else ("ICT Institutional" if magic == 126456
+                        else ("Trend Reversal Strategy" if magic == 128456
+                        else "SMC Swing (15m)")))
+                    )
+                    status = "CLOSED_TP" if net_pnl > 0 else "CLOSED_SL"
+                    fallback_rows.append({
+                        "id": pos_id,
+                        "timestamp": open_dt.isoformat(),
+                        "symbol": open_d.symbol,
+                        "strategy_name": strat,
+                        "entry_price": float(open_d.price),
+                        "stop_loss": 0.0,
+                        "take_profit": 0.0,
+                        "realized_pnl": net_pnl,
+                        "status": status,
+                        "duration_seconds": max(0.0, (close_dt - open_dt).total_seconds()),
+                        "closed_at": close_dt.isoformat(),
+                    })
+            return fallback_rows
+        except Exception as e:
+            logger.warning(f"[MT5_FALLBACK] Error querying MT5 deal history: {e}")
+            return []
+
     def get_performance_metrics(self) -> dict:
         """
         Comprehensive analytics for the dashboard:
@@ -810,13 +879,24 @@ class StateManager:
         - profit_factor, best_trade, worst_trade
         - strategy_breakdown, pair_breakdown
         """
-        with self._lock:
-            cursor = self.conn.execute('''
-                SELECT id, timestamp, symbol, strategy_name, entry_price, stop_loss, take_profit,
-                       realized_pnl, status, duration_seconds, closed_at
-                FROM trade_log
-            ''')
-            rows = cursor.fetchall()
+        rows = []
+        try:
+            with self._lock:
+                cursor = self.conn.execute('''
+                    SELECT id, timestamp, symbol, strategy_name, entry_price, stop_loss, take_profit,
+                           realized_pnl, status, duration_seconds, closed_at
+                    FROM trade_log
+                ''')
+                rows = cursor.fetchall()
+        except Exception as e:
+            logger.warning(f"[DB_FAILOVER] Database unreachable ({e}), falling back to MT5 live trade history.")
+            rows = self._fetch_trades_from_mt5_fallback()
+
+        if not rows:
+            # Check if MT5 has direct deals as secondary fallback
+            mt5_rows = self._fetch_trades_from_mt5_fallback()
+            if mt5_rows:
+                rows = mt5_rows
 
         total_trades = len(rows)
         closed_rows = [r for r in rows if r['status'] != 'OPEN']

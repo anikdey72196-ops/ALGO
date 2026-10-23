@@ -44,12 +44,10 @@ class CloudSyncEngine:
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
 
-    def get_db_connection(self) -> sqlite3.Connection:
-        """Create a thread-safe connection to trading_state.db with WAL mode."""
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")
-        return conn
+    def get_db_connection(self):
+        """Create a thread-safe database connection honoring DB_BACKEND (MySQL or SQLite)."""
+        from core.database import get_db_connection
+        return get_db_connection(str(self.db_path))
 
     # ─────────────────────────────────────────────────────────────
     # Model Artifacts Manifest & Verification
@@ -241,7 +239,7 @@ class CloudSyncEngine:
                 ptp_params.append(limit)
                 ptp_rows = conn.execute(ptp_query, ptp_params).fetchall()
                 partial_tp_events = [dict(r) for r in ptp_rows]
-            except sqlite3.OperationalError:
+            except Exception:
                 pass
 
             payload = {
@@ -364,7 +362,7 @@ class CloudSyncEngine:
             ptp_count = 0
             try:
                 ptp_count = conn.execute("SELECT count(*) FROM partial_tp_events").fetchone()[0]
-            except sqlite3.OperationalError:
+            except Exception:
                 pass
 
             models = self.get_models_manifest()
