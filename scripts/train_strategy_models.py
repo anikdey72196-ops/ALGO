@@ -59,7 +59,17 @@ def seed_ict_events_if_empty(svc: TrapDetectorService, min_seed_samples: int = 4
     added = 0
     now = datetime.now(timezone.utc)
 
-    for sym, start_p, vol in [("XAUUSD", 2650.0, 1.5), ("EURUSD", 1.0850, 0.0004), ("GBPUSD", 1.2950, 0.0005)]:
+    for sym, start_p, vol in [
+        ("XAUUSD", 2650.0, 1.5),
+        ("EURUSD", 1.0850, 0.0004),
+        ("GBPUSD", 1.2950, 0.0005),
+        ("USDCHF", 0.9100, 0.0003),
+        ("AUDJPY", 98.50, 0.08),
+        ("EURJPY", 162.50, 0.12),
+        ("NZDUSD", 0.5950, 0.0004),
+        ("CADCHF", 0.6550, 0.0003),
+        ("BTCUSD", 65000.0, 80.0),
+    ]:
         for trend in ("bullish", "bearish"):
             df = generate_trending_ohlcv(sym, "15m", bars=250, start_price=start_p, trend_direction=trend, volatility=vol, seed=42)
             if "time" in df.columns:
@@ -148,6 +158,11 @@ def seed_trend_reversal_events_if_empty(svc: TrapDetectorService, min_seed_sampl
         ("XAUUSD", 2650.0, 1.8),
         ("EURUSD", 1.0850, 0.0004),
         ("GBPUSD", 1.2950, 0.0005),
+        ("USDCHF", 0.9100, 0.0003),
+        ("AUDJPY", 98.50, 0.08),
+        ("EURJPY", 162.50, 0.12),
+        ("NZDUSD", 0.5950, 0.0004),
+        ("CADCHF", 0.6550, 0.0003),
         ("BTCUSD", 65000.0, 80.0),
     ]
 

@@ -2500,10 +2500,10 @@ async def trigger_cloud_retrain(request: Request):
             # 3. Smart Partial TP Retraining
             try:
                 from ml.smart_partial_tp import SmartPartialTPService
-                from core.state import BotState
+                from core.state import StateManager
                 ptp_svc = SmartPartialTPService.get_instance() if SmartPartialTPService else None
                 if ptp_svc:
-                    b_state = BotState(db_path=str(sync_engine.db_path))
+                    b_state = StateManager(db_path=str(sync_engine.db_path))
                     trade_records = b_state.get_all_trades(limit=5000)
                     if len(trade_records) >= 10:
                         ptp_svc.model.train_from_trade_records(trade_records)
