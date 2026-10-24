@@ -317,13 +317,13 @@ class TestAuthorizeTrade(unittest.TestCase):
         self.assertIn("Circuit breaker active", result.rejection_reason)
 
     def test_authorize_trade_unknown_instrument_rejection(self):
-        """Rejects trade for an unregistered symbol."""
+        """Rejects trade for an empty or invalid symbol."""
         self.state.is_circuit_breaker_active = MagicMock(return_value=False)
         self.state.get_open_positions = MagicMock(return_value=[])
         self.state.get_daily_pnl = MagicMock(return_value=0.0)
 
         unknown_signal = TradeSignal(
-            symbol="UNKNOWN_XYZ",
+            symbol="NONE",
             direction=Direction.BUY,
             entry_price=100.0,
             stop_loss=99.0,
@@ -342,7 +342,7 @@ class TestAuthorizeTrade(unittest.TestCase):
             current_equity=10_000.0,
         )
         self.assertFalse(result.authorized)
-        self.assertIn("not found in config", result.rejection_reason)
+        self.assertIn("invalid or not configured", result.rejection_reason)
 
     def test_authorize_trade_max_per_symbol_exceeded(self):
         """Rejects trade when symbol already has max allowed positions (default 3)."""

@@ -1017,7 +1017,13 @@ DEFAULT_CONFIG = TradingConfig()
 
 def get_instrument(config: TradingConfig, symbol: str) -> InstrumentConfig:
     """Look up an instrument by symbol, dynamically generating a validated InstrumentConfig if absent."""
+    if not symbol or not str(symbol).strip() or str(symbol).strip().upper() == "NONE":
+        raise ValueError(f"Instrument '{symbol}' is invalid or not configured.")
+
     sym_clean = re.sub(r'[^A-Z0-9]', '', str(symbol).strip().upper())
+    if not sym_clean:
+        raise ValueError(f"Instrument '{symbol}' is invalid or not configured.")
+
     for inst in config.instruments:
         if inst.symbol.upper() == sym_clean:
             return inst

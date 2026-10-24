@@ -154,7 +154,7 @@ class WeekendRetrainService:
                     logger.info("[4/4] 🎯 Retraining Smart Partial TP Reversal & Runner Model...")
                     try:
                         from ml.smart_partial_tp import SmartPartialTPService
-                        from core.state import BotState
+                        from core.state import StateManager
 
                         ptp_svc = None
                         if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
@@ -163,7 +163,7 @@ class WeekendRetrainService:
                             ptp_svc = SmartPartialTPService.get_instance()
 
                         if ptp_svc:
-                            b_state = BotState(db_path=target_db)
+                            b_state = StateManager(db_path=target_db)
                             trade_records = b_state.get_all_trades(limit=5000)
                             if len(trade_records) >= 10:
                                 ptp_svc.model.train_from_trade_records(trade_records)
