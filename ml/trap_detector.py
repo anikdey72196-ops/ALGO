@@ -1440,9 +1440,12 @@ class TrapDetectorService:
         """Background loop: label pending events, then retrain LightGBM occasionally."""
         retrain_every = 20  # iterations
         tick = 0
+        # Allow web server and event loop to cleanly start and bind port before labeling
+        await asyncio.sleep(5.0)
         while True:
             try:
-                self._label_pending(history_provider)
+                # Offload synchronous MT5 broker fetching and labeling to background thread
+                await asyncio.to_thread(self._label_pending, history_provider)
                 tick += 1
                 if tick % retrain_every == 0:
                     # Offload CPU-heavy retrain to a thread so the loop stays responsive.

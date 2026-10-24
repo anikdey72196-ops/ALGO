@@ -138,7 +138,11 @@ class MT5Adapter(BrokerAdapter):
         self.retry_delay = retry_delay
         self._symbol_cache: dict[str, str] = {}
         self._last_connect_attempt: float = 0.0
-        self._reconnect_cooldown: float = 5.0
+        self._reconnect_cooldown: float = 10.0
+        self._max_reconnect_cooldown: float = 60.0
+        self._current_cooldown: float = 10.0
+        self._cached_equity: float = 0.0
+        self._cached_account_info: dict | None = None
 
     def is_connected(self) -> bool:
         """Check if MT5 terminal is running and a trading account is active."""
@@ -158,9 +162,8 @@ class MT5Adapter(BrokerAdapter):
         if self.is_connected():
             return True
         now = _time.time()
-        if now - self._last_connect_attempt < self._reconnect_cooldown:
+        if now - self._last_connect_attempt < self._current_cooldown:
             return False
-        self._last_connect_attempt = now
         return self.connect()
 
     def resolve_symbol(self, symbol: str) -> str:
@@ -233,9 +236,9 @@ class MT5Adapter(BrokerAdapter):
             return False
 
         initialized = False
-        # 1. Attempt connecting to an already running MT5 terminal
+        # 1. Attempt connecting to an already running MT5 terminal with 2000ms timeout
         try:
-            initialized = mt5.initialize()
+            initialized = mt5.initialize(timeout=2000)
             if initialized:
                 logger.info("Attached to running MetaTrader 5 terminal.")
         except Exception as e:
@@ -253,27 +256,56 @@ class MT5Adapter(BrokerAdapter):
             for path in candidate_paths:
                 if os.path.exists(path):
                     logger.info(f"Attempting MT5 initialization with terminal path: {path}")
-                    if mt5.initialize(path=path):
+                    if mt5.initialize(path=path, timeout=2000):
                         initialized = True
                         break
 
         if not initialized:
             err = mt5.last_error()
-            logger.error(
-                f"MT5 initialization failed (code: {err}). "
-                "Please make sure the MetaTrader 5 desktop app is open and logged into your account."
+            logger.warning(
+                f"MT5 initialization timed out or failed (code: {err}). "
+                "Operating in standby/offline mode. Terminal will auto-reconnect when desktop app is available."
             )
+            self._current_cooldown = min(self._current_cooldown * 1.5, self._max_reconnect_cooldown)
+            self._last_connect_attempt = _time.time()
             return False
 
         # 3. Optional explicit login if credentials were provided
         if self.login_id and self.password and self.server:
-            if not mt5.login(self.login_id, password=self.password, server=self.server):
-                err = mt5.last_error()
-                logger.error(f"MT5 login failed for account #{self.login_id}: {err}")
+            try:
+                curr_acc = mt5.account_info()
+                if curr_acc is not None and getattr(curr_acc, 'login', 0) == self.login_id:
+                    logger.info(f"Already authenticated with MT5 account #{self.login_id}.")
+                else:
+                    if not mt5.login(self.login_id, password=self.password, server=self.server, timeout=2500):
+                        err = mt5.last_error()
+                        logger.error(f"MT5 login failed for account #{self.login_id}: {err}")
+                        self._current_cooldown = min(self._current_cooldown * 1.5, self._max_reconnect_cooldown)
+                        self._last_connect_attempt = _time.time()
+                        return False
+            except Exception as e:
+                logger.warning(f"MT5 login check exception: {e}")
+                self._current_cooldown = min(self._current_cooldown * 1.5, self._max_reconnect_cooldown)
+                self._last_connect_attempt = _time.time()
                 return False
 
         acc = mt5.account_info()
+        self._last_connect_attempt = _time.time()
         if acc is not None:
+            self._current_cooldown = 5.0
+            self._cached_equity = float(acc.equity)
+            self._cached_account_info = {
+                "login": acc.login,
+                "server": acc.server,
+                "balance": acc.balance,
+                "equity": acc.equity,
+                "profit": acc.profit,
+                "margin": acc.margin,
+                "margin_free": acc.margin_free,
+                "currency": acc.currency,
+                "company": acc.company,
+                "leverage": acc.leverage,
+            }
             logger.info(
                 f"✅ Connected to MetaTrader 5 | Account #{acc.login} ({acc.server}) | "
                 f"Balance: ${acc.balance:,.2f} | Equity: ${acc.equity:,.2f} | Leverage: 1:{acc.leverage}"
@@ -431,21 +463,40 @@ class MT5Adapter(BrokerAdapter):
     def get_account_equity(self) -> float:
         if mt5 is None:
             return 0.0
-        self.ensure_connected()
+        if not self.is_connected():
+            if not self.ensure_connected():
+                return self._cached_equity
         acc_info = mt5.account_info()
         if acc_info is None:
-            return 0.0
-        return acc_info.equity
+            return self._cached_equity
+        self._cached_equity = float(acc_info.equity)
+        return self._cached_equity
 
     def get_account_info(self) -> dict | None:
         """Return dict of account details (login, server, balance, equity, leverage)."""
         if mt5 is None:
             return None
-        self.ensure_connected()
+        if not self.is_connected():
+            if not self.ensure_connected():
+                if self._cached_account_info:
+                    return self._cached_account_info
+                return {
+                    "login": self.login_id or 0,
+                    "server": self.server or "Standby",
+                    "balance": 0.0,
+                    "equity": self._cached_equity,
+                    "profit": 0.0,
+                    "margin": 0.0,
+                    "margin_free": 0.0,
+                    "currency": "USD",
+                    "company": "MetaTrader 5 (Standby)",
+                    "leverage": 100,
+                    "status": "standby",
+                }
         acc = mt5.account_info()
         if acc is None:
-            return None
-        return {
+            return self._cached_account_info
+        info = {
             "login": acc.login,
             "server": acc.server,
             "balance": acc.balance,
@@ -456,7 +507,10 @@ class MT5Adapter(BrokerAdapter):
             "currency": acc.currency,
             "company": acc.company,
             "leverage": acc.leverage,
+            "status": "connected",
         }
+        self._cached_account_info = info
+        return info
     
     def get_open_positions(self, symbol: str | None = None) -> list[dict]:
         if mt5 is None:

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from web_app import app, get_allowed_origins
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
     return TestClient(app)
 

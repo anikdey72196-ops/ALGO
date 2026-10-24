@@ -550,8 +550,7 @@ class TradingBot:
 
         connected = self.broker.connect()
         if not connected:
-            logger.error("Failed to connect to broker. Aborting.")
-            return False
+            logger.warning("Broker connection not ready at startup. Bot initialized in STANDBY mode.")
         return True
 
     def shutdown(self) -> None:
@@ -1758,7 +1757,8 @@ class TradingBot:
                 return None
 
             if hasattr(self.broker, 'ensure_connected'):
-                self.broker.ensure_connected()
+                if not self.broker.ensure_connected():
+                    return None
 
             broker_symbol = symbol
             if hasattr(self.broker, 'resolve_symbol'):

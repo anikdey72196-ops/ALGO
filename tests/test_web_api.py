@@ -238,6 +238,11 @@ def test_mobile_terminal_and_pwa_endpoints():
     assert "Glacier Terminal" in res_term.text or "Glacier" in res_term.text
     assert "Controls" in res_term.text
 
+    res_ctrl = client.get("/terminal/control")
+    assert res_ctrl.status_code == 200
+    assert "Glacier Terminal" in res_ctrl.text or "Glacier" in res_ctrl.text
+    assert "Controls" in res_ctrl.text
+
     # 4. Network Info Endpoint
     res_net = client.get("/api/network-info")
     assert res_net.status_code == 200

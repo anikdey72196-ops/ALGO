@@ -215,15 +215,27 @@ async def lifespan(app: FastAPI):
     scheduler_instance.start()
     logger.info(f"Background tick scheduler active (fast 60s scan interval). Bot starts DEACTIVATED.")
 
-    # Schedule ML Trap Detector background labeler task
-    labeler_task_instance = asyncio.create_task(
-        bot_instance.trap_svc.run_labeler(
-            history_provider=lambda sym, tf, n: bot_instance._prepare_df_for_trap_detector(
-                bot_instance._get_ohlcv(sym, tf, count=max(n, 300))
-            )
+    # Schedule ML Trap Detector background labeler task (active only when bot is active & connected)
+    def safe_labeler_history(sym: str, tf: str, n: int):
+        if not bot_instance or not bot_instance.is_active or not getattr(bot_instance.broker, "is_connected", lambda: False)():
+            return None
+        return bot_instance._prepare_df_for_trap_detector(
+            bot_instance._get_ohlcv(sym, tf, count=max(n, 300))
         )
-    )
-    logger.info("ML Trap Detector background labeler task active.")
+
+    async def safe_labeler_loop():
+        while True:
+            try:
+                await asyncio.sleep(60.0)
+                if bot_instance and bot_instance.is_active and getattr(bot_instance.broker, "is_connected", lambda: False)():
+                    await asyncio.to_thread(bot_instance.trap_svc._label_pending, safe_labeler_history)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Safe labeler pass error: {e}")
+
+    labeler_task_instance = asyncio.create_task(safe_labeler_loop())
+    logger.info("ML Trap Detector background labeler initialized (idle while bot deactivated).")
 
     # Schedule WebSocket background broadcaster for connected dashboards
     async def ws_broadcaster_task():
@@ -403,6 +415,12 @@ async def serve_terminal():
     return RedirectResponse(url="/terminal/controls", status_code=307)
 
 
+@app.get("/terminal/control")
+async def serve_terminal_control():
+    """Redirect /terminal/control (singular) to /terminal/controls."""
+    return RedirectResponse(url="/terminal/controls", status_code=307)
+
+
 @app.get("/terminal/controls", response_class=HTMLResponse)
 async def serve_terminal_controls(request: Request):
     """Serve Glacier Terminal Controls tab."""
@@ -415,14 +433,26 @@ async def serve_terminal_controls(request: Request):
         "4": "AUDJPY",
         "5": "NZDCAD",
     }) if bot_instance else {"1": "XAUUSD", "2": "EURUSD", "3": "GBPUSD", "4": "AUDJPY", "5": "NZDCAD"}
+    pair_configs_data = {}
+    if bot_instance and hasattr(bot_instance.config, "pair_configs"):
+        for s_sym, s_cfg in bot_instance.config.pair_configs.items():
+            pair_configs_data[s_sym] = {
+                "lot": getattr(s_cfg, "fixed_lot_size", None),
+                "sl": getattr(s_cfg, "fixed_sl_pips", None),
+                "enabled": getattr(s_cfg, "enabled", True),
+            }
+    selected_symbols = list(bot_instance.config.selected_symbols) if (bot_instance and hasattr(bot_instance.config, "selected_symbols")) else []
     return templates.TemplateResponse(
         request=request, 
         name="terminal_controls.html", 
         context={
+            "request": request,
             "is_active": bot_instance.is_active if bot_instance else False,
             "ml_shadow_mode": ml_shadow,
             "ai_confirmation_enabled": ai_gate,
             "pair_slots": pair_slots,
+            "pair_configs": pair_configs_data,
+            "selected_symbols": selected_symbols,
         }
     )
 
@@ -519,7 +549,11 @@ async def get_bot_state():
     if not bot_instance:
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
-    equity = bot_instance.broker.get_account_equity()
+    try:
+        equity = await asyncio.wait_for(asyncio.to_thread(bot_instance.broker.get_account_equity), timeout=1.2)
+    except Exception:
+        equity = getattr(bot_instance.broker, "_cached_equity", 0.0)
+
     daily_pnl = bot_instance.state.get_daily_pnl()
     trade_count = bot_instance.state.get_trade_count()
     cb_active = bot_instance.state.is_circuit_breaker_active()
@@ -528,7 +562,10 @@ async def get_bot_state():
     available = [i.symbol for i in bot_instance.config.instruments]
     broker_info = None
     if hasattr(bot_instance.broker, "get_account_info"):
-        broker_info = bot_instance.broker.get_account_info()
+        try:
+            broker_info = await asyncio.wait_for(asyncio.to_thread(bot_instance.broker.get_account_info), timeout=1.2)
+        except Exception:
+            broker_info = getattr(bot_instance.broker, "_cached_account_info", None)
 
     # Compute performance metrics in a single database pass
     metrics = bot_instance.state.get_performance_metrics()
@@ -1385,6 +1422,22 @@ async def handle_dashboard_update(payload: dict):
             elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
+        if is_enabled is not None:
+            en_bool = bool(is_enabled)
+            bot_instance.config.pair_configs[sym].enabled = en_bool
+            sel_syms = list(bot_instance.config.selected_symbols)
+            if en_bool and sym not in sel_syms:
+                sel_syms.append(sym)
+            elif not en_bool and sym in sel_syms:
+                sel_syms.remove(sym)
+            bot_instance.config.selected_symbols = sel_syms
+            if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
+                bot_instance.config.pair1.enabled = en_bool
+            elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
+                bot_instance.config.pair2.enabled = en_bool
+            elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
+                bot_instance.config.pair3.enabled = en_bool
+
         bot_instance.save_settings()
         invalidate_state_cache()
         asyncio.create_task(broadcast_bot_state())
@@ -1393,6 +1446,8 @@ async def handle_dashboard_update(payload: dict):
             "symbol": sym,
             "lot": bot_instance.config.pair_configs[sym].fixed_lot_size,
             "sl": bot_instance.config.pair_configs[sym].fixed_sl_pips,
+            "enabled": bot_instance.config.pair_configs[sym].enabled,
+            "selected_symbols": bot_instance.config.selected_symbols,
         }
 
     elif action == "save_configuration":
