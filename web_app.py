@@ -614,30 +614,33 @@ async def get_bot_state():
     for s_name, meta in default_meta.items():
         lot_val = meta["lot"]
         sl_val = meta["sl"]
-        en_val = s_name in bot_instance.config.selected_symbols
-
         if hasattr(bot_instance.config, "pair_configs") and s_name in bot_instance.config.pair_configs:
             cfg = bot_instance.config.pair_configs[s_name]
             if cfg.fixed_lot_size is not None:
                 lot_val = cfg.fixed_lot_size
             if cfg.fixed_sl_pips is not None:
                 sl_val = cfg.fixed_sl_pips
-            en_val = cfg.enabled and en_val
+            en_val = bool(getattr(cfg, "enabled", False))
         elif bot_instance.config.pair1.symbol == s_name:
             if bot_instance.config.pair1.fixed_lot_size is not None:
                 lot_val = bot_instance.config.pair1.fixed_lot_size
             if bot_instance.config.pair1.fixed_sl_pips is not None:
                 sl_val = bot_instance.config.pair1.fixed_sl_pips
+            en_val = getattr(bot_instance.config.pair1, "enabled", True)
         elif bot_instance.config.pair2.symbol == s_name:
             if bot_instance.config.pair2.fixed_lot_size is not None:
                 lot_val = bot_instance.config.pair2.fixed_lot_size
             if bot_instance.config.pair2.fixed_sl_pips is not None:
                 sl_val = bot_instance.config.pair2.fixed_sl_pips
+            en_val = getattr(bot_instance.config.pair2, "enabled", True)
         elif bot_instance.config.pair3.symbol == s_name:
             if bot_instance.config.pair3.fixed_lot_size is not None:
                 lot_val = bot_instance.config.pair3.fixed_lot_size
             if bot_instance.config.pair3.fixed_sl_pips is not None:
                 sl_val = bot_instance.config.pair3.fixed_sl_pips
+            en_val = getattr(bot_instance.config.pair3, "enabled", True)
+        else:
+            en_val = s_name in bot_instance.config.selected_symbols
 
         pairs_cfg_data[s_name.lower()] = {
             "symbol": s_name,

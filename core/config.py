@@ -868,7 +868,10 @@ class TradingConfig(BaseModel):
         description="Enforce directional candle confirmation (Green for BUY, Red for SELL) with minimum 50% body.",
     )
     selected_symbols: List[str] = Field(
-        default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD"],
+        default_factory=lambda: [
+            "XAUUSD", "EURUSD", "GBPUSD", "BTCUSD", "ETHUSD",
+            "AUDJPY", "EURJPY", "USDCHF", "CADCHF", "NZDCAD", "NZDCHF", "NZDUSD"
+        ],
         description="List of active symbols to analyze concurrently.",
     )
 

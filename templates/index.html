@@ -1479,7 +1479,7 @@
         }
       },
 
-      // 5 Monitored Market Pairs (Independent Lot Size & SL Precision Engine)
+      // 12 Monitored Market Pairs (Independent Lot Size & SL Precision Engine)
       pairs: {
         xauusd: { 
           id: 'xauusd', 
@@ -1514,8 +1514,8 @@
           accentBorder: 'active-emerald',
           active: true, 
           lot: 0.12, 
-          sl: 6.0, 
-          slStep: 1 
+          sl: 20.0, 
+          slStep: 5 
         },
         btcusd: { 
           id: 'btcusd', 
@@ -1540,6 +1540,90 @@
           lot: 0.05, 
           sl: 80.0, 
           slStep: 10 
+        },
+        eurjpy: { 
+          id: 'eurjpy', 
+          symbol: 'EURJPY', 
+          name: 'Euro / Japanese Yen', 
+          category: 'CROSS FX',
+          tagColor: 'text-purple-400 bg-purple-950/60 border-purple-800/50',
+          accentBorder: 'active-purple',
+          active: true, 
+          lot: 0.10, 
+          sl: 25.0, 
+          slStep: 5 
+        },
+        usdchf: { 
+          id: 'usdchf', 
+          symbol: 'USDCHF', 
+          name: 'USD / Swiss Franc', 
+          category: 'MAJOR FX',
+          tagColor: 'text-teal-400 bg-teal-950/60 border-teal-800/50',
+          accentBorder: 'active-teal',
+          active: true, 
+          lot: 0.10, 
+          sl: 20.0, 
+          slStep: 5 
+        },
+        audjpy: { 
+          id: 'audjpy', 
+          symbol: 'AUDJPY', 
+          name: 'AUD / Japanese Yen', 
+          category: 'CROSS FX',
+          tagColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/50',
+          accentBorder: 'active-emerald',
+          active: true, 
+          lot: 0.10, 
+          sl: 25.0, 
+          slStep: 5 
+        },
+        cadchf: { 
+          id: 'cadchf', 
+          symbol: 'CADCHF', 
+          name: 'CAD / Swiss Franc', 
+          category: 'CROSS FX',
+          tagColor: 'text-rose-400 bg-rose-950/60 border-rose-800/50',
+          accentBorder: 'active-rose',
+          active: true, 
+          lot: 0.10, 
+          sl: 20.0, 
+          slStep: 5 
+        },
+        nzdcad: { 
+          id: 'nzdcad', 
+          symbol: 'NZDCAD', 
+          name: 'NZD / Canadian Dollar', 
+          category: 'CROSS FX',
+          tagColor: 'text-sky-400 bg-sky-950/60 border-sky-800/50',
+          accentBorder: 'active-sky',
+          active: true, 
+          lot: 0.10, 
+          sl: 25.0, 
+          slStep: 5 
+        },
+        nzdchf: { 
+          id: 'nzdchf', 
+          symbol: 'NZDCHF', 
+          name: 'NZD / Swiss Franc', 
+          category: 'CROSS FX',
+          tagColor: 'text-indigo-400 bg-indigo-950/60 border-indigo-800/50',
+          accentBorder: 'active-indigo',
+          active: true, 
+          lot: 0.10, 
+          sl: 25.0, 
+          slStep: 5 
+        },
+        nzdusd: { 
+          id: 'nzdusd', 
+          symbol: 'NZDUSD', 
+          name: 'NZD / US Dollar', 
+          category: 'MAJOR FX',
+          tagColor: 'text-blue-400 bg-blue-950/60 border-blue-800/50',
+          accentBorder: 'active-blue',
+          active: true, 
+          lot: 0.10, 
+          sl: 20.0, 
+          slStep: 5 
         }
       }
     };
