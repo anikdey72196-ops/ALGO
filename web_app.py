@@ -17,14 +17,52 @@ import socket
 import asyncio
 import threading
 from datetime import datetime, timezone
+import secrets
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 # pyrefly: ignore [missing-import]
-from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Depends, Header, Security
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
+
+# ---------------------------------------------------------------------------
+# API key authentication
+# ---------------------------------------------------------------------------
+API_KEY_ENV = "ALGO_API_KEY"
+api_key_header_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def is_production() -> bool:
+    """Check if application is running in production mode."""
+    return (
+        os.getenv("ENVIRONMENT", "").strip().lower() in ("prod", "production")
+        or os.getenv("ALGO_ENV", "").strip().lower() in ("prod", "production")
+    )
+
+
+def get_api_key_header(x_api_key: Optional[str] = Security(api_key_header_scheme)) -> str:
+    """Validate the X-API-Key header against the environment variable using constant-time comparison.
+
+    Security features:
+    - Fail-Secure: In production, missing ALGO_API_KEY blocks requests rather than failing open.
+    - Constant-time comparison via secrets.compare_digest prevents timing attacks (CWE-208).
+    - In local dev mode with no key configured, permits open access for development agility.
+    """
+    expected = os.getenv(API_KEY_ENV, "").strip()
+    if not expected:
+        if is_production():
+            logger.error("FATAL: ALGO_API_KEY must be configured in production environment.")
+            raise HTTPException(
+                status_code=500,
+                detail="Server authentication configuration error: ALGO_API_KEY required in production."
+            )
+        return ""
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return x_api_key
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -149,9 +187,9 @@ class BotStateResponse(BaseModel):
 
 
 
-# ─────────────────────────────────────────────
-#  Global Bot Instance & Background Scheduler
-# ─────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Global Bot Instance & Background Scheduler
+# ---------------------------------------------------------------------------
 
 bot_instance: TradingBot = TradingBot(DEFAULT_CONFIG)
 bot_instance.startup()
@@ -365,6 +403,46 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# API Key Authentication Enforcement Middleware
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def enforce_api_key_auth(request: Request, call_next):
+    """Enforce API key authentication on API endpoints when configured or in production.
+
+    Security features:
+    - Fail-Secure: Blocks requests if running in production mode and ALGO_API_KEY is missing.
+    - Constant-time validation (secrets.compare_digest) to prevent timing attacks (CWE-208).
+    - UI templates, static files, and PWA assets remain accessible.
+    """
+    path = request.url.path
+    if path.startswith("/api/"):
+        expected = os.getenv(API_KEY_ENV, "").strip()
+        if expected or is_production():
+            if not expected and is_production():
+                return JSONResponse(
+                    status_code=500,
+                    content={"detail": "Server authentication configuration error: ALGO_API_KEY required in production."}
+                )
+
+            key = request.headers.get("X-API-Key")
+            if not key:
+                auth_hdr = request.headers.get("Authorization", "")
+                if auth_hdr.startswith("Bearer "):
+                    key = auth_hdr.split("Bearer ", 1)[1].strip()
+                elif auth_hdr.startswith("ApiKey "):
+                    key = auth_hdr.split("ApiKey ", 1)[1].strip()
+            if not key:
+                key = request.query_params.get("api_key")
+
+            if not key or not secrets.compare_digest(key, expected):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unauthorized: Invalid or missing API Key"}
+                )
+
+    return await call_next(request)
 
 # Templates and static directories
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -835,7 +913,22 @@ async def websocket_bot_state(websocket: WebSocket):
     """
     Real-time persistent state stream.
     Replaces repetitive HTTP GET /api/state polling with low-latency event-driven push.
+    Protected with constant-time API key handshake.
     """
+    expected = os.getenv(API_KEY_ENV, "").strip()
+    if expected or is_production():
+        if not expected and is_production():
+            await websocket.close(code=1008, reason="ALGO_API_KEY required in production")
+            return
+        token = (
+            websocket.headers.get("X-API-Key")
+            or websocket.query_params.get("api_key")
+            or websocket.query_params.get("token")
+        )
+        if not token or not secrets.compare_digest(token, expected):
+            await websocket.close(code=1008, reason="Unauthorized: Invalid or missing API Key")
+            return
+
     await websocket.accept()
     active_websockets.add(websocket)
     try:

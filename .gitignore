@@ -15,3 +15,4 @@ graphify-out
 .gemini
 /adapters
 /.agent
+/codeql-custom-queries-python
