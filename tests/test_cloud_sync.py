@@ -250,6 +250,26 @@ def test_api_sync_endpoints(monkeypatch):
     res_unauth = client.post("/api/sync/trigger_retrain")
     assert res_unauth.status_code == 401
 
+    # 6. run_client_sync Auth & Validation Checks
+    res_sync_unauth = client.post("/api/sync/run_client_sync")
+    assert res_sync_unauth.status_code == 401
+
+    res_sync_bad_auth = client.post("/api/sync/run_client_sync", headers={"Authorization": "Bearer wrong-token"})
+    assert res_sync_bad_auth.status_code == 401
+
+    monkeypatch.delenv("CLOUD_SYNC_URL", raising=False)
+    res_sync_no_url = client.post("/api/sync/run_client_sync", headers=headers)
+    assert res_sync_no_url.status_code == 400
+
+    res_sync_bad_url = client.post("/api/sync/run_client_sync?target_url=ftp://evil.com", headers=headers)
+    assert res_sync_bad_url.status_code == 400
+
+    from unittest.mock import patch
+    with patch("web_app.CloudSyncClient.full_two_way_sync", return_value={"status": "ok"}):
+        res_sync_ok = client.post("/api/sync/run_client_sync?target_url=https://cloud.example.com", headers=headers)
+        assert res_sync_ok.status_code == 200
+
+
 
 def test_engine_import_partial_tp_events_batch(temp_sync_env):
     """Verify batch insertion and deduplication of partial_tp_events."""

@@ -2543,7 +2543,7 @@ def verify_sync_auth(request: Request) -> bool:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth.split("Bearer ", 1)[1].strip()
-        if token == expected:
+        if secrets.compare_digest(token, expected):
             return True
     return False
 
@@ -2673,11 +2673,16 @@ async def trigger_cloud_retrain(request: Request):
 
 
 @app.post("/api/sync/run_client_sync")
-async def run_client_sync(target_url: Optional[str] = None):
+async def run_client_sync(request: Request, target_url: Optional[str] = None):
     """Execute client sync from this machine to target cloud URL."""
+    if not verify_sync_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     cloud_url = target_url or os.getenv("CLOUD_SYNC_URL", "")
     if not cloud_url:
         raise HTTPException(status_code=400, detail="CLOUD_SYNC_URL not configured.")
+    parsed = urlparse(cloud_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Invalid cloud sync URL scheme or host. Only http and https are allowed.")
     token = os.getenv("SYNC_AUTH_TOKEN", "")
     try:
         client = CloudSyncClient(remote_url=cloud_url, auth_token=token, local_engine=sync_engine)
