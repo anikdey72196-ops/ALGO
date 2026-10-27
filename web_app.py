@@ -43,12 +43,13 @@ def is_production() -> bool:
     )
 
 
-def get_api_key_header(x_api_key: Optional[str] = Security(api_key_header_scheme)) -> str:
+def get_api_key_header(request: Request, x_api_key: Optional[str] = Security(api_key_header_scheme)) -> str:
     """Validate the X-API-Key header against the environment variable using constant-time comparison.
 
     Security features:
     - Fail-Secure: In production, missing ALGO_API_KEY blocks requests rather than failing open.
     - Constant-time comparison via secrets.compare_digest prevents timing attacks (CWE-208).
+    - Supports X-API-Key, Authorization (Bearer / ApiKey), and api_key query param.
     - In local dev mode with no key configured, permits open access for development agility.
     """
     expected = os.getenv(API_KEY_ENV, "").strip()
@@ -60,9 +61,18 @@ def get_api_key_header(x_api_key: Optional[str] = Security(api_key_header_scheme
                 detail="Server authentication configuration error: ALGO_API_KEY required in production."
             )
         return ""
-    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+    key = x_api_key
+    if not key and request:
+        auth_hdr = request.headers.get("Authorization", "")
+        if auth_hdr.startswith("Bearer "):
+            key = auth_hdr.split("Bearer ", 1)[1].strip()
+        elif auth_hdr.startswith("ApiKey "):
+            key = auth_hdr.split("ApiKey ", 1)[1].strip()
+        if not key:
+            key = request.query_params.get("api_key")
+    if not key or not secrets.compare_digest(key, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return x_api_key
+    return key
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -2437,8 +2447,8 @@ async def get_activation_history(limit: int = 100):
     }
 
 
-@app.post("/api/activation_history/clear")
-@app.post("/api/activation-history/clear")
+@app.post("/api/activation_history/clear", dependencies=[Depends(get_api_key_header)])
+@app.post("/api/activation-history/clear", dependencies=[Depends(get_api_key_header)])
 async def clear_activation_history():
     """Clear historical completed/interrupted sessions."""
     if not bot_instance:

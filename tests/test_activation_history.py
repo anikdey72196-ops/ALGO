@@ -76,8 +76,38 @@ def test_activation_history_flow():
     assert stats["total_uptime_seconds"] >= 1.0
     print(f"   Stats: Total Sessions={stats['total_sessions']}, Total Uptime={stats['formatted_total_uptime']}, Avg Duration={stats['formatted_avg_duration']}")
 
-    print("\nAll Activation History integration tests PASSED successfully!")
+    print("\n8. Testing authentication on /api/activation_history/clear...")
+    import os
+    os.environ["ALGO_API_KEY"] = "secret-test-key-987"
+    try:
+        # Unauthorized without key
+        unauth_res = client.post("/api/activation_history/clear")
+        assert unauth_res.status_code == 401
+
+        # Unauthorized with wrong key
+        wrong_res = client.post("/api/activation_history/clear", headers={"X-API-Key": "wrong"})
+        assert wrong_res.status_code == 401
+
+        # Authorized with correct key
+        auth_res = client.post("/api/activation_history/clear", headers={"X-API-Key": "secret-test-key-987"})
+        assert auth_res.status_code == 200
+        assert auth_res.json()["status"] == "success"
+
+        # Hyphenated route authorized with Bearer token
+        auth_res2 = client.post("/api/activation-history/clear", headers={"Authorization": "Bearer secret-test-key-987"})
+        assert auth_res2.status_code == 200
+        assert auth_res2.json()["status"] == "success"
+
+        # Verify history is now cleared
+        hist_cleared = client.get("/api/activation_history", headers={"X-API-Key": "secret-test-key-987"})
+        assert hist_cleared.status_code == 200
+        assert len(hist_cleared.json()["sessions"]) == 0
+    finally:
+        os.environ.pop("ALGO_API_KEY", None)
+
+    print("\nAll Activation History integration and security tests PASSED successfully!")
 
 
 if __name__ == "__main__":
     test_activation_history_flow()
+
