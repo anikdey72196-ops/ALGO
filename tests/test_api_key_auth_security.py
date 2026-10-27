@@ -99,3 +99,28 @@ def test_websocket_accepts_valid_key_in_query(client, monkeypatch):
     with client.websocket_connect(f"/ws/state?api_key={secret}") as ws:
         data = ws.receive_json()
         assert "is_active" in data
+
+
+def test_clear_trades_endpoint_auth(client, monkeypatch):
+    """Verify /api/trades/clear enforces authentication dependency."""
+    secret = "trades-secret-key-123"
+    monkeypatch.setenv(API_KEY_ENV, secret)
+
+    # 1. Missing auth returns 401
+    res_unauth = client.post("/api/trades/clear")
+    assert res_unauth.status_code == 401
+
+    # 2. Invalid auth returns 401
+    res_wrong = client.post("/api/trades/clear", headers={"X-API-Key": "wrong-key"})
+    assert res_wrong.status_code == 401
+
+    # 3. Valid X-API-Key returns 200
+    res_auth = client.post("/api/trades/clear", headers={"X-API-Key": secret})
+    assert res_auth.status_code == 200
+    assert res_auth.json().get("status") == "success"
+
+    # 4. Valid Bearer token returns 200
+    res_bearer = client.post("/api/trades/clear", headers={"Authorization": f"Bearer {secret}"})
+    assert res_bearer.status_code == 200
+    assert res_bearer.json().get("status") == "success"
+

@@ -2389,7 +2389,7 @@ async def explain_smart_partial_tp_prediction(payload: Dict[str, Any] = Body(...
 
 
 
-@app.post("/api/trades/clear")
+@app.post("/api/trades/clear", dependencies=[Depends(get_api_key_header)])
 async def clear_trades():
     """Clear closed trade ledger history."""
     if not bot_instance:
