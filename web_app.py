@@ -1095,7 +1095,7 @@ async def activate_bot():
     }
 
 
-@app.post("/api/deactivate")
+@app.post("/api/deactivate", dependencies=[Depends(get_api_key_header)])
 async def deactivate_bot():
     """Deactivate trading bot. Stops execution loop and unlocks market selection."""
     if not bot_instance:
@@ -1117,7 +1117,7 @@ async def deactivate_bot():
     }
 
 
-@app.post("/api/halt")
+@app.post("/api/halt", dependencies=[Depends(get_api_key_header)])
 async def halt_bot(close_trades: bool = True):
     """
     Emergency HALT trading bot. Stops execution loop and immediately closes all open trades.

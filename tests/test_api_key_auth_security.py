@@ -124,3 +124,41 @@ def test_clear_trades_endpoint_auth(client, monkeypatch):
     assert res_bearer.status_code == 200
     assert res_bearer.json().get("status") == "success"
 
+
+def test_halt_endpoint_auth(client, monkeypatch):
+    """Verify /api/halt enforces authentication dependency."""
+    secret = "halt-secret-key-456"
+    monkeypatch.setenv(API_KEY_ENV, secret)
+
+    # 1. Missing auth returns 401
+    res_unauth = client.post("/api/halt")
+    assert res_unauth.status_code == 401
+
+    # 2. Invalid auth returns 401
+    res_wrong = client.post("/api/halt", headers={"X-API-Key": "wrong-key"})
+    assert res_wrong.status_code == 401
+
+    # 3. Valid X-API-Key allows authorized execution
+    res_auth = client.post("/api/halt", headers={"X-API-Key": secret})
+    assert res_auth.status_code == 200
+
+
+def test_deactivate_endpoint_auth(client, monkeypatch):
+    """Verify /api/deactivate enforces authentication dependency."""
+    secret = "deactivate-secret-key-789"
+    monkeypatch.setenv(API_KEY_ENV, secret)
+
+    # 1. Missing auth returns 401
+    res_unauth = client.post("/api/deactivate")
+    assert res_unauth.status_code == 401
+
+    # 2. Invalid auth returns 401
+    res_wrong = client.post("/api/deactivate", headers={"X-API-Key": "wrong-key"})
+    assert res_wrong.status_code == 401
+
+    # 3. Valid X-API-Key allows authorized execution
+    res_auth = client.post("/api/deactivate", headers={"X-API-Key": secret})
+    assert res_auth.status_code == 200
+
+
+
