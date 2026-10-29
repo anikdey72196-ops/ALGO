@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 
 import json
+import time
 
 from dataclasses import dataclass
 
@@ -298,160 +299,91 @@ Decision Rules:
 
 
     def _call_gemini_api(self, prompt: str) -> AIDecision:
-
-        """Query Gemini API with automatic API key rotation on 429 quota and model fallback."""
-
+        """Query Gemini API with automatic API key rotation on 429 quota, 503 retry, and model fallback."""
         from google.genai import types
-
         candidate_models = [self.model_name]
-
         for fallback in (
-
-            "gemini-flash-lite-latest",
-
-            "gemini-2.5-flash-lite",
-
             "gemini-2.5-flash",
-
+            "gemini-2.5-flash-lite",
             "gemini-2.0-flash",
-
-            "gemini-3.1-flash-lite",
-
+            "gemini-flash-lite-latest",
+            "gemini-1.5-flash",
         ):
-
             if fallback not in candidate_models:
-
                 candidate_models.append(fallback)
 
-
-
         response = None
-
         last_error = None
-
         num_keys = len(self.api_keys)
 
-
-
         # Iterate across available keys in rotation pool
-
         for attempt in range(num_keys):
-
             key_idx = (self._current_key_idx + attempt) % num_keys
-
             active_key = self.api_keys[key_idx]
-
             client = self._clients.get(active_key)
-
             if not client:
-
                 continue
 
-
-
             for m in candidate_models:
-
-                try:
-
-                    response = client.models.generate_content(
-
-                        model=m,
-
-                        contents=prompt,
-
-                        config=types.GenerateContentConfig(
-
-                            response_mime_type="application/json",
-
-                            temperature=0.1,  # Strict, low-variance reasoning
-
-                        ),
-
-                    )
-
-                    if response and response.text:
-
-                        # Key succeeded! Update active key index
-
-                        self._current_key_idx = key_idx
-
-                        break
-
-                except Exception as e:
-
-                    last_error = e
-
-                    err_str = str(e).lower()
-
-                    if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
-
-                        masked = f"{active_key[:6]}...{active_key[-4:]}"
-
-                        logger.warning(
-
-                            f"Gemini API key [{masked}] quota exhausted (429 RESOURCE_EXHAUSTED) on model '{m}'. "
-
-                            f"Rotating to next available key in pool..."
-
+                for try_count in range(2):
+                    try:
+                        response = client.models.generate_content(
+                            model=m,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.1,  # Strict, low-variance reasoning
+                            ),
                         )
+                        if response and response.text:
+                            self._current_key_idx = key_idx
+                            break
+                    except Exception as e:
+                        last_error = e
+                        err_str = str(e).lower()
+                        if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+                            masked = f"{active_key[:6]}...{active_key[-4:]}"
+                            logger.warning(
+                                f"Gemini API key [{masked}] quota exhausted (429 RESOURCE_EXHAUSTED) on model '{m}'. "
+                                f"Rotating to next available key in pool..."
+                            )
+                            break
+                        elif ("503" in err_str or "unavailable" in err_str or "high demand" in err_str) and try_count == 0:
+                            logger.info(f"Gemini model '{m}' busy (503 UNAVAILABLE). Retrying in 1s...")
+                            time.sleep(1.0)
+                            continue
+                        else:
+                            logger.warning(f"Gemini model '{m}' evaluation failed on key [{active_key[:6]}...]: {e}. Trying next candidate model...")
+                            break
 
-                        break  # Break model loop to rotate key immediately
-
-                    else:
-
-                        logger.warning(f"Gemini model '{m}' evaluation failed on key [{active_key[:6]}...]: {e}. Trying next candidate model...")
-
-                        continue
-
-
+                if response and response.text:
+                    break
+                if "429" in str(last_error).lower() or "resource_exhausted" in str(last_error).lower():
+                    break
 
             if response and response.text:
-
                 break
 
-
-
         if response is None or not response.text:
-
             raise last_error or RuntimeError("No response from Gemini models across all keys")
 
-
-
         data = json.loads(response.text)
-
         confirmed = bool(data.get("confirmed", False))
-
         confidence = float(data.get("confidence", 50.0))
-
         reason = str(data.get("reason", "AI evaluation complete."))
-
         warnings = str(data.get("warnings", ""))
 
-
-
         # Check against threshold
-
         if confidence < self.threshold:
-
             confirmed = False
-
             reason = f"AI confidence ({confidence:.1f}%) below threshold ({self.threshold}%): {reason}"
 
-
-
         return AIDecision(
-
             confirmed=confirmed,
-
             confidence=confidence,
-
             reason=reason,
-
             warnings=warnings,
-
         )
-
-
 
     def _heuristic_evaluation(
 
