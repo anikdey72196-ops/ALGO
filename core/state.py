@@ -1286,6 +1286,20 @@ class StateManager:
 
         logger.warning(f"Circuit breaker activated for {date_str}")
 
+    def reset_circuit_breaker(self, today: date | None = None) -> None:
+        """Reset the circuit breaker flag for a specific date (or today)."""
+        if today is None:
+            today = datetime.now(timezone.utc).date()
+        date_str = today.isoformat()
+        self._ensure_daily_row(today)
+        with self._lock:
+            self.conn.execute('''
+                UPDATE daily_state
+                SET circuit_breaker_active = 0
+                WHERE date = ?
+            ''', (date_str,))
+        logger.info(f"Circuit breaker reset for {date_str}")
+
     
 
     def reset_daily_state(self) -> None:

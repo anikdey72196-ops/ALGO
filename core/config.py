@@ -539,7 +539,7 @@ class AccountConfig(BaseModel):
 
         le=0.10,
 
-        description="Maximum daily drawdown as fraction of equity (0.02 = 2%).",
+        description="Maximum daily drawdown as fraction of equity (0.05 = 5%).",
 
     )
 

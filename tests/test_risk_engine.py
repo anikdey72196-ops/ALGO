@@ -212,7 +212,8 @@ class TestCircuitBreakers(unittest.TestCase):
         """
         self.state.is_circuit_breaker_active = MagicMock(return_value=False)
         self.state.get_open_positions = MagicMock(return_value=[])
-        self.state.get_daily_pnl = MagicMock(return_value=-250.0)  # Breached $200 limit
+        limit = 10_000.0 * self.config.account.max_daily_drawdown_pct
+        self.state.get_daily_pnl = MagicMock(return_value=-(limit + 50.0))
         self.state.activate_circuit_breaker = MagicMock()
 
         blocked, reason = self.risk_engine.check_circuit_breakers(equity=10_000.0)
