@@ -1,2715 +1,5431 @@
 """
+
 web_app.py — FastAPI Web Control Dashboard for the Automated Trading Bot.
 
+
+
 Features:
+
 - Activation / Deactivation toggle: Starts/stops the execution loop on demand.
+
 - Custom fixed lot size input: Allows manual override of lot sizing.
+
 - Dual Chart Selection: Allows user to pick 2 active markets (e.g. XAUUSD & EURUSD).
+
 - Market Lock Enforcement: Once activated, symbol selectors cannot be modified until deactivated.
+
 - Real-time State Polling: Exposes live equity, daily PnL, circuit breaker status, and recent activity logs.
+
 """
+
+
 
 from __future__ import annotations
 
+
+
 import os
+
 import re
+
 import socket
+
 import asyncio
+
 import threading
+
 from datetime import datetime, timezone
+
 import secrets
+
 from typing import Any, Dict, List, Optional
+
 from pathlib import Path
+
 from contextlib import asynccontextmanager
+
 from urllib.parse import urlparse
 
+
+
 # pyrefly: ignore [missing-import]
+
 from fastapi import Body, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, Depends, Header, Security
+
 from fastapi.security import APIKeyHeader
+
 from fastapi.middleware.cors import CORSMiddleware
 
+
+
 # ---------------------------------------------------------------------------
+
 # API key authentication
+
 # ---------------------------------------------------------------------------
+
 API_KEY_ENV = "ALGO_API_KEY"
+
 api_key_header_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+
+
+
 def is_production() -> bool:
+
     """Check if application is running in production mode."""
+
     return (
+
         os.getenv("ENVIRONMENT", "").strip().lower() in ("prod", "production")
+
         or os.getenv("ALGO_ENV", "").strip().lower() in ("prod", "production")
+
     )
 
 
+
+
+
 def get_api_key_header(request: Request, x_api_key: Optional[str] = Security(api_key_header_scheme)) -> str:
+
     """Validate the X-API-Key header against the environment variable using constant-time comparison.
 
+
+
     Security features:
+
     - Fail-Secure: In production, missing ALGO_API_KEY blocks requests rather than failing open.
+
     - Constant-time comparison via secrets.compare_digest prevents timing attacks (CWE-208).
+
     - Supports X-API-Key, Authorization (Bearer / ApiKey), and api_key query param.
+
     - In local dev mode with no key configured, permits open access for development agility.
+
     """
+
     expected = os.getenv(API_KEY_ENV, "").strip()
+
     if not expected:
+
         if is_production():
+
             logger.error("FATAL: ALGO_API_KEY must be configured in production environment.")
+
             raise HTTPException(
+
                 status_code=500,
+
                 detail="Server authentication configuration error: ALGO_API_KEY required in production."
+
             )
+
         return ""
+
     key = x_api_key
+
     if not key and request:
+
         auth_hdr = request.headers.get("Authorization", "")
+
         if auth_hdr.startswith("Bearer "):
+
             key = auth_hdr.split("Bearer ", 1)[1].strip()
+
         elif auth_hdr.startswith("ApiKey "):
+
             key = auth_hdr.split("ApiKey ", 1)[1].strip()
+
         if not key:
+
             key = request.query_params.get("api_key")
+
     if not key or not secrets.compare_digest(key, expected):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     return key
+
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+
 from fastapi.staticfiles import StaticFiles
+
 from fastapi.templating import Jinja2Templates
+
 from pydantic import BaseModel, Field
+
 from loguru import logger
+
 import pandas as pd
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from apscheduler.triggers.interval import IntervalTrigger
 
+
+
 from core.config import TradingConfig, DEFAULT_CONFIG, InstrumentConfig, get_instrument
+
 from core.state import format_duration
+
 from main import TradingBot, parse_ltf_to_seconds
 
-try:
-    from ml.smart_partial_tp import SmartPartialTPService
-except ImportError:
-    SmartPartialTPService = None
+
 
 try:
-    from ml.cluster_manager import AssetCluster, CLUSTER_PAIRS
+
+    from ml.smart_partial_tp import SmartPartialTPService
+
 except ImportError:
+
+    SmartPartialTPService = None
+
+
+
+try:
+
+    from ml.cluster_manager import AssetCluster, CLUSTER_PAIRS
+
+except ImportError:
+
     AssetCluster = None
+
     CLUSTER_PAIRS = {}
 
 
-# ─────────────────────────────────────────────
-#  Pydantic Schemas for Web API
+
+
+
 # ─────────────────────────────────────────────
 
+#  Pydantic Schemas for Web API
+
+# ─────────────────────────────────────────────
+
+
+
 class PairConfigItem(BaseModel):
+
     symbol: str
+
     fixed_lot_size: Optional[float] = None
+
     fixed_sl_pips: Optional[float] = None
+
     enabled: bool = True
 
 
+
+
+
 class BotConfigUpdate(BaseModel):
+
     pair1: Optional[PairConfigItem] = None
+
     pair2: Optional[PairConfigItem] = None
+
     pair3: Optional[PairConfigItem] = None
+
     enabled_strategies: Optional[List[str]] = None
+
     selected_symbols: Optional[List[str]] = None
+
     strategy_type: Optional[str] = None
+
     fixed_lot_size: Optional[float] = None
+
     fixed_sl_pips: Optional[float] = None
+
     ai_confirmation_enabled: Optional[bool] = None
+
     pair_configs: Optional[dict] = None
+
     max_open_positions: Optional[int] = None
+
     night_limit_enabled: Optional[bool] = None
+
     night_max_open_positions: Optional[int] = None
+
     night_start_hour: Optional[int] = None
+
     night_end_hour: Optional[int] = None
+
     night_timezone_mode: Optional[str] = None
+
     ml_gating_enabled: Optional[bool] = None
+
     ml_max_sl_probability: Optional[float] = None
+
     ml_shadow_mode: Optional[bool] = None
+
     temporal_ml_enabled: Optional[bool] = None
+
     reversal_strategy_enabled: Optional[bool] = None
+
     directional_loss_cooldown_enabled: Optional[bool] = None
+
     weekend_retrain_enabled: Optional[bool] = None
 
 
+
+
+
 class BotStateResponse(BaseModel):
+
     is_active: bool
+
     selected_symbols: List[str]
+
     pair1: dict
+
     pair2: dict
+
     pair3: dict
+
     pairs_config: dict = {}
+
     pair_slots: Dict[str, str] = {}
+
     enabled_strategies: List[str]
+
     strategy_type: str
+
     fixed_lot_size: Optional[float]
+
     fixed_sl_pips: Optional[float]
+
     max_open_positions: int = 15
+
     effective_max_open_positions: int = 15
+
     is_night_window: bool = False
+
     night_limit_enabled: bool = True
+
     night_max_open_positions: int = 2
+
     night_start_hour: int = 23
+
     night_end_hour: int = 8
+
     night_timezone_mode: str = "Asia/Kolkata"
+
     directional_loss_cooldown_enabled: bool = False
+
     ai_confirmation_enabled: bool
+
     ai_confidence_threshold: float
+
     ml_gating_enabled: bool = True
+
     ml_max_sl_probability: float = 0.50
+
     ml_shadow_mode: bool = True
+
     temporal_ml_enabled: bool = True
+
     reversal_strategy_enabled: bool = False
+
     equity: float
+
     daily_pnl: float
+
     trades_today: int
+
     circuit_breaker_active: bool
+
     recent_logs: List[str]
+
     available_symbols: List[str]
+
     mock_mode: bool
+
     broker_info: Optional[dict] = None
+
     accuracy: float = 0.0
+
     winning_trades: int = 0
+
     losing_trades: int = 0
+
     total_closed_trades: int = 0
+
     active_session: Optional[dict] = None
+
     available_strategies: List[str] = ["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"]
+
     stats_by_strategy: dict = {}
+
     stats_by_pair: dict = {}
+
     performance_metrics: dict = {}
+
     ml_trap_detector: dict = {}
+
     trap_stats: dict = {}
+
     temporal_ml_model: dict = {}
+
     open_positions_by_strategy: dict = {}
+
     execution_summary: dict = {}
+
     trend_reversal: dict = {}
+
     ml_logs: List[str] = []
+
     current_window: dict = {}
+
     temporal_ml_shadow_mode: bool = True
+
     daily_bias: dict = {}
+
     ml_clusters: dict = {}
+
     pair_lockouts: dict = {}
 
 
 
 
 
-# ---------------------------------------------------------------------------
-# Global Bot Instance & Background Scheduler
+
+
+
+
+
+
 # ---------------------------------------------------------------------------
 
+# Global Bot Instance & Background Scheduler
+
+# ---------------------------------------------------------------------------
+
+
+
 bot_instance: TradingBot = TradingBot(DEFAULT_CONFIG)
+
 bot_instance.startup()
+
 scheduler_instance: AsyncIOScheduler | None = None
+
 labeler_task_instance: asyncio.Task | None = None
+
 ws_task_instance: asyncio.Task | None = None
+
 active_websockets: set[WebSocket] = set()
 
 
+
+
+
 @asynccontextmanager
+
 async def lifespan(app: FastAPI):
+
     """Lifecycle manager to initialize background tick scheduler and ML labeler."""
+
     global bot_instance, scheduler_instance, labeler_task_instance
+
     logger.info("Initializing Web Control Server...")
+
+
 
     config = bot_instance.config
 
+
+
     # Start background scheduler — fast 60-second (1-minute) interval for high responsiveness
+
     scheduler_instance = AsyncIOScheduler(timezone="UTC")
+
     interval = 60
+
     
+
     # Tick job runs every interval, but bot.tick() checks `if not self.is_active: return`
+
     async def safe_tick_wrapper():
+
         try:
+
             if bot_instance.is_active:
+
                 loop = asyncio.get_running_loop()
+
                 await loop.run_in_executor(None, bot_instance.tick)
+
                 await broadcast_bot_state()
+
         except asyncio.CancelledError:
+
             pass  # Clean shutdown cancellation, avoid noisy traceback
+
         except Exception as e:
+
             logger.error(f"Error in safe_tick_wrapper: {e}")
 
+
+
     scheduler_instance.add_job(
+
         safe_tick_wrapper,
+
         trigger=IntervalTrigger(seconds=interval),
+
         id="web_trading_tick",
+
         name="Web Trading Tick",
+
         max_instances=1,
+
         misfire_grace_time=30,
+
     )
 
+
+
     # Schedule Automated Weekend ML Retraining (Market Closed Window)
+
     if getattr(config, "weekend_retrain_enabled", True):
+
         from apscheduler.triggers.cron import CronTrigger
+
         from ml.weekend_retrainer import run_weekend_retraining_job
 
+
+
         retrain_day = getattr(config, "weekend_retrain_day", "sat").lower()
+
         retrain_hour = getattr(config, "weekend_retrain_hour_utc", 2)
 
+
+
         async def weekend_retrain_wrapper():
+
             logger.info("Executing scheduled automated weekend ML batch retraining job...")
+
             loop = asyncio.get_running_loop()
+
             await loop.run_in_executor(None, run_weekend_retraining_job, bot_instance)
 
+
+
         scheduler_instance.add_job(
+
             weekend_retrain_wrapper,
+
             trigger=CronTrigger(day_of_week=retrain_day, hour=retrain_hour, minute=0, timezone="UTC"),
+
             id="weekend_ml_batch_retrain",
+
             name="Weekend ML Batch Retraining",
+
             max_instances=1,
+
             misfire_grace_time=3600,
+
         )
+
         logger.info(f"Automated Weekend ML Retraining active: Scheduled for {retrain_day.upper()} at {retrain_hour:02d}:00 UTC (Market Closed).")
 
+
+
     scheduler_instance.start()
+
     logger.info(f"Background tick scheduler active (fast 60s scan interval). Bot starts DEACTIVATED.")
 
+
+
     # Schedule ML Trap Detector background labeler task (active only when bot is active & connected)
+
     def safe_labeler_history(sym: str, tf: str, n: int):
+
         if not bot_instance or not bot_instance.is_active or not getattr(bot_instance.broker, "is_connected", lambda: False)():
+
             return None
+
         return bot_instance._prepare_df_for_trap_detector(
+
             bot_instance._get_ohlcv(sym, tf, count=max(n, 300))
+
         )
 
+
+
     async def safe_labeler_loop():
+
         while True:
+
             try:
+
                 await asyncio.sleep(60.0)
+
                 if bot_instance and bot_instance.is_active and getattr(bot_instance.broker, "is_connected", lambda: False)():
+
                     await asyncio.to_thread(bot_instance.trap_svc._label_pending, safe_labeler_history)
+
             except asyncio.CancelledError:
+
                 break
+
             except Exception as e:
+
                 logger.debug(f"Safe labeler pass error: {e}")
 
+
+
     labeler_task_instance = asyncio.create_task(safe_labeler_loop())
+
     logger.info("ML Trap Detector background labeler initialized (idle while bot deactivated).")
 
+
+
     # Schedule WebSocket background broadcaster for connected dashboards
+
     async def ws_broadcaster_task():
+
         while True:
+
             try:
+
                 await asyncio.sleep(3.0)
+
                 if active_websockets:
+
                     await broadcast_bot_state()
+
             except asyncio.CancelledError:
+
                 break
+
             except Exception as e:
+
                 logger.debug(f"WebSocket broadcaster error: {e}")
+
                 await asyncio.sleep(2.0)
 
+
+
     ws_task_instance = asyncio.create_task(ws_broadcaster_task())
+
     logger.info("WebSocket state streaming background task active.")
+
+
 
     yield
 
+
+
     # Shutdown
+
     if ws_task_instance:
+
         ws_task_instance.cancel()
+
     for ws in list(active_websockets):
+
         try:
+
             await ws.close()
+
         except Exception:
+
             pass
+
     active_websockets.clear()
 
+
+
     if labeler_task_instance:
+
         labeler_task_instance.cancel()
+
     if scheduler_instance:
+
         scheduler_instance.shutdown(wait=False)
+
     if bot_instance:
+
         if bot_instance.is_active:
+
             bot_instance.state.record_deactivation("Server Shutdown")
+
             bot_instance.is_active = False
+
         bot_instance.shutdown()
+
     logger.info("Web Control Server shut down cleanly.")
 
 
 
+
+
+
+
 def get_all_lan_ips() -> list[str]:
+
     """Discover all non-loopback IPv4 addresses (Wi-Fi, Ethernet, Tailscale)."""
+
     ips = set()
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            ips.add(s.getsockname()[0])
-    except Exception:
-        pass
 
     try:
-        hostname = socket.gethostname()
-        for addr_info in socket.getaddrinfo(hostname, None, socket.AF_INET):
-            ip = addr_info[4][0]
-            if not ip.startswith("127."):
-                ips.add(ip)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+
+            s.connect(("8.8.8.8", 80))
+
+            ips.add(s.getsockname()[0])
+
     except Exception:
+
         pass
+
+
+
+    try:
+
+        hostname = socket.gethostname()
+
+        for addr_info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+
+            ip = addr_info[4][0]
+
+            if not ip.startswith("127."):
+
+                ips.add(ip)
+
+    except Exception:
+
+        pass
+
+
 
     return sorted(list(ips)) if ips else ["127.0.0.1"]
 
 
+
+
+
 def get_allowed_origins() -> list[str]:
+
     """
+
     Construct a restricted list of trusted origins for CORS.
+
     Includes loopback addresses, detected local LAN IPs on the dashboard port,
+
     and any origins explicitly configured via ALLOWED_ORIGINS or CORS_ORIGINS environment variables.
+
     Wildcards ('*') are strictly disallowed to prevent cross-origin exploitation (CWE-942).
+
     """
+
     port = os.getenv("PORT", "8000").strip() or "8000"
+
     origins = {
+
         "http://localhost",
+
         f"http://localhost:{port}",
+
         "http://127.0.0.1",
+
         f"http://127.0.0.1:{port}",
+
         "http://localhost:3000",
+
         "http://127.0.0.1:3000",
+
         "http://localhost:5173",
+
         "http://127.0.0.1:5173",
+
     }
 
+
+
     try:
+
         for ip in get_all_lan_ips():
+
             origins.add(f"http://{ip}")
+
             origins.add(f"http://{ip}:{port}")
+
             if port != "8000":
+
                 origins.add(f"http://{ip}:8000")
+
     except Exception as e:
+
         logger.debug(f"Could not discover LAN IPs for CORS: {e}")
 
+
+
     # Support cloud sync URL origin if configured
+
     cloud_sync = os.getenv("CLOUD_SYNC_URL", "").strip()
+
     if cloud_sync:
+
         try:
+
             parsed = urlparse(cloud_sync)
+
             if parsed.scheme and parsed.netloc:
+
                 origins.add(f"{parsed.scheme}://{parsed.netloc}")
+
         except Exception:
+
             pass
 
+
+
     # Allow custom trusted origins via environment variable (comma-separated)
+
     custom_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+
     if custom_origins:
+
         for origin in custom_origins.split(","):
+
             cleaned = origin.strip().rstrip("/")
+
             if cleaned == "*":
+
                 logger.warning("Wildcard '*' in ALLOWED_ORIGINS is forbidden when credentials are enabled. Skipping wildcard.")
+
                 continue
+
             if cleaned:
+
                 origins.add(cleaned)
+
+
 
     return sorted(list(origins))
 
 
+
+
+
 app = FastAPI(title="Algorithmic Trading Bot Dashboard", lifespan=lifespan)
 
+
+
 # Secure CORS Middleware Configuration:
+
 # Restrict origins to trusted loopback addresses, local LAN IPs on the dashboard port,
+
 # and any custom origins explicitly specified via ALLOWED_ORIGINS or CORS_ORIGINS env variables.
+
 # Wildcards ('*') are disallowed with credentials to prevent CWE-942 cross-origin attacks.
+
 app.add_middleware(
+
     CORSMiddleware,
+
     allow_origins=get_allowed_origins(),
+
     allow_credentials=True,
+
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+
     allow_headers=["*"],
+
 )
 
+
+
 # ---------------------------------------------------------------------------
+
 # API Key Authentication Enforcement Middleware
+
 # ---------------------------------------------------------------------------
+
 @app.middleware("http")
+
 async def enforce_api_key_auth(request: Request, call_next):
+
     """Enforce API key authentication on API endpoints when configured or in production.
 
+
+
     Security features:
+
     - Fail-Secure: Blocks requests if running in production mode and ALGO_API_KEY is missing.
+
     - Constant-time validation (secrets.compare_digest) to prevent timing attacks (CWE-208).
+
     - UI templates, static files, and PWA assets remain accessible.
+
     """
+
     path = request.url.path
+
     if path.startswith("/api/"):
+
         expected = os.getenv(API_KEY_ENV, "").strip()
+
         if expected or is_production():
+
             if not expected and is_production():
+
                 return JSONResponse(
+
                     status_code=500,
+
                     content={"detail": "Server authentication configuration error: ALGO_API_KEY required in production."}
+
                 )
+
+
 
             key = request.headers.get("X-API-Key")
+
             if not key:
+
                 auth_hdr = request.headers.get("Authorization", "")
+
                 if auth_hdr.startswith("Bearer "):
+
                     key = auth_hdr.split("Bearer ", 1)[1].strip()
+
                 elif auth_hdr.startswith("ApiKey "):
+
                     key = auth_hdr.split("ApiKey ", 1)[1].strip()
+
             if not key:
+
                 key = request.query_params.get("api_key")
 
+
+
             if not key or not secrets.compare_digest(key, expected):
+
                 return JSONResponse(
+
                     status_code=401,
+
                     content={"detail": "Unauthorized: Invalid or missing API Key"}
+
                 )
+
+
 
     return await call_next(request)
 
+
+
 # Templates and static directories
+
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
 TEMPLATES_DIR.mkdir(exist_ok=True)
+
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+
 STATIC_DIR = Path(__file__).parent / "static"
+
 STATIC_DIR.mkdir(exist_ok=True)
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+
+
+
 def invalidate_state_cache() -> None:
+
     """Safe no-op hook for state cache invalidation (state is evaluated dynamically)."""
+
     pass
 
 
-# ─────────────────────────────────────────────
-#  Web API Routes
+
+
+
 # ─────────────────────────────────────────────
 
+#  Web API Routes
+
+# ─────────────────────────────────────────────
+
+
+
 @app.get("/favicon.ico")
+
 async def get_favicon():
+
     """Silence browser favicon 404 request."""
+
     return Response(status_code=204)
 
 
+
+
+
 @app.get("/manifest.json")
+
 async def get_manifest():
+
     """Serve PWA Web App Manifest for mobile installation."""
+
     manifest_path = STATIC_DIR / "manifest.json"
+
     if manifest_path.exists():
+
         return FileResponse(manifest_path, media_type="application/manifest+json")
+
     raise HTTPException(status_code=404, detail="Manifest not found")
 
 
+
+
+
 @app.get("/sw.js")
+
 async def get_service_worker():
+
     """Serve PWA Service Worker for mobile caching and home screen install."""
+
     sw_path = STATIC_DIR / "sw.js"
+
     if sw_path.exists():
+
         return FileResponse(sw_path, media_type="application/javascript")
+
     raise HTTPException(status_code=404, detail="Service worker not found")
 
 
+
+
+
 @app.get("/terminal")
+
 async def serve_terminal():
+
     """Redirect legacy /terminal route to /terminal/controls."""
+
     return RedirectResponse(url="/terminal/controls", status_code=307)
+
+
+
 
 
 @app.get("/terminal/control")
+
 async def serve_terminal_control():
+
     """Redirect /terminal/control (singular) to /terminal/controls."""
+
     return RedirectResponse(url="/terminal/controls", status_code=307)
 
 
+
+
+
 @app.get("/terminal/controls", response_class=HTMLResponse)
+
 async def serve_terminal_controls(request: Request):
+
     """Serve Glacier Terminal Controls tab."""
+
     ml_shadow = getattr(bot_instance.config, "ml_shadow_mode", True) if bot_instance else True
+
     ai_gate = getattr(bot_instance.config, "ai_confirmation_enabled", True) if bot_instance else True
+
     pair_slots = getattr(bot_instance.config, "pair_slots", {
+
         "1": bot_instance.config.pair1.symbol if bot_instance else "XAUUSD",
+
         "2": bot_instance.config.pair2.symbol if bot_instance else "EURUSD",
+
         "3": bot_instance.config.pair3.symbol if bot_instance else "GBPUSD",
+
         "4": "AUDJPY",
+
         "5": "NZDCAD",
+
     }) if bot_instance else {"1": "XAUUSD", "2": "EURUSD", "3": "GBPUSD", "4": "AUDJPY", "5": "NZDCAD"}
+
     pair_configs_data = {}
+
     if bot_instance and hasattr(bot_instance.config, "pair_configs"):
+
         for s_sym, s_cfg in bot_instance.config.pair_configs.items():
+
             pair_configs_data[s_sym] = {
+
                 "lot": getattr(s_cfg, "fixed_lot_size", None),
+
                 "sl": getattr(s_cfg, "fixed_sl_pips", None),
+
                 "enabled": getattr(s_cfg, "enabled", True),
+
             }
+
     selected_symbols = list(bot_instance.config.selected_symbols) if (bot_instance and hasattr(bot_instance.config, "selected_symbols")) else []
+
     return templates.TemplateResponse(
+
         request=request, 
+
         name="terminal_controls.html", 
+
         context={
+
             "request": request,
+
             "is_active": bot_instance.is_active if bot_instance else False,
+
             "ml_shadow_mode": ml_shadow,
+
             "ai_confirmation_enabled": ai_gate,
+
             "pair_slots": pair_slots,
+
             "pair_configs": pair_configs_data,
+
             "selected_symbols": selected_symbols,
+
         }
+
     )
+
+
+
 
 
 @app.get("/terminal/strategy", response_class=HTMLResponse)
+
 async def serve_terminal_strategy(request: Request):
+
     """Serve Glacier Terminal Strategy tab."""
+
     tpl = "terminal_strategy.html" if (TEMPLATES_DIR / "terminal_strategy.html").exists() else "terminal_controls.html"
+
     enabled = list(bot_instance.config.enabled_strategies) if bot_instance else []
+
     if getattr(bot_instance.config, "reversal_strategy_enabled", False) and "TREND_REVERSAL" not in enabled:
+
         enabled.append("TREND_REVERSAL")
+
     return templates.TemplateResponse(
+
         request=request, 
+
         name=tpl, 
+
         context={
+
             "request": request,
+
             "is_active": bot_instance.is_active if bot_instance else False,
+
             "enabled_strategies": enabled,
+
             "active_count": len(enabled) if enabled else 5,
+
         }
+
     )
+
+
+
 
 
 @app.get("/terminal/analysis", response_class=HTMLResponse)
+
 async def serve_terminal_analysis(request: Request):
+
     """Serve Glacier Terminal Analysis tab with pre-hydrated metrics."""
+
     tpl = "terminal_analysis.html" if (TEMPLATES_DIR / "terminal_analysis.html").exists() else "terminal_controls.html"
+
     metrics = bot_instance.state.get_performance_metrics() if bot_instance else {}
+
     acc = metrics.get("accuracy", 0.0)
+
     closed = metrics.get("total_closed_trades", 0)
+
     wins = metrics.get("winning_trades", 0)
+
     losses = metrics.get("losing_trades", 0)
+
     rr = metrics.get("formatted_avg_rr", "1:2.5")
+
     return templates.TemplateResponse(
+
         request=request, 
+
         name=tpl, 
+
         context={
+
             "request": request,
+
             "is_active": bot_instance.is_active if bot_instance else False,
+
             "accuracy": acc,
+
             "total_closed_trades": closed,
+
             "winning_trades": wins,
+
             "losing_trades": losses,
+
             "formatted_avg_rr": rr,
+
             "performance_metrics": metrics,
+
         }
+
     )
+
+
+
+
 
 
 
 @app.get("/api/network-info")
+
 async def get_network_info():
+
     """Return local LAN IP addresses and phone terminal URLs for QR code display."""
+
     ips = get_all_lan_ips()
+
     primary_ip = ips[0] if ips else "127.0.0.1"
+
     port = 8000
 
+
+
     terminal_urls = [f"http://{ip}:{port}/terminal/controls" for ip in ips]
+
     dashboard_urls = [f"http://{ip}:{port}/" for ip in ips]
 
+
+
     return {
+
         "primary_ip": primary_ip,
+
         "port": port,
+
         "available_ips": ips,
+
         "terminal_url": terminal_urls[0] if terminal_urls else f"http://127.0.0.1:{port}/terminal/controls",
+
         "terminal_urls": terminal_urls,
+
         "dashboard_urls": dashboard_urls,
+
     }
+
+
+
+
 
 
 
 @app.get("/", response_class=HTMLResponse)
+
 async def serve_dashboard(request: Request):
+
     ips = get_all_lan_ips()
+
     primary_ip = ips[0] if ips else "127.0.0.1"
+
     terminal_url = f"http://{primary_ip}:8000/terminal/controls"
+
     return templates.TemplateResponse(
+
         request=request, 
+
         name="index.html",
+
         context={
+
             "request": request,
+
             "primary_ip": primary_ip,
+
             "terminal_url": terminal_url,
+
             "available_ips": ips,
+
         },
+
         headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+
     )
+
+
+
+
 
 
 
 @app.get("/api/state", response_model=BotStateResponse)
+
 async def get_bot_state():
+
     """Return live system state, metrics, and logs."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     try:
+
         equity = await asyncio.wait_for(asyncio.to_thread(bot_instance.broker.get_account_equity), timeout=1.2)
+
     except Exception:
+
         equity = getattr(bot_instance.broker, "_cached_equity", 0.0)
 
+
+
     daily_pnl = bot_instance.state.get_daily_pnl()
+
     trade_count = bot_instance.state.get_trade_count()
-    cb_active = bot_instance.state.is_circuit_breaker_active()
+
+    drawdown_enabled = getattr(bot_instance.config.account, 'daily_drawdown_limit_enabled', True)
+    cb_active = bot_instance.state.is_circuit_breaker_active() if drawdown_enabled else False
+
     active_session = bot_instance.state.get_active_session()
 
+
+
     available = [i.symbol for i in bot_instance.config.instruments]
+
     broker_info = None
+
     if hasattr(bot_instance.broker, "get_account_info"):
+
         try:
+
             broker_info = await asyncio.wait_for(asyncio.to_thread(bot_instance.broker.get_account_info), timeout=1.2)
+
         except Exception:
+
             broker_info = getattr(bot_instance.broker, "_cached_account_info", None)
 
+
+
     # Compute performance metrics in a single database pass
+
     metrics = bot_instance.state.get_performance_metrics()
+
     accuracy = metrics.get("accuracy", 0.0)
+
     winning_trades = metrics.get("winning_trades", 0)
+
     losing_trades = metrics.get("losing_trades", 0)
+
     total_closed = metrics.get("total_closed_trades", 0)
+
     stats_by_strategy = metrics.get("by_strategy", {})
+
     stats_by_pair = metrics.get("by_pair", {})
 
+
+
     pair1_data = {
+
         "symbol": bot_instance.config.pair1.symbol,
+
         "fixed_lot_size": bot_instance.config.pair1.fixed_lot_size,
+
         "fixed_sl_pips": bot_instance.config.pair1.fixed_sl_pips,
+
         "enabled": bot_instance.config.pair1.enabled,
+
     }
+
     pair2_data = {
+
         "symbol": bot_instance.config.pair2.symbol,
+
         "fixed_lot_size": bot_instance.config.pair2.fixed_lot_size,
+
         "fixed_sl_pips": bot_instance.config.pair2.fixed_sl_pips,
+
         "enabled": bot_instance.config.pair2.enabled,
+
     }
+
     pair3_data = {
+
         "symbol": bot_instance.config.pair3.symbol,
+
         "fixed_lot_size": bot_instance.config.pair3.fixed_lot_size,
+
         "fixed_sl_pips": bot_instance.config.pair3.fixed_sl_pips,
+
         "enabled": bot_instance.config.pair3.enabled,
+
     }
+
+
 
     # Build multi-pair lot size and SL configuration dictionary
+
     pairs_cfg_data = {}
+
     default_meta = {
+
         "XAUUSD": {"name": "Gold / USD", "lot": 0.05, "sl": 25.0},
+
         "EURUSD": {"name": "Euro / USD", "lot": 0.10, "sl": 15.0},
+
         "GBPUSD": {"name": "Pound / USD", "lot": 0.12, "sl": 20.0},
+
         "BTCUSD": {"name": "Bitcoin / USD", "lot": 0.01, "sl": 150.0},
+
         "ETHUSD": {"name": "Ethereum / USD", "lot": 0.05, "sl": 80.0},
+
         "AUDJPY": {"name": "AUD / JPY", "lot": 0.10, "sl": 25.0},
+
         "EURJPY": {"name": "EUR / JPY", "lot": 0.10, "sl": 25.0},
+
         "USDCHF": {"name": "USD / CHF", "lot": 0.10, "sl": 20.0},
+
         "CADCHF": {"name": "CAD / CHF", "lot": 0.10, "sl": 20.0},
+
         "NZDCAD": {"name": "NZD / CAD", "lot": 0.10, "sl": 25.0},
+
         "NZDCHF": {"name": "NZD / CHF", "lot": 0.10, "sl": 25.0},
+
         "NZDUSD": {"name": "NZD / USD", "lot": 0.10, "sl": 20.0},
+
     }
+
     for s_name, meta in default_meta.items():
+
         lot_val = meta["lot"]
+
         sl_val = meta["sl"]
+
         if hasattr(bot_instance.config, "pair_configs") and s_name in bot_instance.config.pair_configs:
+
             cfg = bot_instance.config.pair_configs[s_name]
+
             if cfg.fixed_lot_size is not None:
+
                 lot_val = cfg.fixed_lot_size
+
             if cfg.fixed_sl_pips is not None:
+
                 sl_val = cfg.fixed_sl_pips
+
             en_val = bool(getattr(cfg, "enabled", False))
+
         elif bot_instance.config.pair1.symbol == s_name:
+
             if bot_instance.config.pair1.fixed_lot_size is not None:
+
                 lot_val = bot_instance.config.pair1.fixed_lot_size
+
             if bot_instance.config.pair1.fixed_sl_pips is not None:
+
                 sl_val = bot_instance.config.pair1.fixed_sl_pips
+
             en_val = getattr(bot_instance.config.pair1, "enabled", True)
+
         elif bot_instance.config.pair2.symbol == s_name:
+
             if bot_instance.config.pair2.fixed_lot_size is not None:
+
                 lot_val = bot_instance.config.pair2.fixed_lot_size
+
             if bot_instance.config.pair2.fixed_sl_pips is not None:
+
                 sl_val = bot_instance.config.pair2.fixed_sl_pips
+
             en_val = getattr(bot_instance.config.pair2, "enabled", True)
+
         elif bot_instance.config.pair3.symbol == s_name:
+
             if bot_instance.config.pair3.fixed_lot_size is not None:
+
                 lot_val = bot_instance.config.pair3.fixed_lot_size
+
             if bot_instance.config.pair3.fixed_sl_pips is not None:
+
                 sl_val = bot_instance.config.pair3.fixed_sl_pips
+
             en_val = getattr(bot_instance.config.pair3, "enabled", True)
+
         else:
+
             en_val = s_name in bot_instance.config.selected_symbols
 
+
+
         pairs_cfg_data[s_name.lower()] = {
+
             "symbol": s_name,
+
             "name": meta["name"],
+
             "lot": lot_val,
+
             "sl": sl_val,
+
             "active": en_val,
+
         }
 
+
+
     # ML Trap Detector status & statistics
+
     trap_stats = {}
+
     if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
         try:
+
             store_stats = bot_instance.trap_svc.store.stats()
+
             today_stats = bot_instance.trap_svc.store.stats_today() if hasattr(bot_instance.trap_svc.store, "stats_today") else {}
+
             strat_stats = bot_instance.trap_svc.store.stats_by_strategy() if hasattr(bot_instance.trap_svc.store, "stats_by_strategy") else {}
+
             is_shadow = (
+
                 getattr(bot_instance.config, "ml_shadow_mode", True)
+
                 or getattr(bot_instance.trap_svc.cfg, "shadow_mode", True)
+
                 or (
+
                     bot_instance.trap_svc.cfg.shadow_until_samples > 0
+
                     and bot_instance.trap_svc.model.n_samples < bot_instance.trap_svc.cfg.shadow_until_samples
+
                     and not bot_instance.trap_svc.model._sgd_fitted
+
                     and bot_instance.trap_svc.model.lgbm is None
+
                 )
+
             )
+
             strategy_models = {}
+
             if hasattr(bot_instance.trap_svc, "models"):
+
                 for s_name, m in bot_instance.trap_svc.models.items():
+
                     s_stat = strat_stats.get(s_name, {})
+
                     strategy_models[s_name] = {
+
                         "model_version": m.version,
+
                         "n_samples": m.n_samples,
+
                         "total_events": s_stat.get("total", 0),
+
                         "labeled_events": s_stat.get("labeled", 0),
+
                         "traps_caught": s_stat.get("traps", 0),
+
                         "genuine_setups": s_stat.get("genuine", 0),
+
                     }
+
             shadow_perf = {}
+
             if hasattr(bot_instance.trap_svc, "shadow_prediction_stats"):
+
                 try:
+
                     shadow_perf = bot_instance.trap_svc.shadow_prediction_stats(
+
                         threshold=getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50)
+
                     )
+
                 except Exception as ex:
+
                     shadow_perf = {"error": str(ex)}
 
+
+
             trap_stats = {
+
                 "model_version": bot_instance.trap_svc.model.version,
+
                 "n_samples": bot_instance.trap_svc.model.n_samples,
+
                 "shadow_until": bot_instance.trap_svc.cfg.shadow_until_samples,
+
                 "mode": "shadow" if is_shadow else "gated",
+
                 "threshold": getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50),
+
                 "max_sl_probability": getattr(bot_instance.trap_svc.cfg, "max_sl_probability", 0.50),
+
                 "total_events": store_stats.get("total", 0),
+
                 "labeled_events": store_stats.get("labeled", 0),
+
                 "traps_caught": store_stats.get("traps", 0),
+
                 "genuine_setups": store_stats.get("genuine", 0),
+
                 "traps_today": today_stats.get("traps_caught", 0),
+
                 "vetoed_today": today_stats.get("vetoed", 0),
+
                 "total_today": today_stats.get("total", 0),
+
                 "gating_enabled": getattr(bot_instance.config, "ml_gating_enabled", True),
+
                 "strategies": strategy_models,
+
                 "shadow_performance": shadow_perf,
+
             }
+
         except Exception as e:
+
             trap_stats = {"error": str(e)}
 
+
+
     # Open positions breakdown by strategy
+
     open_positions_by_strategy = {"SMC": 0, "SMC_SCALP_5M": 0, "ICT": 0, "ORDER_FLOW": 0, "TREND_REVERSAL": 0}
+
     try:
+
         open_trades = bot_instance.state.get_open_positions()
+
         for t in open_trades:
+
             strat_name = getattr(t, "strategy_name", None) or "SMC"
+
             open_positions_by_strategy[strat_name] = open_positions_by_strategy.get(strat_name, 0) + 1
+
     except Exception as e:
+
         logger.warning(f"Failed to fetch open positions by strategy: {e}")
 
+
+
     # Execution Quality summary (last 24h)
+
     exec_summary = {}
+
     if hasattr(bot_instance, "eqm_aggregator") and bot_instance.eqm_aggregator:
+
         try:
+
             exec_summary = bot_instance.eqm_aggregator.get_summary(window_hours=24)
+
         except Exception as e:
+
             logger.warning(f"Failed to fetch execution quality summary: {e}")
 
+
+
     # Real-time Trend Reversal & CHoCH status
+
     trend_reversal_data = {}
+
     if hasattr(bot_instance, "trend_reversal_status"):
+
         for sym, rev in bot_instance.trend_reversal_status.items():
+
             trend_reversal_data[sym] = rev.to_dict()
 
+
+
     # Temporal & Session ML Model statistics
+
     temporal_stats = {}
+
     if hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+
         try:
+
             temporal_stats = bot_instance.temporal_svc.get_summary()
+
         except Exception as e:
+
             temporal_stats = {"error": str(e)}
 
+
+
     return BotStateResponse(
+
         is_active=bot_instance.is_active,
+
         selected_symbols=bot_instance.config.selected_symbols,
+
         pair1=pair1_data,
+
         pair2=pair2_data,
+
         pair3=pair3_data,
+
         pairs_config=pairs_cfg_data,
+
         pair_slots=getattr(bot_instance.config, "pair_slots", {
+
             "1": bot_instance.config.pair1.symbol,
+
             "2": bot_instance.config.pair2.symbol,
+
             "3": bot_instance.config.pair3.symbol,
+
             "4": "AUDJPY",
+
             "5": "NZDCAD",
+
         }),
+
         enabled_strategies=bot_instance.config.enabled_strategies,
+
         strategy_type=bot_instance.config.strategy_type,
+
         fixed_lot_size=bot_instance.config.fixed_lot_size,
+
         fixed_sl_pips=bot_instance.config.fixed_sl_pips,
+
         max_open_positions=getattr(bot_instance.config.risk, 'max_open_positions', 15),
+
         effective_max_open_positions=bot_instance.config.risk.get_effective_max_open_positions() if hasattr(bot_instance.config.risk, 'get_effective_max_open_positions') else getattr(bot_instance.config.risk, 'max_open_positions', 15),
+
         is_night_window=bot_instance.config.risk.is_night_window() if hasattr(bot_instance.config.risk, 'is_night_window') else False,
+
         night_limit_enabled=getattr(bot_instance.config.risk, 'night_limit_enabled', True),
+
         night_max_open_positions=getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
+
         night_start_hour=getattr(bot_instance.config.risk, 'night_start_hour', 23),
+
         night_end_hour=getattr(bot_instance.config.risk, 'night_end_hour', 8),
+
         night_timezone_mode=getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'),
+
         directional_loss_cooldown_enabled=getattr(bot_instance.config.risk, 'directional_loss_cooldown_enabled', False),
+
         ai_confirmation_enabled=bot_instance.config.ai_confirmation_enabled,
+
         ai_confidence_threshold=bot_instance.config.ai_confidence_threshold,
+
         ml_gating_enabled=getattr(bot_instance.config, "ml_gating_enabled", True),
+
         ml_max_sl_probability=getattr(bot_instance.config, "ml_max_sl_probability", 0.50),
+
         ml_shadow_mode=getattr(bot_instance.config, "ml_shadow_mode", True),
+
         temporal_ml_enabled=getattr(bot_instance.config, "temporal_ml_enabled", True),
+
         reversal_strategy_enabled=getattr(bot_instance.config, "reversal_strategy_enabled", False),
+
         equity=round(equity, 2),
+
         daily_pnl=round(daily_pnl, 2),
+
         trades_today=trade_count,
+
         circuit_breaker_active=cb_active,
+
         recent_logs=list(reversed(bot_instance.recent_logs[-150:])),
+
         available_symbols=available,
+
         mock_mode=bot_instance.config.use_mock_broker,
+
         broker_info=broker_info,
+
         accuracy=accuracy,
+
         winning_trades=winning_trades,
+
         losing_trades=losing_trades,
+
         total_closed_trades=total_closed,
+
         active_session=active_session,
+
         available_strategies=["SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL"],
+
         stats_by_strategy=stats_by_strategy,
+
         stats_by_pair=stats_by_pair,
+
         performance_metrics=metrics,
+
         ml_trap_detector=trap_stats,
+
         trap_stats=trap_stats,
+
         temporal_ml_model=temporal_stats,
+
         open_positions_by_strategy=open_positions_by_strategy,
+
         execution_summary=exec_summary,
+
         trend_reversal=trend_reversal_data,
+
         ml_logs=list(reversed(getattr(bot_instance, "ml_logs", [])[-100:])),
+
         current_window=getattr(bot_instance, "window_recorder", None).get_window_info() if hasattr(bot_instance, "window_recorder") and bot_instance.window_recorder else {},
+
         temporal_ml_shadow_mode=getattr(bot_instance.config, "temporal_ml_shadow_mode", True),
+
         daily_bias=bot_instance.get_daily_bias_summary() if hasattr(bot_instance, "get_daily_bias_summary") else {},
+
         ml_clusters=_get_clusters_status(bot_instance),
+
         pair_lockouts=bot_instance.pair_tracker.summary() if hasattr(bot_instance, "pair_tracker") and bot_instance.pair_tracker else {},
+
     )
 
 
-# ─────────────────────────────────────────────
-#  WebSocket State Streaming Manager
+
+
+
 # ─────────────────────────────────────────────
 
+#  WebSocket State Streaming Manager
+
+# ─────────────────────────────────────────────
+
+
+
 async def broadcast_bot_state():
+
     """Broadcast current bot state to all connected WebSockets in real time."""
+
     if not active_websockets or not bot_instance:
+
         return
+
     try:
+
         state_resp = await get_bot_state()
+
         data = state_resp.model_dump()
+
         dead_sockets = set()
+
         for ws in list(active_websockets):
+
             try:
+
                 await ws.send_json(data)
+
             except Exception:
+
                 dead_sockets.add(ws)
+
         for ws in dead_sockets:
+
             active_websockets.discard(ws)
+
     except Exception as e:
+
         logger.debug(f"Error broadcasting bot state via WebSocket: {e}")
 
 
+
+
+
 @app.websocket("/ws/state")
+
 async def websocket_bot_state(websocket: WebSocket):
+
     """
+
     Real-time persistent state stream.
+
     Replaces repetitive HTTP GET /api/state polling with low-latency event-driven push.
+
     Protected with constant-time API key handshake.
+
     """
+
     expected = os.getenv(API_KEY_ENV, "").strip()
+
     if expected or is_production():
+
         if not expected and is_production():
+
             await websocket.close(code=1008, reason="ALGO_API_KEY required in production")
+
             return
+
         token = (
+
             websocket.headers.get("X-API-Key")
+
             or websocket.query_params.get("api_key")
+
             or websocket.query_params.get("token")
+
         )
+
         if not token or not secrets.compare_digest(token, expected):
+
             await websocket.close(code=1008, reason="Unauthorized: Invalid or missing API Key")
+
             return
+
+
 
     await websocket.accept()
+
     active_websockets.add(websocket)
+
     try:
+
         # Push immediate snapshot upon initial connection
+
         if bot_instance:
+
             state_resp = await get_bot_state()
+
             await websocket.send_json(state_resp.model_dump())
 
+
+
         while True:
+
             text = await websocket.receive_text()
+
             if text == "ping":
+
                 await websocket.send_text("pong")
+
             elif text == "refresh":
+
                 if bot_instance:
+
                     state_resp = await get_bot_state()
+
                     await websocket.send_json(state_resp.model_dump())
+
     except WebSocketDisconnect:
+
         pass
+
     except Exception as e:
+
         logger.debug(f"WebSocket client disconnected: {e}")
+
     finally:
+
         active_websockets.discard(websocket)
 
 
+
+
+
 @app.get("/api/logs")
+
 async def get_system_logs(category: Optional[str] = None, limit: int = 200):
+
     """
+
     Return recent logs with optional category filtering (ML, TRADE, REVERSAL, WARN, ALL).
+
     Combines in-memory ring buffers and disk logs if necessary.
+
     """
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     cat = (category or "ALL").upper()
+
     
+
     if cat in ("ML", "AI"):
+
         # Prioritize dedicated ml_logs buffer
+
         logs = list(getattr(bot_instance, "ml_logs", []))
+
         for l in bot_instance.recent_logs:
+
             if any(k in l for k in ["ML", "TRAP", "Trap", "🪤", "🔬", "🤖", "AI", "TEMPORAL", "DECISION", "vetoed"]):
+
                 if l not in logs:
+
                     logs.append(l)
+
     elif cat == "REVERSAL":
+
         logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["REVERSAL", "CHoCH", "🚨", "🛡️", "SWEEP"])]
+
     elif cat == "TRADE":
+
         logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["ORDER", "FILLED", "TRADE", "POSITION", "✅", "AUTHORIZED", "ACTIVATED", "SIGNAL"])]
+
     elif cat == "WARN":
+
         logs = [l for l in bot_instance.recent_logs if any(k in l for k in ["⚠️", "WARN", "🚫", "⛔", "ERROR", "FAILED", "SKIPPED", "REJECTED"])]
+
     else:
+
         logs = list(bot_instance.recent_logs)
 
+
+
     return {
+
         "status": "ok",
+
         "category": cat,
+
         "count": len(logs),
+
         "logs": list(reversed(logs[-limit:]))
+
     }
+
+
+
 
 
 @app.get("/api/trend-reversal")
+
 async def get_trend_reversal_status():
+
     """Return real-time CHoCH & Trend Reversal analysis for all monitored pairs."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     return {
+
         "status": "ok",
+
         "data": {
+
             sym: rev.to_dict()
+
             for sym, rev in getattr(bot_instance, "trend_reversal_status", {}).items()
+
         }
+
     }
+
+
+
 
 
 @app.get("/api/daily-bias")
+
 async def get_daily_bias_api(symbol: Optional[str] = None, date: Optional[str] = None):
+
     """
+
     Return today's directional bias summary or specific symbol/date bias.
+
     Allows quick polling and switching between pairs on the frontend card.
+
     """
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     if date:
+
         res = bot_instance.state.get_all_daily_biases(date_str=date)
+
         return {"date": date, "symbols": res}
+
     return bot_instance.get_daily_bias_summary(target_symbol=symbol)
 
 
+
+
+
 @app.get("/api/daily-bias/history")
+
 async def get_daily_bias_history_api(symbol: Optional[str] = None, limit: int = 14):
+
     """Return historical daily bias log entries for auditing and review."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     return bot_instance.state.get_daily_bias_history(symbol=symbol, limit=limit)
 
 
+
+
+
 @app.post("/api/activate")
+
 async def activate_bot():
+
     """Engage the trading bot. Once active, chart selections are locked."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     if bot_instance.is_active:
+
         return {"status": "already_active", "message": "Bot is already active."}
 
+
+
     # Ensure all enabled pairs are included in selected_symbols
+
     active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
+
     for p_cfg in (bot_instance.config.pair1, bot_instance.config.pair2, bot_instance.config.pair3):
+
         if p_cfg and getattr(p_cfg, "enabled", False) and p_cfg.symbol:
+
             p_s = p_cfg.symbol.strip().upper()
+
             if p_s and p_s != "NONE" and p_s not in active_syms:
+
                 active_syms.append(p_s)
+
     bot_instance.config.selected_symbols = active_syms
 
+
+
     bot_instance.is_active = True
+
     bot_instance.save_settings()
+
     invalidate_state_cache()
 
+
+
     p1 = getattr(bot_instance.config, "pair1", None)
+
     p2 = getattr(bot_instance.config, "pair2", None)
+
     p3 = getattr(bot_instance.config, "pair3", None)
 
+
+
     p1_lot = getattr(p1, "fixed_lot_size", None) or "Dyn"
+
     p2_lot = getattr(p2, "fixed_lot_size", None) or "Dyn"
+
     p3_lot = getattr(p3, "fixed_lot_size", None) or "Dyn"
 
+
+
     p1_sl = getattr(p1, "fixed_sl_pips", None) or "Dyn"
+
     p2_sl = getattr(p2, "fixed_sl_pips", None) or "Dyn"
+
     p3_sl = getattr(p3, "fixed_sl_pips", None) or "Dyn"
 
+
+
     p1_sym = getattr(p1, "symbol", "Pair 1")
+
     p2_sym = getattr(p2, "symbol", "Pair 2")
+
     p3_sym = getattr(p3, "symbol", "Pair 3")
 
+
+
     session_id = bot_instance.state.record_activation(
+
         symbols=bot_instance.config.selected_symbols,
+
         lot_size=f"P1:{p1_lot} | P2:{p2_lot} | P3:{p3_lot}",
+
         trigger_source="Web Dashboard",
-    )
-    bot_instance.log(
-        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring pairs: [{', '.join(bot_instance.config.selected_symbols)}] | "
-        f"Pair 1 ({p1_sym}, lot={p1_lot}, SL={p1_sl}) | "
-        f"Pair 2 ({p2_sym}, lot={p2_lot}, SL={p2_sl}) | "
-        f"Pair 3 ({p3_sym}, lot={p3_lot}, SL={p3_sl}) | "
-        f"Active Strategies: {bot_instance.config.enabled_strategies}"
+
     )
 
+    bot_instance.log(
+
+        f"🟢 BOT ACTIVATED by user (Session #{session_id}). Monitoring pairs: [{', '.join(bot_instance.config.selected_symbols)}] | "
+
+        f"Pair 1 ({p1_sym}, lot={p1_lot}, SL={p1_sl}) | "
+
+        f"Pair 2 ({p2_sym}, lot={p2_lot}, SL={p2_sl}) | "
+
+        f"Pair 3 ({p3_sym}, lot={p3_lot}, SL={p3_sl}) | "
+
+        f"Active Strategies: {bot_instance.config.enabled_strategies}"
+
+    )
+
+
+
     # Immediately trigger a tick cycle & broadcast state
+
     asyncio.create_task(asyncio.to_thread(bot_instance.tick))
+
     asyncio.create_task(broadcast_bot_state())
+
     return {
+
         "status": "success",
+
         "session_id": session_id,
+
         "message": f"Bot activated successfully (Session #{session_id}). Market selection locked.",
+
     }
+
+
+
 
 
 @app.post("/api/deactivate", dependencies=[Depends(get_api_key_header)])
+
 async def deactivate_bot():
+
     """Deactivate trading bot. Stops execution loop and unlocks market selection."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     if not bot_instance.is_active:
+
         return {"status": "already_inactive", "message": "Bot is already deactivated."}
 
+
+
     bot_instance.is_active = False
+
     bot_instance.save_settings()
+
     invalidate_state_cache()
+
     closed_id = bot_instance.state.record_deactivation("Manual User Stop")
+
     bot_instance.log(f"🔴 BOT DEACTIVATED by user (Session #{closed_id or '---'}). No trade execution will occur.")
+
     asyncio.create_task(broadcast_bot_state())
+
     return {
+
         "status": "success",
+
         "session_id": closed_id,
+
         "message": "Bot deactivated. Trade execution halted.",
+
     }
 
 
+
+
+
 @app.post("/api/halt", dependencies=[Depends(get_api_key_header)])
+
 async def halt_bot(close_trades: bool = True):
+
     """
+
     Emergency HALT trading bot. Stops execution loop and immediately closes all open trades.
+
     """
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     result = bot_instance.halt(close_trades=close_trades, reason="Emergency HALT via Web")
+
     invalidate_state_cache()
+
     asyncio.create_task(broadcast_bot_state())
+
     return result
 
 
+
+
+
 @app.post("/api/update")
+
 async def handle_dashboard_update(payload: dict):
+
     """
+
     Unified dashboard update endpoint supporting state toggles,
+
     strategy toggles, pair toggles, and configuration saves.
+
     """
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     action = payload.get("action")
+
     if action == "halt":
+
         result = bot_instance.halt(close_trades=True, reason="Emergency HALT via Dashboard")
+
         invalidate_state_cache()
+
         return result
 
+
+
     if action == "set_status":
+
         status = payload.get("status")
+
         if status in ("RUNNING", "ACTIVATED"):
+
             if not bot_instance.is_active:
+
                 await activate_bot()
+
             return {"status": "success", "botStatus": "RUNNING"}
+
         elif status == "HALTED":
+
             result = bot_instance.halt(close_trades=True, reason="Emergency HALT via Dashboard")
+
             invalidate_state_cache()
+
             return result
+
         elif status in ("IDLE", "DEACTIVATED"):
+
             if bot_instance.is_active:
+
                 await deactivate_bot()
+
             return {"status": "success", "botStatus": status}
 
 
+
+
+
     elif action == "toggle_strategy":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Strategy modification is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         strat_id = payload.get("strategy")
+
         active = payload.get("active", True)
+
         strat_map = {
+
             "smc": "SMC",
+
             "swing": "SMC",
+
             "scalp5m": "SMC_SCALP_5M",
+
             "scalp-5m": "SMC_SCALP_5M",
+
             "scalp_5m": "SMC_SCALP_5M",
+
             "smc_scalp_5m": "SMC_SCALP_5M",
+
             "ict": "ICT",
+
             "ict-inst": "ICT",
+
             "orderflow": "ORDER_FLOW",
+
             "order-flow": "ORDER_FLOW",
+
             "order_flow": "ORDER_FLOW",
+
             "reversal": "TREND_REVERSAL",
+
             "trend_reversal": "TREND_REVERSAL",
+
             "trend-reversal": "TREND_REVERSAL",
+
         }
+
         lookup_key = str(strat_id).lower().replace(" ", "_")
+
         strat_name = strat_map.get(lookup_key, strat_map.get(strat_id, str(strat_id).upper().replace("-", "_")))
+
         current = list(bot_instance.config.enabled_strategies)
+
         if active and strat_name not in current:
+
             current.append(strat_name)
+
         elif not active and strat_name in current:
+
             current.remove(strat_name)
+
         bot_instance.config.enabled_strategies = current
 
+
+
         if lookup_key in ("reversal", "trend_reversal", "trend-reversal") or strat_name == "TREND_REVERSAL":
+
             bot_instance.config.reversal_strategy_enabled = active
 
+
+
         if hasattr(bot_instance, "strategy") and hasattr(bot_instance.strategy, "set_enabled_strategies"):
+
             bot_instance.strategy.set_enabled_strategies(current)
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         return {
+
             "status": "success",
+
             "enabled_strategies": current,
+
             "reversal_strategy_enabled": getattr(bot_instance.config, "reversal_strategy_enabled", False),
+
             "message": f"Strategy {strat_name} {'enabled' if active else 'disabled'}"
+
         }
+
+
 
     elif action == "toggle_pair":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Pair modification is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         pair_id = payload.get("pair")
+
         active = payload.get("active", True)
+
         sym = re.sub(r'[^A-Z0-9]', '', str(pair_id).strip().upper())
+
         if not sym:
+
             raise HTTPException(status_code=400, detail="Invalid symbol format")
+
         current = list(bot_instance.config.selected_symbols)
+
         if active and sym not in current:
+
             current.append(sym)
+
         elif not active and sym in current:
+
             current.remove(sym)
+
         bot_instance.config.selected_symbols = current
 
+
+
         # Synchronize pair_configs
+
         from core.config import PairSettings
+
         if not hasattr(bot_instance.config, "pair_configs"):
+
             bot_instance.config.pair_configs = {}
+
         if sym not in bot_instance.config.pair_configs:
+
             bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+
         bot_instance.config.pair_configs[sym].enabled = active
 
+
+
         # Synchronize primary pair references
+
         if getattr(bot_instance.config, "pair1", None) and bot_instance.config.pair1.symbol == sym:
+
             bot_instance.config.pair1.enabled = active
+
         elif getattr(bot_instance.config, "pair2", None) and bot_instance.config.pair2.symbol == sym:
+
             bot_instance.config.pair2.enabled = active
+
         elif getattr(bot_instance.config, "pair3", None) and bot_instance.config.pair3.symbol == sym:
+
             bot_instance.config.pair3.enabled = active
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         return {"status": "success", "selected_symbols": current}
 
+
+
     elif action == "toggle_trailing":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Trailing Stop setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         enabled = payload.get("enabled", True)
+
         bot_instance.config.trailing_stop_mode = "STRUCTURE" if enabled else "NONE"
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         return {"status": "success", "trailing_stop_mode": bot_instance.config.trailing_stop_mode}
 
+
+
     elif action == "toggle_ml_shadow":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="ML Shadow Mode setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         enabled = payload.get("enabled", True)
+
         bot_instance.config.ml_shadow_mode = bool(enabled)
+
         bot_instance.config.temporal_ml_shadow_mode = bool(enabled)
+
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
             bot_instance.trap_svc.cfg.shadow_mode = bool(enabled)
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         bot_instance.log(f"🎛️ ML Shadow Mode updated to: {'ON (Observe Only)' if enabled else 'OFF (Live Veto Active)'}")
+
         return {
+
             "status": "success",
+
             "ml_shadow_mode": bot_instance.config.ml_shadow_mode,
+
             "message": f"ML Shadow Mode {'engaged (observe only)' if enabled else 'disengaged (live gating)'}"
+
         }
+
+
 
     elif action == "toggle_ai_gate":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="AI Confirmation setting is LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         enabled = payload.get("enabled", True)
+
         bot_instance.config.ai_confirmation_enabled = bool(enabled)
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         bot_instance.log(f"🎛️ AI Confirmation Gate updated to: {'ON' if enabled else 'OFF'}")
+
         return {
+
             "status": "success",
+
             "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
+
             "message": f"AI Gate {'enabled' if enabled else 'disabled'}"
+
         }
 
+
+
     elif action == "save_all_pairs":
+
         pairs_data = payload.get("pairs", {})
+
         if not pairs_data:
+
             raise HTTPException(status_code=400, detail="No pair configuration provided")
 
+
+
         if isinstance(pairs_data, list):
+
             pairs_dict = {}
+
             for item in pairs_data:
+
                 if isinstance(item, dict) and "symbol" in item:
+
                     pairs_dict[item["symbol"]] = item
+
             pairs_data = pairs_dict
 
+
+
         from core.config import PairSettings
+
         if not hasattr(bot_instance.config, "pair_configs"):
+
             bot_instance.config.pair_configs = {}
 
+
+
         # Handle explicit slots mapping (1-5)
+
         slots_data = payload.get("slots") or payload.get("pair_slots")
+
         if slots_data and isinstance(slots_data, dict):
+
             if not hasattr(bot_instance.config, "pair_slots"):
+
                 bot_instance.config.pair_slots = {}
+
             for s_k, s_v in slots_data.items():
+
                 if isinstance(s_v, dict):
+
                     sym_name = s_v.get("symbol", "")
+
                 else:
+
                     sym_name = str(s_v)
+
                 s_clean = re.sub(r'[^A-Z0-9]', '', sym_name.strip().upper())
+
                 if s_clean:
+
                     bot_instance.config.pair_slots[str(s_k)] = s_clean
+
                     if str(s_k) == "1" and hasattr(bot_instance.config, "pair1"):
+
                         bot_instance.config.pair1.symbol = s_clean
+
                     elif str(s_k) == "2" and hasattr(bot_instance.config, "pair2"):
+
                         bot_instance.config.pair2.symbol = s_clean
+
                     elif str(s_k) == "3" and hasattr(bot_instance.config, "pair3"):
+
                         bot_instance.config.pair3.symbol = s_clean
 
+
+
         selected_symbols = list(bot_instance.config.selected_symbols)
+
         for sym_raw, p_vals in pairs_data.items():
+
             sym = str(sym_raw).upper().strip()
+
             if sym not in bot_instance.config.pair_configs:
+
                 bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
 
+
+
             p_cfg = bot_instance.config.pair_configs[sym]
+
             if "lot" in p_vals and p_vals["lot"] is not None:
+
                 p_cfg.fixed_lot_size = round(float(p_vals["lot"]), 2)
+
             if "sl" in p_vals and p_vals["sl"] is not None:
+
                 p_cfg.fixed_sl_pips = round(float(p_vals["sl"]), 1)
+
             if "enabled" in p_vals:
+
                 is_en = bool(p_vals["enabled"])
+
                 p_cfg.enabled = is_en
+
                 if is_en and sym not in selected_symbols:
+
                     selected_symbols.append(sym)
+
                 elif not is_en and sym in selected_symbols:
+
                     selected_symbols.remove(sym)
 
+
+
             # Sync primary pair references
+
             if getattr(bot_instance.config, "pair1", None) and bot_instance.config.pair1.symbol == sym:
+
                 if p_cfg.fixed_lot_size is not None: bot_instance.config.pair1.fixed_lot_size = p_cfg.fixed_lot_size
+
                 if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair1.fixed_sl_pips = p_cfg.fixed_sl_pips
+
                 if "enabled" in p_vals: bot_instance.config.pair1.enabled = p_cfg.enabled
+
             elif getattr(bot_instance.config, "pair2", None) and bot_instance.config.pair2.symbol == sym:
+
                 if p_cfg.fixed_lot_size is not None: bot_instance.config.pair2.fixed_lot_size = p_cfg.fixed_lot_size
+
                 if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair2.fixed_sl_pips = p_cfg.fixed_sl_pips
+
                 if "enabled" in p_vals: bot_instance.config.pair2.enabled = p_cfg.enabled
+
             elif getattr(bot_instance.config, "pair3", None) and bot_instance.config.pair3.symbol == sym:
+
                 if p_cfg.fixed_lot_size is not None: bot_instance.config.pair3.fixed_lot_size = p_cfg.fixed_lot_size
+
                 if p_cfg.fixed_sl_pips is not None: bot_instance.config.pair3.fixed_sl_pips = p_cfg.fixed_sl_pips
+
                 if "enabled" in p_vals: bot_instance.config.pair3.enabled = p_cfg.enabled
+
+
 
         bot_instance.config.selected_symbols = selected_symbols
 
+
+
         # Also sync global guard rails if provided in payload and bot is NOT active
+
         if not bot_instance.is_active:
+
             if "ml_shadow_mode" in payload or "mlShadowMode" in payload:
+
                 m_val = bool(payload.get("ml_shadow_mode", payload.get("mlShadowMode", True)))
+
                 bot_instance.config.ml_shadow_mode = m_val
+
                 bot_instance.config.temporal_ml_shadow_mode = m_val
+
                 if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
                     bot_instance.trap_svc.cfg.shadow_mode = m_val
+
             if "ai_confirmation_enabled" in payload or "aiGateEnabled" in payload:
+
                 bot_instance.config.ai_confirmation_enabled = bool(payload.get("ai_confirmation_enabled", payload.get("aiGateEnabled", True)))
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         bot_instance.log(f"💾 Applied & saved all pair parameters to Engine: {list(pairs_data.keys())}")
+
         return {
+
             "status": "success",
+
             "message": "All pair parameters successfully saved and transmitted to Engine",
+
             "pairs": {
+
                 s: {
+
                     "lot": bot_instance.config.pair_configs[s].fixed_lot_size,
+
                     "sl": bot_instance.config.pair_configs[s].fixed_sl_pips,
+
                     "enabled": bot_instance.config.pair_configs[s].enabled,
+
                 }
+
                 for s in bot_instance.config.pair_configs
+
             }
+
         }
+
+
 
     elif action == "switch_pair_slot":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Market pair changes are LOCKED while bot is ACTIVE! Switch bot to STANDBY first."
+
             )
+
         slot = int(payload.get("slot", 1))
+
         raw_new = payload.get("new_symbol") or payload.get("newSymbol") or payload.get("pair")
+
         raw_old = payload.get("old_symbol") or payload.get("oldSymbol")
+
         new_sym = re.sub(r'[^A-Z0-9]', '', str(raw_new).strip().upper())
+
         old_sym = re.sub(r'[^A-Z0-9]', '', str(raw_old).strip().upper()) if raw_old else ""
+
         if not new_sym or len(new_sym) < 3 or len(new_sym) > 12:
+
             raise HTTPException(status_code=400, detail="Invalid currency pair symbol format.")
 
+
+
         from core.config import PairSettings, get_instrument
+
         # Ensure instrument definition exists
+
         get_instrument(bot_instance.config, new_sym)
 
+
+
         if not hasattr(bot_instance.config, "pair_configs"):
+
             bot_instance.config.pair_configs = {}
+
         if new_sym not in bot_instance.config.pair_configs:
+
             bot_instance.config.pair_configs[new_sym] = PairSettings(symbol=new_sym, enabled=True)
+
         else:
+
             bot_instance.config.pair_configs[new_sym].enabled = True
 
+
+
         # Assign to slot 1, 2, or 3
+
         if slot == 1 and hasattr(bot_instance.config, "pair1"):
+
             bot_instance.config.pair1.symbol = new_sym
+
             bot_instance.config.pair1.enabled = True
+
         elif slot == 2 and hasattr(bot_instance.config, "pair2"):
+
             bot_instance.config.pair2.symbol = new_sym
+
             bot_instance.config.pair2.enabled = True
+
         elif slot == 3 and hasattr(bot_instance.config, "pair3"):
+
             bot_instance.config.pair3.symbol = new_sym
+
             bot_instance.config.pair3.enabled = True
 
+
+
         # Assign to persistent pair_slots mapping
+
         if not hasattr(bot_instance.config, "pair_slots") or not isinstance(bot_instance.config.pair_slots, dict):
+
             bot_instance.config.pair_slots = {
+
                 "1": bot_instance.config.pair1.symbol,
+
                 "2": bot_instance.config.pair2.symbol,
+
                 "3": bot_instance.config.pair3.symbol,
+
                 "4": "AUDJPY",
+
                 "5": "NZDCAD",
+
             }
+
         bot_instance.config.pair_slots[str(slot)] = new_sym
 
+
+
         # Update lot / sl if provided
+
         lot_val = payload.get("lot")
+
         sl_val = payload.get("sl")
+
         if lot_val is not None:
+
             bot_instance.config.pair_configs[new_sym].fixed_lot_size = round(float(lot_val), 2)
+
         if sl_val is not None:
+
             bot_instance.config.pair_configs[new_sym].fixed_sl_pips = round(float(sl_val), 1)
 
+
+
         # Update selected_symbols
+
         cur_syms = list(bot_instance.config.selected_symbols)
+
         if old_sym and old_sym in cur_syms:
+
             idx = cur_syms.index(old_sym)
+
             cur_syms[idx] = new_sym
+
         elif new_sym not in cur_syms:
+
             cur_syms.append(new_sym)
+
         seen = set()
+
         deduped = []
+
         for s in cur_syms:
+
             if s not in seen:
+
                 seen.add(s)
+
                 deduped.append(s)
+
         bot_instance.config.selected_symbols = deduped
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
+
 
         # Trigger immediate daily bias analysis on the newly chosen pair
+
         try:
+
             bot_instance.compute_daily_bias(new_sym)
+
         except Exception as e:
+
             logger.warning(f"Failed pre-computing bias for {new_sym}: {e}")
 
+
+
         asyncio.create_task(broadcast_bot_state())
+
         bot_instance.log(f"🔀 Pair Slot #{slot} switched to {new_sym}. Daily bias analysis triggered.")
+
         return {
+
             "status": "success",
+
             "slot": slot,
+
             "symbol": new_sym,
+
             "selected_symbols": bot_instance.config.selected_symbols
+
         }
+
+
 
     elif action == "update_pair_settings":
+
         pair_id = payload.get("pair")
+
         slot = payload.get("slot")
+
         lot_val = payload.get("lot")
+
         sl_val = payload.get("sl")
+
         is_enabled = payload.get("enabled")
+
         sym = re.sub(r'[^A-Z0-9]', '', str(pair_id).strip().upper())
+
         if not sym or len(sym) < 3 or len(sym) > 12:
+
             raise HTTPException(status_code=400, detail="Invalid symbol format.")
 
+
+
         from core.config import PairSettings, get_instrument
+
         get_instrument(bot_instance.config, sym)
 
+
+
         from core.config import PairSettings
+
         if not hasattr(bot_instance.config, "pair_configs"):
+
             bot_instance.config.pair_configs = {}
+
         if sym not in bot_instance.config.pair_configs:
+
             bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
 
+
+
         if lot_val is not None:
+
             val_f = round(float(lot_val), 2)
+
             bot_instance.config.pair_configs[sym].fixed_lot_size = val_f
+
             if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
+
                 bot_instance.config.pair1.fixed_lot_size = val_f
+
             elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
+
                 bot_instance.config.pair2.fixed_lot_size = val_f
+
             elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
+
                 bot_instance.config.pair3.fixed_lot_size = val_f
 
+
+
         if sl_val is not None:
+
             sl_f = round(float(sl_val), 1)
+
             bot_instance.config.pair_configs[sym].fixed_sl_pips = sl_f
+
             if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
+
                 bot_instance.config.pair1.fixed_sl_pips = sl_f
+
             elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
+
                 bot_instance.config.pair2.fixed_sl_pips = sl_f
+
             elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
+
                 bot_instance.config.pair3.fixed_sl_pips = sl_f
 
+
+
         if is_enabled is not None:
+
             en_bool = bool(is_enabled)
+
             bot_instance.config.pair_configs[sym].enabled = en_bool
+
             sel_syms = list(bot_instance.config.selected_symbols)
+
             if en_bool and sym not in sel_syms:
+
                 sel_syms.append(sym)
+
             elif not en_bool and sym in sel_syms:
+
                 sel_syms.remove(sym)
+
             bot_instance.config.selected_symbols = sel_syms
+
             if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol:
+
                 bot_instance.config.pair1.enabled = en_bool
+
             elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol:
+
                 bot_instance.config.pair2.enabled = en_bool
+
             elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol:
+
                 bot_instance.config.pair3.enabled = en_bool
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         return {
+
             "status": "success",
+
             "symbol": sym,
+
             "lot": bot_instance.config.pair_configs[sym].fixed_lot_size,
+
             "sl": bot_instance.config.pair_configs[sym].fixed_sl_pips,
+
             "enabled": bot_instance.config.pair_configs[sym].enabled,
+
             "selected_symbols": bot_instance.config.selected_symbols,
+
         }
 
+
+
     elif action == "save_configuration":
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Configuration changes are LOCKED during activation! Deactivate the bot first."
+
             )
+
         config = payload.get("config", {})
+
         strats = config.get("strategies", {})
+
         if strats:
+
             enabled_strats = []
+
             strat_mapping = {
+
                 "smc": "SMC", "swing": "SMC",
+
                 "scalp5m": "SMC_SCALP_5M", "scalp-5m": "SMC_SCALP_5M", "scalp_5m": "SMC_SCALP_5M", "smc_scalp_5m": "SMC_SCALP_5M",
+
                 "ict": "ICT", "ict-inst": "ICT",
+
                 "orderflow": "ORDER_FLOW", "order-flow": "ORDER_FLOW", "order_flow": "ORDER_FLOW",
+
                 "reversal": "TREND_REVERSAL", "trend_reversal": "TREND_REVERSAL", "trend-reversal": "TREND_REVERSAL"
+
             }
+
             for k, v in strats.items():
+
                 if v:
+
                     strat_name = strat_mapping.get(str(k).lower().replace(" ", "_"), str(k).upper().replace("-", "_"))
+
                     if strat_name not in enabled_strats:
+
                         enabled_strats.append(strat_name)
+
             bot_instance.config.enabled_strategies = enabled_strats
+
             bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in enabled_strats)
+
             if hasattr(bot_instance, "strategy") and hasattr(bot_instance.strategy, "set_enabled_strategies"):
+
                 bot_instance.strategy.set_enabled_strategies(enabled_strats)
 
+
+
         pairs = config.get("pairs", {})
+
         if pairs:
+
             enabled_pairs = []
+
             from core.config import PairSettings
+
             if not hasattr(bot_instance.config, "pair_configs"):
+
                 bot_instance.config.pair_configs = {}
 
+
+
             for k, v in pairs.items():
+
                 sym = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}.get(str(k).lower(), str(k).upper())
+
                 is_active = True
+
                 lot_val = None
+
                 sl_val = None
 
+
+
                 if isinstance(v, dict):
+
                     is_active = bool(v.get("active", True))
+
                     lot_val = v.get("lot")
+
                     sl_val = v.get("sl")
+
                 elif isinstance(v, bool):
+
                     is_active = v
 
+
+
                 if is_active:
+
                     enabled_pairs.append(sym)
 
+
+
                 if sym not in bot_instance.config.pair_configs:
+
                     bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
 
+
+
                 bot_instance.config.pair_configs[sym].enabled = is_active
+
                 if lot_val is not None:
+
                     lf = round(float(lot_val), 2)
+
                     bot_instance.config.pair_configs[sym].fixed_lot_size = lf
+
                     if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_lot_size = lf
+
                     elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_lot_size = lf
+
                     elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_lot_size = lf
+
                 if sl_val is not None:
+
                     sf = round(float(sl_val), 1)
+
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = sf
+
                     if getattr(bot_instance.config, "pair1", None) and sym == bot_instance.config.pair1.symbol: bot_instance.config.pair1.fixed_sl_pips = sf
+
                     elif getattr(bot_instance.config, "pair2", None) and sym == bot_instance.config.pair2.symbol: bot_instance.config.pair2.fixed_sl_pips = sf
+
                     elif getattr(bot_instance.config, "pair3", None) and sym == bot_instance.config.pair3.symbol: bot_instance.config.pair3.fixed_sl_pips = sf
+
+
 
             bot_instance.config.selected_symbols = enabled_pairs
 
+
+
         if "aiGateEnabled" in config:
+
             bot_instance.config.ai_confirmation_enabled = bool(config["aiGateEnabled"])
 
+
+
         if "mlShadowMode" in config or "ml_shadow_mode" in config:
+
             m_val = bool(config.get("mlShadowMode", config.get("ml_shadow_mode", True)))
+
             bot_instance.config.ml_shadow_mode = m_val
+
             bot_instance.config.temporal_ml_shadow_mode = m_val
+
             if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
                 bot_instance.trap_svc.cfg.shadow_mode = m_val
 
+
+
         bot_instance.save_settings()
+
         invalidate_state_cache()
+
         asyncio.create_task(broadcast_bot_state())
+
         return {"status": "success", "message": "Configuration and pair Lot/SL settings saved"}
+
+
 
     return {"status": "success", "message": "Acknowledged"}
 
 
+
+
+
 @app.post("/api/configure")
+
 async def update_configuration(payload: BotConfigUpdate):
+
     """
+
     Update selected charts (Pair 1 & Pair 2), strategies, and lot sizes.
+
     STRICT RULE: Cannot change symbols or strategies if bot is currently ACTIVE.
+
     """
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     # Handle Pair 1 & Pair 2 update
+
     if payload.pair1 is not None:
+
         p1_sym = payload.pair1.symbol.strip().upper()
+
         if bot_instance.is_active:
+
             if p1_sym != bot_instance.config.pair1.symbol:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 1."
+
                 )
+
             if payload.pair1.fixed_lot_size != bot_instance.config.pair1.fixed_lot_size:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 1 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+
                 )
+
             if payload.pair1.fixed_sl_pips != bot_instance.config.pair1.fixed_sl_pips:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 1 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+
                 )
+
             if payload.pair1.enabled != bot_instance.config.pair1.enabled:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 1 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+
                 )
+
         bot_instance.config.pair1.symbol = p1_sym
+
         bot_instance.config.pair1.fixed_lot_size = payload.pair1.fixed_lot_size
+
         bot_instance.config.pair1.fixed_sl_pips = payload.pair1.fixed_sl_pips
+
         if getattr(payload.pair1, "avg_spread_points", None) is not None:
+
             bot_instance.config.pair1.avg_spread_points = payload.pair1.avg_spread_points
+
         bot_instance.config.pair1.enabled = payload.pair1.enabled
 
+
+
     if payload.pair2 is not None:
+
         p2_sym = payload.pair2.symbol.strip().upper()
+
         if bot_instance.is_active:
+
             if p2_sym != bot_instance.config.pair2.symbol:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 2."
+
                 )
+
             if payload.pair2.fixed_lot_size != bot_instance.config.pair2.fixed_lot_size:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 2 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+
                 )
+
             if payload.pair2.fixed_sl_pips != bot_instance.config.pair2.fixed_sl_pips:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 2 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+
                 )
+
             if payload.pair2.enabled != bot_instance.config.pair2.enabled:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 2 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+
                 )
+
         bot_instance.config.pair2.symbol = p2_sym
+
         bot_instance.config.pair2.fixed_lot_size = payload.pair2.fixed_lot_size
+
         bot_instance.config.pair2.fixed_sl_pips = payload.pair2.fixed_sl_pips
+
         if getattr(payload.pair2, "avg_spread_points", None) is not None:
+
             bot_instance.config.pair2.avg_spread_points = payload.pair2.avg_spread_points
+
         bot_instance.config.pair2.enabled = payload.pair2.enabled
 
+
+
     if payload.pair3 is not None:
+
         p3_sym = payload.pair3.symbol.strip().upper()
+
         if bot_instance.is_active:
+
             if p3_sym != bot_instance.config.pair3.symbol:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Market pair changes are LOCKED during activation! Deactivate the bot first to switch Pair 3."
+
                 )
+
             if payload.pair3.fixed_lot_size != bot_instance.config.pair3.fixed_lot_size:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 3 lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+
                 )
+
             if payload.pair3.fixed_sl_pips != bot_instance.config.pair3.fixed_sl_pips:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 3 Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+
                 )
+
             if payload.pair3.enabled != bot_instance.config.pair3.enabled:
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Pair 3 status is LOCKED during activation! Deactivate the bot first to enable/disable."
+
                 )
+
         bot_instance.config.pair3.symbol = p3_sym
+
         bot_instance.config.pair3.fixed_lot_size = payload.pair3.fixed_lot_size
+
         bot_instance.config.pair3.fixed_sl_pips = payload.pair3.fixed_sl_pips
+
         if getattr(payload.pair3, "avg_spread_points", None) is not None:
+
             bot_instance.config.pair3.avg_spread_points = payload.pair3.avg_spread_points
+
         bot_instance.config.pair3.enabled = payload.pair3.enabled
 
+
+
     # Handle multi-pair independent configurations (pair_configs)
+
     if payload.pair_configs is not None:
+
         if bot_instance.is_active:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Pair configurations are LOCKED during activation! Deactivate the bot first to modify Lot Size or SL."
+
             )
+
         from core.config import PairSettings
+
         if not hasattr(bot_instance.config, "pair_configs"):
+
             bot_instance.config.pair_configs = {}
+
         for k, v in payload.pair_configs.items():
+
             sym = {"xauusd": "XAUUSD", "eurusd": "EURUSD", "gbpusd": "GBPUSD", "btcusd": "BTCUSD", "ethusd": "ETHUSD"}.get(str(k).lower(), str(k).upper())
+
             if sym not in bot_instance.config.pair_configs:
+
                 bot_instance.config.pair_configs[sym] = PairSettings(symbol=sym)
+
             if isinstance(v, dict):
+
                 if "lot" in v and v["lot"] is not None:
+
                     bot_instance.config.pair_configs[sym].fixed_lot_size = round(float(v["lot"]), 2)
+
                 elif "fixed_lot_size" in v and v["fixed_lot_size"] is not None:
+
                     bot_instance.config.pair_configs[sym].fixed_lot_size = round(float(v["fixed_lot_size"]), 2)
+
                 if "sl" in v and v["sl"] is not None:
+
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["sl"]), 1)
+
                 elif "fixed_sl_pips" in v and v["fixed_sl_pips"] is not None:
+
                     bot_instance.config.pair_configs[sym].fixed_sl_pips = round(float(v["fixed_sl_pips"]), 1)
+
                 if "avg_spread_points" in v and v["avg_spread_points"] is not None:
+
                     bot_instance.config.pair_configs[sym].avg_spread_points = round(float(v["avg_spread_points"]), 1)
+
                 if "enabled" in v:
+
                     bot_instance.config.pair_configs[sym].enabled = bool(v["enabled"])
 
+
+
                 # Sync back to pair1, pair2, pair3 if matches
+
                 if sym == bot_instance.config.pair1.symbol:
+
                     if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+
                         bot_instance.config.pair1.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+
                         bot_instance.config.pair1.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+
                     if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+
                         bot_instance.config.pair1.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
+
                 elif sym == bot_instance.config.pair2.symbol:
+
                     if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+
                         bot_instance.config.pair2.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+
                         bot_instance.config.pair2.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+
                     if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+
                         bot_instance.config.pair2.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
+
                 elif sym == bot_instance.config.pair3.symbol:
+
                     if bot_instance.config.pair_configs[sym].fixed_lot_size is not None:
+
                         bot_instance.config.pair3.fixed_lot_size = bot_instance.config.pair_configs[sym].fixed_lot_size
+
                     if bot_instance.config.pair_configs[sym].fixed_sl_pips is not None:
+
                         bot_instance.config.pair3.fixed_sl_pips = bot_instance.config.pair_configs[sym].fixed_sl_pips
+
                     if bot_instance.config.pair_configs[sym].avg_spread_points is not None:
+
                         bot_instance.config.pair3.avg_spread_points = bot_instance.config.pair_configs[sym].avg_spread_points
 
+
+
     # Handle enabled strategies update
+
     if payload.enabled_strategies is not None:
+
         valid_strats = [s for s in payload.enabled_strategies if s in ("SMC", "SMC_SCALP_5M", "ICT", "ORDER_FLOW", "TREND_REVERSAL")]
+
         if not valid_strats:
+
             raise HTTPException(status_code=400, detail="At least 1 strategy must be enabled.")
+
         if bot_instance.is_active and set(valid_strats) != set(bot_instance.config.enabled_strategies):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Strategy configuration is LOCKED during activation! Deactivate the bot first to toggle strategies."
+
             )
+
         bot_instance.config.enabled_strategies = valid_strats
+
         bot_instance.strategy.set_enabled_strategies(valid_strats)
+
         bot_instance.config.reversal_strategy_enabled = ("TREND_REVERSAL" in valid_strats)
 
+
+
     # Handle selected_symbols (Multi-Pair Concurrent Scanning)
+
     if payload.selected_symbols is not None:
+
         valid_symbols = [s.strip().upper() for s in payload.selected_symbols if s and s != "NONE"]
+
         if valid_symbols:
+
             if bot_instance.is_active and set(valid_symbols) != set(bot_instance.config.selected_symbols):
+
                 raise HTTPException(
+
                     status_code=400,
+
                     detail="Market type changes are LOCKED during activation! Deactivate the bot first to switch symbols."
+
                 )
+
             bot_instance.config.selected_symbols = valid_symbols
+
             for s in valid_symbols:
+
                 if hasattr(bot_instance.config, "pair_configs") and s in bot_instance.config.pair_configs:
+
                     bot_instance.config.pair_configs[s].enabled = True
+
             if not payload.pair1 and not payload.pair2 and not payload.pair3:
+
                 bot_instance.config.pair1.symbol = valid_symbols[0]
+
                 bot_instance.config.pair1.enabled = True
+
                 if len(valid_symbols) >= 2:
+
                     bot_instance.config.pair2.symbol = valid_symbols[1]
+
                     bot_instance.config.pair2.enabled = True
+
                 else:
+
                     bot_instance.config.pair2.enabled = False
+
                 if len(valid_symbols) >= 3:
+
                     bot_instance.config.pair3.symbol = valid_symbols[2]
+
                     bot_instance.config.pair3.enabled = True
+
                 else:
+
                     bot_instance.config.pair3.enabled = False
+
         else:
+
             bot_instance.config.selected_symbols = []
+
     # Ensure all enabled pairs (Pair 1, Pair 2, Pair 3) are present in selected_symbols
+
     active_syms = list(bot_instance.config.selected_symbols) if bot_instance.config.selected_symbols else []
+
     for p_cfg in (bot_instance.config.pair1, bot_instance.config.pair2, bot_instance.config.pair3):
+
         if p_cfg and getattr(p_cfg, "enabled", False) and p_cfg.symbol:
+
             p_s = p_cfg.symbol.strip().upper()
+
             if p_s and p_s != "NONE" and p_s not in active_syms:
+
                 active_syms.append(p_s)
+
     bot_instance.config.selected_symbols = active_syms
 
+
+
     if payload.strategy_type is not None:
+
         new_strat = payload.strategy_type.strip().upper()
+
         if bot_instance.is_active and new_strat != bot_instance.config.strategy_type:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Strategy type changes are LOCKED during activation! Deactivate the bot first to change strategy."
+
             )
+
         bot_instance.config.strategy_type = new_strat
 
+
+
     if payload.fixed_lot_size is not None:
+
         if bot_instance.is_active and payload.fixed_lot_size != bot_instance.config.fixed_lot_size:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Lot size is LOCKED during activation! Deactivate the bot first to modify lot size."
+
             )
+
         bot_instance.config.fixed_lot_size = payload.fixed_lot_size
 
+
+
     if payload.fixed_sl_pips is not None:
+
         if bot_instance.is_active and payload.fixed_sl_pips != bot_instance.config.fixed_sl_pips:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Stop Loss (SL) is LOCKED during activation! Deactivate the bot first to modify SL."
+
             )
+
         bot_instance.config.fixed_sl_pips = payload.fixed_sl_pips
 
+
+
     if payload.max_open_positions is not None:
+
         if bot_instance.is_active and payload.max_open_positions != bot_instance.config.risk.max_open_positions:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Max open positions limit is LOCKED during activation! Deactivate the bot first to modify trade limits."
+
             )
+
         bot_instance.config.risk.max_open_positions = payload.max_open_positions
 
+
+
     if payload.night_limit_enabled is not None:
+
         if bot_instance.is_active and payload.night_limit_enabled != getattr(bot_instance.config.risk, 'night_limit_enabled', True):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Night trade limit is LOCKED during activation! Deactivate the bot first to modify."
+
             )
+
         bot_instance.config.risk.night_limit_enabled = payload.night_limit_enabled
 
+
+
     if payload.night_max_open_positions is not None:
+
         if bot_instance.is_active and payload.night_max_open_positions != getattr(bot_instance.config.risk, 'night_max_open_positions', 2):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Night trade limit capacity is LOCKED during activation! Deactivate the bot first to modify."
+
             )
+
         bot_instance.config.risk.night_max_open_positions = payload.night_max_open_positions
 
+
+
     if payload.night_start_hour is not None:
+
         if bot_instance.is_active and payload.night_start_hour != getattr(bot_instance.config.risk, 'night_start_hour', 23):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Night start hour is LOCKED during activation! Deactivate the bot first to modify."
+
             )
+
         bot_instance.config.risk.night_start_hour = payload.night_start_hour
 
+
+
     if payload.night_end_hour is not None:
+
         if bot_instance.is_active and payload.night_end_hour != getattr(bot_instance.config.risk, 'night_end_hour', 8):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Night end hour is LOCKED during activation! Deactivate the bot first to modify."
+
             )
+
         bot_instance.config.risk.night_end_hour = payload.night_end_hour
 
+
+
     if payload.night_timezone_mode is not None:
+
         if bot_instance.is_active and payload.night_timezone_mode != getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Night timezone mode is LOCKED during activation! Deactivate the bot first to modify."
+
             )
+
         bot_instance.config.risk.night_timezone_mode = payload.night_timezone_mode
 
+
+
     if payload.directional_loss_cooldown_enabled is not None:
+
         bot_instance.config.risk.directional_loss_cooldown_enabled = payload.directional_loss_cooldown_enabled
 
+
+
     if payload.ai_confirmation_enabled is not None:
+
         if bot_instance.is_active and payload.ai_confirmation_enabled != bot_instance.config.ai_confirmation_enabled:
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="AI Confirmation setting is LOCKED during activation! Deactivate the bot first to toggle AI gate."
+
             )
+
         bot_instance.config.ai_confirmation_enabled = payload.ai_confirmation_enabled
 
+
+
     if payload.ml_gating_enabled is not None:
+
         if bot_instance.is_active and payload.ml_gating_enabled != getattr(bot_instance.config, 'ml_gating_enabled', True):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="ML Trap Gate setting is LOCKED during activation! Deactivate the bot first to toggle ML filter."
+
             )
+
         bot_instance.config.ml_gating_enabled = payload.ml_gating_enabled
 
+
+
     if payload.ml_max_sl_probability is not None:
+
         if bot_instance.is_active and payload.ml_max_sl_probability != getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="ML Max Stop Loss Risk threshold is LOCKED during activation! Deactivate the bot first to modify threshold."
+
             )
+
         bot_instance.config.ml_max_sl_probability = payload.ml_max_sl_probability
+
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
             bot_instance.trap_svc.cfg.max_sl_probability = payload.ml_max_sl_probability
+
             bot_instance.trap_svc.cfg.p_genuine_threshold = 1.0 - payload.ml_max_sl_probability
 
+
+
     if payload.ml_shadow_mode is not None:
+
         if bot_instance.is_active and payload.ml_shadow_mode != getattr(bot_instance.config, 'ml_shadow_mode', True):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="ML Shadow Mode setting is LOCKED during activation! Deactivate the bot first to toggle ML Shadow Mode."
+
             )
+
         bot_instance.config.ml_shadow_mode = payload.ml_shadow_mode
+
         bot_instance.config.temporal_ml_shadow_mode = payload.ml_shadow_mode
+
         if hasattr(bot_instance, "trap_svc") and bot_instance.trap_svc:
+
             bot_instance.trap_svc.cfg.shadow_mode = payload.ml_shadow_mode
 
+
+
     if payload.temporal_ml_enabled is not None:
+
         if bot_instance.is_active and payload.temporal_ml_enabled != getattr(bot_instance.config, 'temporal_ml_enabled', True):
+
             raise HTTPException(
+
                 status_code=400,
+
                 detail="Temporal ML setting is LOCKED during activation! Deactivate the bot first to toggle Temporal ML filter."
+
             )
+
         bot_instance.config.temporal_ml_enabled = payload.temporal_ml_enabled
+
         if hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+
             bot_instance.temporal_svc.cfg.active_gating = payload.temporal_ml_enabled
 
+
+
     if payload.reversal_strategy_enabled is not None:
+
         bot_instance.config.reversal_strategy_enabled = payload.reversal_strategy_enabled
 
+
+
     if payload.weekend_retrain_enabled is not None:
+
         bot_instance.config.weekend_retrain_enabled = payload.weekend_retrain_enabled
 
+
+
     # Persist updated configuration to bot_settings.json
+
     bot_instance.save_settings()
+
     invalidate_state_cache()
+
     asyncio.create_task(broadcast_bot_state())
+
+
 
     bot_instance.log(
+
         f"⚙️ Configuration updated: "
+
         f"Pair 1={bot_instance.config.pair1.symbol} (lot={bot_instance.config.pair1.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair1.fixed_sl_pips or 'Dyn'}) | "
+
         f"Pair 2={bot_instance.config.pair2.symbol} (lot={bot_instance.config.pair2.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair2.fixed_sl_pips or 'Dyn'}) | "
+
         f"Pair 3={bot_instance.config.pair3.symbol} (lot={bot_instance.config.pair3.fixed_lot_size or 'Dyn'}, SL={bot_instance.config.pair3.fixed_sl_pips or 'Dyn'}) | "
+
         f"Strategies={bot_instance.config.enabled_strategies} | "
+
         f"Max Open Positions={bot_instance.config.risk.max_open_positions} | "
+
         f"AI Confirmation={'ON' if bot_instance.config.ai_confirmation_enabled else 'OFF'} | "
+
         f"ML Trap Filter={'ON' if getattr(bot_instance.config, 'ml_gating_enabled', True) else 'OFF'} (max_sl={getattr(bot_instance.config, 'ml_max_sl_probability', 0.50):.2f}) | "
+
         f"Temporal ML={'ON' if getattr(bot_instance.config, 'temporal_ml_enabled', True) else 'OFF'}"
+
     )
 
+
+
     bot_instance.save_settings()
+
     invalidate_state_cache()
+
     asyncio.create_task(broadcast_bot_state())
 
+
+
     return {
+
         "status": "success",
+
         "pair1": bot_instance.config.pair1.model_dump(),
+
         "pair2": bot_instance.config.pair2.model_dump(),
+
         "pair3": bot_instance.config.pair3.model_dump(),
+
         "enabled_strategies": bot_instance.config.enabled_strategies,
+
         "selected_symbols": bot_instance.config.selected_symbols,
+
         "strategy_type": bot_instance.config.strategy_type,
+
         "fixed_lot_size": bot_instance.config.fixed_lot_size,
+
         "fixed_sl_pips": bot_instance.config.fixed_sl_pips,
+
         "max_open_positions": bot_instance.config.risk.max_open_positions,
+
         "night_limit_enabled": getattr(bot_instance.config.risk, 'night_limit_enabled', True),
+
         "night_max_open_positions": getattr(bot_instance.config.risk, 'night_max_open_positions', 2),
+
         "night_start_hour": getattr(bot_instance.config.risk, 'night_start_hour', 23),
+
         "night_end_hour": getattr(bot_instance.config.risk, 'night_end_hour', 8),
+
         "night_timezone_mode": getattr(bot_instance.config.risk, 'night_timezone_mode', 'Asia/Kolkata'),
+
         "ai_confirmation_enabled": bot_instance.config.ai_confirmation_enabled,
+
     }
+
+
+
+
+
+
 
 
 
 
 
 @app.post("/api/trigger_tick")
+
 async def manual_trigger_tick():
+
     """Manually invoke a tick cycle for testing while active."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     if not bot_instance.is_active:
+
         raise HTTPException(status_code=400, detail="Bot is deactivated. Activate it first to run a tick.")
+
     
+
     asyncio.create_task(asyncio.to_thread(bot_instance.tick))
+
     return {"status": "success", "message": "Manual tick cycle triggered."}
 
 
+
+
+
 @app.get("/api/trades")
+
 async def get_trade_history():
+
     """Return historical executed trades, entry/exit prices, status, holding times, and performance metrics."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     
+
     records = bot_instance.state.get_all_trades(limit=100)
+
     trades_data = []
+
     now_dt = datetime.now(timezone.utc)
 
+
+
     for r in records:
+
         dur_sec = r.duration_seconds
+
         if (dur_sec <= 0.0 or dur_sec is None) and r.timestamp:
+
             try:
+
                 t_dt = r.timestamp if r.timestamp.tzinfo else r.timestamp.replace(tzinfo=timezone.utc)
+
                 if r.status != 'OPEN' and r.closed_at:
+
                     c_dt = r.closed_at if r.closed_at.tzinfo else r.closed_at.replace(tzinfo=timezone.utc)
+
                     dur_sec = max(0.0, (c_dt - t_dt).total_seconds())
+
                 else:
+
                     dur_sec = max(0.0, (now_dt - t_dt).total_seconds())
+
             except Exception:
+
                 dur_sec = 0.0
 
+
+
         # Calculate Planned R:R
+
         sl_dist = abs(r.entry_price - r.stop_loss)
+
         tp_dist = abs(r.take_profit - r.entry_price)
+
         planned_rr = round(tp_dist / sl_dist, 2) if sl_dist > 0.00001 else 2.0
 
+
+
         trades_data.append({
+
             "id": r.id,
+
             "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC"),
+
             "closed_at": r.closed_at.strftime("%Y-%m-%d %H:%M:%S UTC") if r.closed_at else None,
+
             "symbol": r.symbol,
+
             "direction": r.direction.value if hasattr(r.direction, 'value') else str(r.direction),
+
             "strategy_name": r.strategy_name,
+
             "entry_price": round(r.entry_price, 5),
+
             "stop_loss": round(r.stop_loss, 5),
+
             "take_profit": round(r.take_profit, 5),
+
             "planned_rr": planned_rr,
+
             "lot_size": round(r.lot_size, 2),
+
             "realized_pnl": round(r.realized_pnl, 2),
+
             "status": r.status,
+
             "duration_seconds": round(dur_sec, 1),
+
             "holding_time_formatted": bot_instance.state.__class__.__module__ and format_duration(dur_sec),
+
         })
+
+
 
     metrics = bot_instance.state.get_performance_metrics()
 
+
+
     return {
+
         "trades": trades_data,
+
         "metrics": metrics,
+
         "total_trades": metrics.get("total_trades", len(trades_data)),
+
         "total_closed_trades": metrics.get("total_closed_trades", 0),
+
         "total_open_trades": metrics.get("total_open_trades", 0),
+
         "total_tp": metrics.get("total_tp", 0),
+
         "total_sl": metrics.get("total_sl", 0),
+
         "total_pnl": metrics.get("total_pnl", 0.0),
+
         "accuracy": metrics.get("accuracy", 0.0),
+
         "win_rate": metrics.get("win_rate", 0.0),
+
         "win_loss_diff": metrics.get("win_loss_diff", 0),
+
         "winning_trades": metrics.get("winning_trades", 0),
+
         "losing_trades": metrics.get("losing_trades", 0),
+
         "formatted_avg_rr": metrics.get("formatted_avg_rr", "1:2.50"),
+
         "formatted_realized_rr": metrics.get("formatted_realized_rr", "1:2.50"),
+
         "formatted_avg_holding_time": metrics.get("formatted_avg_holding_time", "---"),
+
         "formatted_total_holding_time": metrics.get("formatted_total_holding_time", "---"),
+
         "profit_factor": metrics.get("profit_factor", 0.0),
+
     }
+
+
+
 
 
 @app.get("/api/performance_metrics")
+
 @app.get("/api/analytics")
+
 async def get_analytics_metrics():
+
     """Return comprehensive performance metrics, SL/TP stats, win rates, RR ratios, and holding times."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     return bot_instance.state.get_performance_metrics()
 
 
+
+
+
 @app.get("/api/ml/temporal/summary")
+
 async def get_temporal_ml_summary():
+
     """Return top profitable and losing days, hours, and market sessions from ML Model 2."""
+
     if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+
         raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+
     return bot_instance.temporal_svc.get_summary()
 
 
+
+
+
 @app.get("/api/ml/temporal/breakdown")
+
 async def get_temporal_ml_breakdown():
+
     """Return detailed Day, Hour, Session, and DayxSession cross-matrices."""
+
     if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+
         raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+
     return bot_instance.temporal_svc.get_full_breakdown()
 
 
+
+
+
 @app.post("/api/ml/temporal/retrain")
+
 async def retrain_temporal_ml_model():
+
     """Trigger on-demand retraining of Temporal & Session ML Model from SQLite trade database."""
+
     if not bot_instance or not hasattr(bot_instance, "temporal_svc"):
+
         raise HTTPException(status_code=500, detail="Temporal ML service not initialized")
+
     summary = bot_instance.temporal_svc.train_and_update()
+
     bot_instance.log("🧠 [TEMPORAL ML] Model retrained on latest trade records and event logs.")
+
     return {"status": "success", "message": "Temporal ML model retrained successfully", "summary": summary}
 
 
-# =============================================================================
-#  Automated Weekend ML Batch Retraining Endpoints
+
+
+
 # =============================================================================
 
+#  Automated Weekend ML Batch Retraining Endpoints
+
+# =============================================================================
+
+
+
 @app.get("/api/ml/weekend_retrain/status")
+
 async def get_weekend_retrain_status():
+
     """Return status, telemetry, and next scheduled trigger of weekend batch retraining."""
+
     from ml.weekend_retrainer import weekend_retrain_service
+
     info = weekend_retrain_service.get_last_run_info()
+
     next_run = None
+
     if scheduler_instance:
+
         job = scheduler_instance.get_job("weekend_ml_batch_retrain")
+
         if job and job.next_run_time:
+
             next_run = job.next_run_time.isoformat()
+
     info["next_scheduled_run"] = next_run
+
     info["is_running"] = weekend_retrain_service.is_running
+
     return info
 
 
+
+
+
 @app.post("/api/ml/weekend_retrain")
+
 async def trigger_weekend_retrain(background: bool = True):
+
     """Trigger manual on-demand execution of the full weekend ML batch retraining pipeline."""
+
     from ml.weekend_retrainer import weekend_retrain_service, run_weekend_retraining_job
+
     if weekend_retrain_service.is_running:
+
         return {"status": "in_progress", "message": "Weekend batch retraining is already in progress."}
 
+
+
     if background:
+
         threading.Thread(target=run_weekend_retraining_job, args=(bot_instance,), daemon=True).start()
+
         return {"status": "success", "message": "Weekend batch retraining pipeline initiated in background."}
+
     else:
+
         res = run_weekend_retraining_job(bot_instance)
+
         return res
 
 
-# =============================================================================
-#  5-Window Daytime Interval & October Shadow Mode Telemetry Endpoints
+
+
+
 # =============================================================================
 
+#  5-Window Daytime Interval & October Shadow Mode Telemetry Endpoints
+
+# =============================================================================
+
+
+
 @app.get("/api/windows/current")
+
 async def get_current_window_status():
+
     """Return active 3-hour daytime window or night guard window with shadow sizing recommendations."""
+
     from ml.temporal_window_recorder import window_recorder
+
     win_info = window_recorder.get_window_info()
+
     return {
+
         "status": "ok",
+
         "current_window": win_info,
+
         "shadow_mode": getattr(bot_instance.config if bot_instance else None, 'temporal_ml_shadow_mode', True),
+
     }
+
+
+
 
 
 @app.get("/api/windows/summary")
+
 async def get_windows_summary():
+
     """Return cumulative win rates, trade counts, and PnL for each of the 5 daytime windows + night guard."""
+
     from ml.temporal_window_recorder import window_recorder
+
     return {
+
         "status": "ok",
+
         "windows": window_recorder.get_summary_by_window(),
+
         "total_records": len(window_recorder.read_all_records()),
+
         "csv_path": str(window_recorder.csv_path),
+
     }
+
+
+
 
 
 @app.get("/api/windows/export_csv")
+
 async def export_windows_csv():
+
     """Download the October 5-window CSV dataset for lot size manipulation and audit."""
+
     from ml.temporal_window_recorder import window_recorder, CSV_FILE_PATH
+
     if not CSV_FILE_PATH.exists():
+
         window_recorder.backfill_from_database()
+
     return FileResponse(
+
         path=CSV_FILE_PATH,
+
         filename="temporal_windows_october.csv",
+
         media_type="text/csv",
+
     )
 
 
+
+
+
 @app.post("/api/windows/sync")
+
 async def sync_windows_from_database():
+
     """Trigger incremental backfill of any unsynced closed trades into the October CSV."""
+
     from ml.temporal_window_recorder import window_recorder
+
     added = window_recorder.backfill_from_database()
+
     return {
+
         "status": "success",
+
         "new_intervals_added": added,
+
         "total_intervals": len(window_recorder.read_all_records()),
+
     }
+
+
+
+
 
 
 
 @app.get("/api/ml/shadow-stats")
+
 async def get_ml_shadow_stats(threshold: float = 0.50):
+
     """Return AI Shadow Mode prediction accuracy and evaluation metrics."""
+
     if not bot_instance or not hasattr(bot_instance, "trap_svc") or not bot_instance.trap_svc:
+
         return {"status": "inactive", "message": "ML Trap Detector not initialized"}
+
     try:
+
         stats = bot_instance.trap_svc.shadow_prediction_stats(threshold=threshold)
+
         if "alpha_drift_pct" not in stats and hasattr(bot_instance.trap_svc, "_conn"):
+
             cur = bot_instance.trap_svc._conn.execute(
+
                 """
+
                 SELECT p_genuine, label
+
                 FROM ml_events
+
                 WHERE label IS NOT NULL AND p_genuine IS NOT NULL
+
                 ORDER BY ts DESC
+
                 LIMIT 50
+
                 """
+
             )
+
             rec_rows = cur.fetchall()
+
             base_acc = float(stats.get("prediction_accuracy_pct", 0.0))
+
             if rec_rows:
+
                 rec_corr = sum(1 for p, l in rec_rows if (float(p) >= threshold and int(l) == 1) or (float(p) < threshold and int(l) == 0))
+
                 rec_acc = round((rec_corr / len(rec_rows)) * 100.0, 1)
+
                 stats["rolling_accuracy_pct"] = rec_acc
+
                 stats["alpha_drift_pct"] = round(rec_acc - base_acc, 1)
+
             else:
+
                 stats["rolling_accuracy_pct"] = base_acc
+
                 stats["alpha_drift_pct"] = 0.0
+
         return {"status": "success", **stats}
+
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 def _get_clusters_status(bot) -> dict[str, Any]:
+
     if not bot or not hasattr(bot, "cluster_trap_svc") or not bot.cluster_trap_svc:
+
         return {}
+
     res = {}
+
     if AssetCluster:
+
         for c in AssetCluster:
+
             c_models = bot.cluster_trap_svc.get_cluster_models(c)
+
             res[c.value] = {
+
                 "cluster_name": c.value,
+
                 "pairs": CLUSTER_PAIRS.get(c, []),
+
                 "models": {
+
                     s: {
+
                         "version": m.version,
+
                         "n_samples": m.n_samples,
+
                         "is_fitted": m._sgd_fitted or m.lgbm is not None,
+
                     }
+
                     for s, m in c_models.items()
+
                 },
+
             }
+
     return res
 
 
+
+
+
 @app.get("/api/ml/clusters")
+
 async def get_ml_clusters_status():
+
     """Return status of all 4 asset clusters, member pairs, and their 20 dedicated ML models."""
+
     if not bot_instance or not hasattr(bot_instance, "cluster_trap_svc") or not bot_instance.cluster_trap_svc:
+
         return {"status": "inactive", "message": "ClusterTrapDetectorService not initialized"}
+
     try:
+
         clusters = _get_clusters_status(bot_instance)
+
         lockouts = bot_instance.pair_tracker.summary() if hasattr(bot_instance, "pair_tracker") and bot_instance.pair_tracker else {}
+
         return {
+
             "status": "success",
+
             "clusters": clusters,
+
             "pair_lockouts": lockouts,
+
         }
+
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 
 @app.post("/api/ml/lockout/reset")
+
 async def reset_pair_lockout(payload: dict = Body(default={})):
+
     """Reset dynamic safety lockout for a pair or all pairs."""
+
     if not bot_instance or not hasattr(bot_instance, "pair_tracker") or not bot_instance.pair_tracker:
+
         raise HTTPException(status_code=500, detail="PairPerformanceTracker not initialized")
+
     try:
+
         symbol = payload.get("symbol")
+
         if symbol:
+
             bot_instance.pair_tracker.unlock_pair(symbol)
+
             return {"status": "success", "message": f"Lockout reset for {symbol}"}
+
         else:
+
             for s in list(bot_instance.pair_tracker._states.keys()):
+
                 bot_instance.pair_tracker.unlock_pair(s)
+
             return {"status": "success", "message": "All pair lockouts reset successfully"}
+
     except Exception as e:
+
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 
 
 
 @app.get("/api/ml/partial_tp/status")
+
 async def get_smart_partial_tp_status():
+
     """Return model health, trained sample counts, and execution statistics."""
+
     svc = None
+
     if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+
         svc = bot_instance.position_manager.smart_partial_tp_service
+
     elif SmartPartialTPService is not None:
+
         svc = SmartPartialTPService.get_instance()
 
+
+
     if not svc:
+
         return {"status": "disabled", "message": "Smart Partial TP service unavailable"}
+
     return {"status": "active", **svc.get_status()}
 
 
+
+
+
 @app.get("/api/ml/partial_tp/events")
+
 async def get_smart_partial_tp_events(limit: int = 50):
+
     """Return recent partial profit booking evaluations and executions."""
+
     if not bot_instance or not hasattr(bot_instance, "state"):
+
         return {"events": []}
+
     events = bot_instance.state.get_recent_partial_tp_events(limit=limit)
+
     return {"events": events, "count": len(events)}
 
 
+
+
+
 @app.post("/api/ml/partial_tp/retrain")
+
 async def retrain_smart_partial_tp_model():
+
     """Trigger retraining on historical trade logs or pre-calibrated baseline."""
+
     svc = None
+
     if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+
         svc = bot_instance.position_manager.smart_partial_tp_service
+
     elif SmartPartialTPService is not None:
+
         svc = SmartPartialTPService.get_instance()
 
+
+
     if not svc:
+
         raise HTTPException(status_code=500, detail="Smart Partial TP service unavailable")
 
+
+
     retrained_on_real = False
+
     if bot_instance and hasattr(bot_instance, "state"):
+
         trade_records = bot_instance.state.get_all_trades(limit=2000)
+
         if len(trade_records) >= 10:
+
             retrained_on_real = svc.model.train_from_trade_records(trade_records)
 
+
+
     if not retrained_on_real:
+
         svc.model._train_synthetic_baseline()
 
+
+
     msg = "Retrained on real historical trades." if retrained_on_real else "Retrained on synthetic pre-calibrated baseline."
+
     if bot_instance:
+
         bot_instance.log(f"🧠 [SMART PARTIAL TP ML] {msg}")
+
+
 
     return {"status": "success", "message": msg, "status_info": svc.get_status()}
 
 
+
+
+
 @app.post("/api/ml/partial_tp/explain")
+
 async def explain_smart_partial_tp_prediction(payload: Dict[str, Any] = Body(...)):
+
     """Return SHAP feature importances and drivers for a given feature set or position."""
+
     svc = None
+
     if bot_instance and hasattr(bot_instance, "position_manager") and getattr(bot_instance.position_manager, "smart_partial_tp_service", None):
+
         svc = bot_instance.position_manager.smart_partial_tp_service
+
     elif SmartPartialTPService is not None:
+
         svc = SmartPartialTPService.get_instance()
 
+
+
     if not svc:
+
         raise HTTPException(status_code=500, detail="Smart Partial TP service unavailable")
 
+
+
     features = payload.get("features", {})
+
     if not features:
+
         # Default mock features for testing / UI preview if none provided
+
         from ml.smart_partial_tp import FEATURE_NAMES
+
         features = {name: 1.0 for name in FEATURE_NAMES}
 
+
+
     explanation = svc.model.explain_prediction(features)
+
     return {"status": "success", **explanation}
 
 
 
 
+
+
+
+
+
 @app.post("/api/trades/clear", dependencies=[Depends(get_api_key_header)])
+
 async def clear_trades():
+
     """Clear closed trade ledger history."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     bot_instance.state.clear_trade_history()
+
     bot_instance.log("🧹 Trade ledger cleared.")
+
     return {"status": "success", "message": "Trade history cleared."}
 
 
+
+
+
 @app.get("/api/trades/export_csv")
+
 @app.get("/api/trades/download_csv")
+
 async def export_trades_csv():
+
     """Download trade ledger as a CSV file."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     bot_instance.state._sync_trades_csv()
+
     csv_file = Path(bot_instance.state.csv_path)
+
     if not csv_file.exists():
+
         raise HTTPException(status_code=404, detail="Trades CSV not found")
+
     return FileResponse(
+
         path=str(csv_file),
+
         filename="trades_history.csv",
+
         media_type="text/csv"
+
     )
+
+
+
 
 
 @app.get("/api/sessions/export_csv")
+
 async def export_sessions_csv():
+
     """Download bot sessions history as a CSV file."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
+
     bot_instance.state._sync_sessions_csv()
+
     csv_file = Path(bot_instance.state.sessions_csv_path)
+
     if not csv_file.exists():
+
         raise HTTPException(status_code=404, detail="Sessions CSV not found")
+
     return FileResponse(
+
         path=str(csv_file),
+
         filename="sessions_history.csv",
+
         media_type="text/csv"
+
     )
+
+
+
 
 
 @app.get("/api/activation_history")
+
 @app.get("/api/activation-history")
+
 async def get_activation_history(limit: int = 100):
+
     """Return historical bot activation / deactivation records and stats."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     history = bot_instance.state.get_activation_history(limit=limit)
+
     stats = bot_instance.state.get_activation_stats()
+
     return {
+
         "sessions": history,
+
         "stats": stats,
+
     }
 
 
+
+
+
 @app.post("/api/activation_history/clear", dependencies=[Depends(get_api_key_header)])
+
 @app.post("/api/activation-history/clear", dependencies=[Depends(get_api_key_header)])
+
 async def clear_activation_history():
+
     """Clear historical completed/interrupted sessions."""
+
     if not bot_instance:
+
         raise HTTPException(status_code=500, detail="Bot not initialized")
 
+
+
     bot_instance.state.clear_activation_history()
+
     bot_instance.log("🧹 Bot activation/deactivation session history cleared.")
+
     return {"status": "success", "message": "Activation history cleared."}
 
 
-# ─────────────────────────────────────────────
-#  Execution Quality Metrics Endpoints
+
+
+
 # ─────────────────────────────────────────────
 
+#  Execution Quality Metrics Endpoints
+
+# ─────────────────────────────────────────────
+
+
+
 @app.get("/api/execution/summary")
+
 async def get_execution_summary(window_hours: int = 24):
+
     """Return top-level execution quality KPIs (slippage, latency, fill rate)."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     return bot_instance.eqm_aggregator.get_summary(window_hours=window_hours)
 
 
+
+
+
 @app.get("/api/execution/breakdowns")
+
 async def get_execution_breakdowns(window_hours: int = 168):
+
     """Return breakdowns by symbol, strategy engine, KillZone, and reject reasons."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     return bot_instance.eqm_aggregator.get_breakdowns(window_hours=window_hours)
 
 
+
+
+
 @app.get("/api/execution/latency_histogram")
+
 async def get_execution_latency_histogram(window_hours: int = 168, bins: int = 10):
+
     """Return latency histogram distribution."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     return bot_instance.eqm_aggregator.get_latency_histogram(window_hours=window_hours, bins=bins)
 
 
+
+
+
 @app.get("/api/execution/slippage_distribution")
+
 async def get_execution_slippage_distribution(window_hours: int = 168):
+
     """Return slippage distribution breakdown (favorable vs adverse)."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     return bot_instance.eqm_aggregator.get_slippage_distribution(window_hours=window_hours)
 
 
+
+
+
 @app.get("/api/execution/orders")
+
 async def get_execution_orders(limit: int = 100):
+
     """Return recent raw order execution records."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     with bot_instance.eqm_aggregator._get_connection() as conn:
+
         rows = conn.execute("""
+
             SELECT * FROM execution_orders
+
             ORDER BY signal_time DESC
+
             LIMIT ?
+
         """, (limit,)).fetchall()
+
         return [dict(r) for r in rows]
 
 
+
+
+
 @app.get("/api/execution/export_csv")
+
 async def export_execution_metrics_csv():
+
     """Export execution orders ledger to CSV."""
+
     if not bot_instance or not hasattr(bot_instance, "eqm_aggregator"):
+
         raise HTTPException(status_code=500, detail="Execution metrics subsystem not initialized")
+
     
+
     import io
+
     import csv
+
     with bot_instance.eqm_aggregator._get_connection() as conn:
+
         rows = conn.execute("SELECT * FROM execution_orders ORDER BY signal_time DESC").fetchall()
+
     
+
     if not rows:
+
         return Response(content="order_id,symbol,strategy_name,status\n", media_type="text/csv", headers={"Content-Disposition": "attachment; filename=execution_metrics.csv"})
+
     
+
     output = io.StringIO()
+
     writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+
     writer.writeheader()
+
     for r in rows:
+
         writer.writerow(dict(r))
+
         
+
     return Response(
+
         content=output.getvalue(),
+
         media_type="text/csv",
+
         headers={"Content-Disposition": "attachment; filename=execution_metrics.csv"}
+
     )
 
 
-# ─────────────────────────────────────────────────────────────
-#  Enterprise Distributed Cloud ML & Data Sync API
+
+
+
 # ─────────────────────────────────────────────────────────────
 
+#  Enterprise Distributed Cloud ML & Data Sync API
+
+# ─────────────────────────────────────────────────────────────
+
+
+
 from core.cloud_sync import CloudSyncEngine, CloudSyncClient
+
+
 
 sync_engine = CloudSyncEngine()
 
 
+
+
+
 def verify_sync_auth(request: Request) -> bool:
+
     """Verify Bearer token against SYNC_AUTH_TOKEN if configured."""
+
     expected = os.getenv("SYNC_AUTH_TOKEN", "").strip()
+
     if not expected:
+
         return True  # Open if no token configured
+
     auth = request.headers.get("Authorization", "")
+
     if auth.startswith("Bearer "):
+
         token = auth.split("Bearer ", 1)[1].strip()
+
         if secrets.compare_digest(token, expected):
+
             return True
+
     return False
 
 
+
+
+
 @app.get("/api/sync/status")
+
 async def get_cloud_sync_status(request: Request):
+
     """Return local event counts and model manifest summary."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     return sync_engine.get_sync_status()
 
 
+
+
+
 @app.post("/api/sync/events/export")
+
 async def export_sync_events(request: Request, since_ts: Optional[str] = None, limit: int = 10000):
+
     """Export ML events and trade logs since timestamp for sync merge."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     return sync_engine.export_events(since_ts=since_ts, limit=limit)
 
 
+
+
+
 @app.post("/api/sync/events/import")
+
 async def import_sync_events(request: Request, payload: Dict[str, Any] = Body(...)):
+
     """Merge remote ML events and trade logs atomically with deduplication."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     stats = sync_engine.import_events(payload)
+
     return {"status": "success", "imported": stats}
 
 
+
+
+
 @app.get("/api/sync/models/manifest")
+
 async def get_sync_models_manifest(request: Request):
+
     """Return manifest of all compiled ML models with SHA256 hashes."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     return {"status": "success", "models": sync_engine.get_models_manifest()}
 
 
+
+
+
 @app.get("/api/sync/models/download/{filename}")
+
 async def download_sync_model(filename: str, request: Request):
+
     """Download compiled model artifact binary with path validation (CWE-22)."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+
+
     base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+
     base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
 
+
+
     norm_path = os.path.realpath(os.path.join(base_dir, filename))
+
     if not norm_path.startswith(base_prefix):
+
         raise HTTPException(status_code=400, detail="Invalid artifact path")
 
+
+
     ok, file_path, _ = sync_engine.resolve_safe_artifact_path(filename)
+
     if not ok or file_path is None or not file_path.exists():
+
         raise HTTPException(status_code=404, detail="Artifact not found")
+
     return FileResponse(path=file_path, filename=file_path.name, media_type="application/octet-stream")
 
 
+
+
+
 @app.post("/api/sync/models/upload/{filename}")
+
 async def upload_sync_model(filename: str, request: Request):
+
     """Upload and atomically replace compiled model artifact with path validation (CWE-22)."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+
+
     base_dir = os.path.realpath(str(sync_engine.artifacts_dir))
+
     base_prefix = base_dir if base_dir.endswith(os.sep) else base_dir + os.sep
 
+
+
     norm_path = os.path.realpath(os.path.join(base_dir, filename))
+
     if not norm_path.startswith(base_prefix):
+
         raise HTTPException(status_code=400, detail="Invalid artifact path")
 
+
+
     content = await request.body()
+
     expected_sha = request.headers.get("X-Sha256")
+
     ok, msg = sync_engine.save_model_artifact(filename, content, expected_sha)
+
     if not ok:
+
         raise HTTPException(status_code=400, detail=msg)
+
     return {"status": "success", "message": msg}
 
 
+
+
+
 @app.post("/api/sync/trigger_retrain")
+
 async def trigger_cloud_retrain(request: Request):
+
     """Trigger background model retraining on the combined real + demo dataset."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     
+
     def run_retrain():
+
         try:
+
             logger.info("Executing cloud model retraining on combined dataset...")
+
             # 1. Temporal Edge Service Retraining
+
             from ml.temporal_analyzer import TemporalEdgeService
+
             if bot_instance and hasattr(bot_instance, "temporal_svc") and bot_instance.temporal_svc:
+
                 bot_instance.temporal_svc.train_and_update()
+
             else:
+
                 TemporalEdgeService().train_and_update()
+
             logger.info("Temporal Edge model retrained successfully.")
 
+
+
             # 2. Strategy-Isolated Trap Detectors Retraining
+
             try:
+
                 from ml.trap_detector import TrapDetectorService, TrapDetectorConfig
+
                 trap_cfg = TrapDetectorConfig(db_path=sync_engine.db_path)
+
                 trap_svc = TrapDetectorService(trap_cfg)
+
                 trap_svc.retrain_if_ready()
+
                 logger.info("Strategy-isolated trap detector models retrained successfully.")
+
             except Exception as e:
+
                 logger.warning(f"Trap detector retrain skipped or error: {e}")
 
+
+
             # 3. Smart Partial TP Retraining
+
             try:
+
                 from ml.smart_partial_tp import SmartPartialTPService
+
                 from core.state import StateManager
+
                 ptp_svc = SmartPartialTPService.get_instance() if SmartPartialTPService else None
+
                 if ptp_svc:
+
                     b_state = StateManager(db_path=str(sync_engine.db_path))
+
                     trade_records = b_state.get_all_trades(limit=5000)
+
                     if len(trade_records) >= 10:
+
                         ptp_svc.model.train_from_trade_records(trade_records)
+
                         logger.info(f"Smart Partial TP retrained on {len(trade_records)} trade records.")
+
                     else:
+
                         ptp_svc.model._train_synthetic_baseline()
+
             except Exception as e:
+
                 logger.warning(f"Smart Partial TP retrain skipped or error: {e}")
 
+
+
             logger.info("Cloud model retraining finished successfully.")
+
         except Exception as e:
+
             logger.error(f"Cloud model retraining error: {e}", exc_info=True)
 
+
+
     threading.Thread(target=run_retrain, daemon=True).start()
+
     return {"status": "success", "message": "Model retraining task initiated in background on combined dataset"}
 
 
+
+
+
 @app.post("/api/sync/run_client_sync")
+
 async def run_client_sync(request: Request, target_url: Optional[str] = None):
+
     """Execute client sync from this machine to target cloud URL."""
+
     if not verify_sync_auth(request):
+
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     cloud_url = target_url or os.getenv("CLOUD_SYNC_URL", "")
+
     if not cloud_url:
+
         raise HTTPException(status_code=400, detail="CLOUD_SYNC_URL not configured.")
+
     parsed = urlparse(cloud_url)
+
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
+
         raise HTTPException(status_code=400, detail="Invalid cloud sync URL scheme or host. Only http and https are allowed.")
+
     token = os.getenv("SYNC_AUTH_TOKEN", "")
+
     try:
+
         client = CloudSyncClient(remote_url=cloud_url, auth_token=token, local_engine=sync_engine)
+
         res = client.full_two_way_sync()
+
         return res
+
     except Exception as e:
+
         logger.error(f"Client synchronization failed: {e}", exc_info=True)
+
         raise HTTPException(status_code=500, detail="Client synchronization failed. See server logs.")
 
 
+
+
+
 if __name__ == "__main__":
+
     import uvicorn
+
     uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
+
+
+
 
 
